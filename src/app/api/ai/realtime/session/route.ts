@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import OpenAI from "openai";
 import type { VoiceProvider } from "@/lib/ai/voice";
 
 /**
  * POST /api/ai/realtime/session
  * Returns the connection config for the requested native-audio provider.
  *
- * - OpenAI: creates an ephemeral session token server-side (API key never
- *   reaches the browser).
+ * - OpenAI: creates an ephemeral session token server-side via direct HTTP call
+ *   (avoids SDK type/version lock-in for new model names).
  * - Gemini: returns model + instructions. The client connects directly with
  *   NEXT_PUBLIC_GOOGLE_GENERATIVE_AI_API_KEY. This is acceptable for a
  *   prototype; production should proxy through a server-side WebSocket.
@@ -25,22 +24,43 @@ export async function POST(request: Request) {
       );
     }
 
-    const openai = new OpenAI({ apiKey });
-    const model =
-      process.env.OPENAI_REALTIME_MODEL ?? "gpt-4o-realtime-preview-2024-10-01";
+    const model = process.env.OPENAI_REALTIME_MODEL ?? "gpt-realtime-2.1-mini";
+    const voice = process.env.OPENAI_REALTIME_VOICE ?? "alloy";
 
     try {
-      const session = await openai.beta.realtime.sessions.create({
-        model: model as "gpt-4o-realtime-preview-2024-10-01",
-        instructions: buildSystemInstructions(),
-        voice: (process.env.OPENAI_REALTIME_VOICE ?? "alloy") as "alloy",
-      });
+      const response = await fetch(
+        "https://api.openai.com/v1/realtime/sessions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            instructions: buildSystemInstructions(),
+            voice,
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        const text = await response.text();
+        return NextResponse.json(
+          { error: `OpenAI session failed: ${text}` },
+          { status: response.status },
+        );
+      }
+
+      const data = (await response.json()) as {
+        client_secret: { value: string; expires_at: number };
+      };
 
       return NextResponse.json({
         provider: "openai",
         model,
-        token: session.client_secret.value,
-        expiresAt: session.client_secret.expires_at,
+        token: data.client_secret.value,
+        expiresAt: data.client_secret.expires_at,
       });
     } catch (err) {
       const message =
@@ -52,7 +72,7 @@ export async function POST(request: Request) {
   if (provider === "gemini") {
     return NextResponse.json({
       provider: "gemini",
-      model: process.env.GOOGLE_LIVE_MODEL ?? "gemini-2.0-flash-exp",
+      model: process.env.GOOGLE_LIVE_MODEL ?? "gemini-3.8-live",
       instructions: buildSystemInstructions(),
     });
   }
