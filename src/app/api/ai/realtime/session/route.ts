@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import type { VoiceProvider } from "@/lib/ai/voice";
+import { checkRateLimit, createRateLimitResponse } from "@/lib/rate-limit";
+import { createClient } from "@/lib/supabase/server";
 
 /**
  * POST /api/ai/realtime/session
@@ -13,6 +15,19 @@ import type { VoiceProvider } from "@/lib/ai/voice";
  */
 
 export async function POST(request: Request) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const rateLimit = await checkRateLimit(user.id);
+  if (!rateLimit.allowed) {
+    return createRateLimitResponse(rateLimit);
+  }
+
   const { provider } = (await request.json()) as { provider: VoiceProvider };
 
   if (provider === "openai") {

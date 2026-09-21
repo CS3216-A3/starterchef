@@ -3,6 +3,8 @@ import { measuredGenerate } from "@/lib/ai/instrument";
 import { getModel } from "@/lib/ai/model";
 import { renderPrompt } from "@/lib/ai/prompts";
 import { kitchenScanSchema } from "@/lib/ai/schemas/kitchen-scan";
+import { checkRateLimit, createRateLimitResponse } from "@/lib/rate-limit";
+import { createClient } from "@/lib/supabase/server";
 
 /**
  * POST /api/ai/kitchen-scan
@@ -12,6 +14,19 @@ import { kitchenScanSchema } from "@/lib/ai/schemas/kitchen-scan";
  */
 export async function POST(request: Request) {
   try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const rateLimit = await checkRateLimit(user.id);
+    if (!rateLimit.allowed) {
+      return createRateLimitResponse(rateLimit);
+    }
+
     const { image } = (await request.json()) as { image?: string };
     if (!image) {
       return NextResponse.json(

@@ -4,6 +4,8 @@ import { measuredGenerate } from "@/lib/ai/instrument";
 import { getModel } from "@/lib/ai/model";
 import { renderPrompt } from "@/lib/ai/prompts";
 import { assistantReplySchema } from "@/lib/ai/schemas/assistant";
+import { checkRateLimit, createRateLimitResponse } from "@/lib/rate-limit";
+import { createClient } from "@/lib/supabase/server";
 
 const requestSchema = z.object({
   question: z.string().min(1).max(1000),
@@ -21,6 +23,19 @@ const requestSchema = z.object({
  */
 export async function POST(request: Request) {
   try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const rateLimit = await checkRateLimit(user.id);
+    if (!rateLimit.allowed) {
+      return createRateLimitResponse(rateLimit);
+    }
+
     const parsed = requestSchema.safeParse(await request.json());
     if (!parsed.success) {
       return NextResponse.json(

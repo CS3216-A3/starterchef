@@ -25,6 +25,10 @@ export const metadata: Metadata = {
       "Scan your kitchen, get recipes that fit what you have, and cook hands-free with an AI sous-chef.",
     type: "website",
   },
+  icons: {
+    icon: "/logo.png",
+    apple: "/logowbg.png",
+  },
 };
 
 export const viewport: Viewport = {
