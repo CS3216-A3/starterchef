@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@theme {
+  /*
+   * StarterChef brand palette — 60 / 30 / 10 rule.
+   * Always use these tokens; never hardcode hex values in components.
+   */
+  --color-cream: #faf7f2; /* 60% — page background, open space */
+  --color-card: #fffdfa; /* raised surface, slightly lighter than cream */
+  --color-oat: #f3e5d2; /* 30% — panels, summary cards, selected sections */
+  --color-oat-dark: #e9d7bf; /* deeper supporting surface / hover */
+  --color-flame: #f58220; /* 10% — logo, primary actions, active indicators */
+  --color-flame-dark: #d96e12; /* primary hover/active */
+  --color-flame-soft: #fde9d3; /* accent tint fill */
+  --color-espresso: #493326; /* headings, body text, functional icons */
+  --color-espresso-light: #8a6f5c; /* secondary text, muted labels */
+
+  --font-sans: var(--font-nunito), ui-rounded, system-ui, sans-serif;
+}
+
+body {
+  background: var(--color-cream);
+  color: var(--color-espresso);
+}
