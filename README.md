@@ -62,6 +62,7 @@ src/app/api/ai/        AI endpoints (kitchen-scan, suggest-recipes, assistant, r
 src/hooks/             voice hooks: web-speech, OpenAI Realtime, Gemini Live
 src/lib/ai/            provider abstraction, zod schemas, tools, voice telemetry
 src/lib/posthog/       analytics init + event tracking helper
+src/instrumentation.ts PostHog AI observability via OpenTelemetry
 src/lib/supabase/      browser + server clients
 prompts/               versioned system prompts (cited in milestones writeup)
 evals/                 eval datasets + runner (LLMOps milestone)
