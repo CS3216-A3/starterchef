@@ -25,7 +25,7 @@ export function getProvider(): AiProvider {
 export function getModel(provider: AiProvider = getProvider()): LanguageModel {
   switch (provider) {
     case "google":
-      return google(process.env.GOOGLE_MODEL ?? "gemini-2.5-flash");
+      return google(process.env.GOOGLE_MODEL ?? "gemini-3.6-flash");
     case "openai":
       return openai(process.env.OPENAI_MODEL ?? "gpt-4o-mini");
   }
@@ -34,7 +34,7 @@ export function getModel(provider: AiProvider = getProvider()): LanguageModel {
 export function getModelName(provider: AiProvider = getProvider()): string {
   switch (provider) {
     case "google":
-      return process.env.GOOGLE_MODEL ?? "gemini-2.5-flash";
+      return process.env.GOOGLE_MODEL ?? "gemini-3.6-flash";
     case "openai":
       return process.env.OPENAI_MODEL ?? "gpt-4o-mini";
   }
