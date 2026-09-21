@@ -8,7 +8,10 @@ import { mockCookingSession, mockRecipes } from "@/lib/mock-data";
 export default async function CookPage({
   params,
   searchParams,
-}: PageProps<"/cook/[id]">) {
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ step?: string }>;
+}) {
   const { id } = await params;
   const { step } = await searchParams;
 
