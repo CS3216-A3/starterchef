@@ -26,10 +26,21 @@ voice-enabled AI sous-chef.
 ## Local setup
 
 ```bash
-cp .env.example .env.local   # fill in an AI provider key; Supabase optional until auth ships
+cp .env.example .env.local   # fill in an AI provider key and Supabase keys
 npm install
 npm run dev                  # http://localhost:3000
 ```
+
+### Supabase checklist
+
+1. Create a project at supabase.com.
+2. In **Project Settings → API Keys**, copy the **publishable** key (starts with `sb_publishable_`) into `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and the **secret** key (starts with `sb_secret_`) into `SUPABASE_SECRET_KEY`.
+3. In **Project Settings → Data API**, enable the Data API, disable **Automatically expose new tables**, and enable **Automatic RLS**.
+4. Run `supabase/migrations/0001_init.sql` in the Supabase SQL editor.
+5. In **Authentication → URL Configuration**, set:
+   - Site URL: `http://localhost:3000/today`
+   - Redirect URLs: `http://localhost:3000/auth/callback`
+6. Enable an auth provider (e.g. Google under **Authentication → Providers**) or keep email auth enabled.
 
 Useful scripts:
 
