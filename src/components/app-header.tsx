@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/logo";
 import { appNavLinks } from "@/lib/nav";
+import { SignOutButton } from "@/components/sign-out-button";
 import { cn } from "@/lib/utils";
 
 export function AppHeader() {
@@ -36,12 +37,7 @@ export function AppHeader() {
           })}
         </nav>
 
-        <div
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-oat text-sm font-extrabold text-espresso"
-          aria-label="Your profile"
-        >
-          You
-        </div>
+        <SignOutButton />
       </div>
     </header>
   );

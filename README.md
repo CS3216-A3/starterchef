@@ -39,8 +39,9 @@ npm run dev                  # http://localhost:3000
 4. Run `supabase/migrations/0001_init.sql` in the Supabase SQL editor.
 5. In **Authentication → URL Configuration**, set:
    - Site URL: `http://localhost:3000/today`
-   - Redirect URLs: `http://localhost:3000/auth/callback`
+   - Redirect URLs: `http://localhost:3000/auth/callback` and your production URL once deployed
 6. Enable an auth provider (e.g. Google under **Authentication → Providers**) or keep email auth enabled.
+7. (Optional) Disable **Confirm email** for password signups under **Authentication → Providers → Email** while developing — re-enable for production.
 
 Useful scripts:
 
