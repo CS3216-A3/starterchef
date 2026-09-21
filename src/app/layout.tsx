@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Nunito } from "next/font/google";
-import { Analytics } from "@/components/analytics";
+import { PostHogProvider } from "@/components/posthog-provider";
 import "./globals.css";
 
 const nunito = Nunito({
@@ -39,8 +39,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${nunito.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col bg-cream font-sans text-espresso">
-        {children}
-        <Analytics />
+        <PostHogProvider>{children}</PostHogProvider>
       </body>
     </html>
   );
