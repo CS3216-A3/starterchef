@@ -36,12 +36,13 @@ npm run dev                  # http://localhost:3000
 1. Create a project at supabase.com.
 2. In **Project Settings → API Keys**, copy the **publishable** key (starts with `sb_publishable_`) into `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and the **secret** key (starts with `sb_secret_`) into `SUPABASE_SECRET_KEY`.
 3. In **Project Settings → Data API**, enable the Data API and disable **Automatically expose new tables**.
-4. Run the migrations in `supabase/migrations/` (0001, 0002, 0003) in order in the Supabase SQL editor.
-5. In **Authentication → URL Configuration**, set:
+4. Run the migrations in `supabase/migrations/` (0001–0005) in order in the Supabase SQL editor.
+5. Load the starter recipe catalogue: run `supabase/seed/recipes.sql` in the SQL editor. The 6 recipes are StarterChef originals released under CC0.
+6. In **Authentication → URL Configuration**, set:
    - Site URL: `http://localhost:3000/today`
    - Redirect URLs: `http://localhost:3000/auth/callback` and your production URL once deployed
-6. Enable an auth provider (e.g. Google under **Authentication → Providers**) or keep email auth enabled.
-7. (Optional) Disable **Confirm email** for password signups under **Authentication → Providers → Email** while developing — re-enable for production.
+7. Enable an auth provider (e.g. Google under **Authentication → Providers**) or keep email auth enabled.
+8. (Optional) Disable **Confirm email** for password signups under **Authentication → Providers → Email** while developing — re-enable for production.
 
 Useful scripts:
 
@@ -57,7 +58,10 @@ npm run format        # Prettier
 
 ```
 src/app/(marketing)/   landing page (SEO + OG, hero/features/pricing)
-src/app/(app)/         authed app shell: today, kitchen, recipes, cook/[id]
+src/app/(app)/         authed app shell: today, kitchen, recipes, cook/[id], settings
+src/lib/data.ts        server-side query helpers (profiles, kitchen_items, recipes, sessions)
+src/lib/types.ts       DB row types (hand-maintained)
+supabase/seed/         starter recipe catalogue (original, CC0)
 src/app/api/ai/        AI endpoints (kitchen-scan, suggest-recipes, assistant, realtime session)
 src/hooks/             voice hooks: web-speech, OpenAI Realtime, Gemini Live
 src/lib/ai/            provider abstraction, zod schemas, tools, voice telemetry

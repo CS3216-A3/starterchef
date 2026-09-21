@@ -1,21 +1,39 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { mockEquipment, mockIngredients } from "@/lib/mock-data";
+import { createClient } from "@/lib/supabase/server";
+import type { KitchenItemRow, ProfileRow } from "@/lib/types";
 
 /**
- * Tools available to the cooking assistant agent. `execute` functions are
- * stubs backed by mock data until Supabase is wired in — the tool surface is
- * what matters for the agentic-pattern milestone.
+ * Tools available to the cooking assistant agent. `execute` runs server-side
+ * inside the route handler, so the cookie-bound Supabase client works and
+ * RLS scopes every query to the calling user.
  */
 export const cookingTools = {
   getInventory: tool({
     description:
       "Get the user's current kitchen inventory: ingredients and equipment.",
     inputSchema: z.object({}),
-    execute: async () => ({
-      ingredients: mockIngredients,
-      equipment: mockEquipment,
-    }),
+    execute: async () => {
+      const supabase = await createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return { ingredients: [], equipment: [] };
+
+      const { data } = await supabase
+        .from("kitchen_items")
+        .select("kind, name")
+        .eq("user_id", user.id);
+      const items = (data ?? []) as Pick<KitchenItemRow, "kind" | "name">[];
+      return {
+        ingredients: items
+          .filter((i) => i.kind === "ingredient")
+          .map((i) => i.name),
+        equipment: items
+          .filter((i) => i.kind === "equipment")
+          .map((i) => i.name),
+      };
+    },
   }),
 
   substituteIngredient: tool({
@@ -52,10 +70,33 @@ export const cookingTools = {
     description:
       "Get the user's dietary restrictions, allergies, and taste preferences.",
     inputSchema: z.object({}),
-    execute: async () => ({
-      dietaryRestrictions: [],
-      allergies: [],
-      skillLevel: "beginner",
-    }),
+    execute: async () => {
+      const supabase = await createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        return {
+          dietaryRestrictions: [],
+          allergies: [],
+          skillLevel: "beginner",
+        };
+      }
+
+      const { data } = await supabase
+        .from("profiles")
+        .select("dietary_restrictions, allergies, skill_level")
+        .eq("id", user.id)
+        .maybeSingle();
+      const profile = data as Pick<
+        ProfileRow,
+        "dietary_restrictions" | "allergies" | "skill_level"
+      > | null;
+      return {
+        dietaryRestrictions: profile?.dietary_restrictions ?? [],
+        allergies: profile?.allergies ?? [],
+        skillLevel: profile?.skill_level ?? "beginner",
+      };
+    },
   }),
 };

@@ -1,9 +1,9 @@
 import { CookingPot, UtensilsCrossed, type LucideIcon } from "lucide-react";
 
 /**
- * Placeholder data used by the UI until Supabase + the AI layer are wired in.
- * Replace progressively; keep shapes aligned with the zod schemas in
- * `src/lib/ai/schemas/` so the swap is mechanical.
+ * @deprecated Pages now read real rows from Supabase (see `src/lib/data.ts`
+ * and `supabase/seed/recipes.sql`). This file is kept only as a reference
+ * for the shapes the AI layer should emit — do not import it from pages.
  */
 
 export const mockIngredients = ["Eggs", "Tomatoes", "Rice", "Mushrooms"];

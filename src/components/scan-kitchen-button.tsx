@@ -3,6 +3,7 @@
 import { Camera, ScanLine, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/button";
+import { saveKitchenItems } from "@/app/(app)/kitchen/actions";
 import type { KitchenScanResult } from "@/lib/ai/schemas/kitchen-scan";
 
 type ScanState =
@@ -10,6 +11,8 @@ type ScanState =
   | { status: "preview" }
   | { status: "scanning" }
   | { status: "done"; result: KitchenScanResult }
+  | { status: "saving" }
+  | { status: "saved"; added: number }
   | { status: "error"; message: string };
 
 export function ScanKitchenButton() {
@@ -80,6 +83,37 @@ export function ScanKitchenButton() {
     }
   }
 
+  async function addToKitchen(result: KitchenScanResult) {
+    setState({ status: "saving" });
+    const now = new Date();
+    const items = [
+      ...result.ingredients.map((i) => ({
+        kind: "ingredient" as const,
+        name: i.name,
+        quantity: i.estimatedQuantity ?? null,
+        expiresOn: i.expiresWithinDays
+          ? new Date(now.getTime() + i.expiresWithinDays * 86400000)
+              .toISOString()
+              .slice(0, 10)
+          : null,
+        source: "scan" as const,
+      })),
+      ...result.equipment.map((i) => ({
+        kind: "equipment" as const,
+        name: i.name,
+        quantity: null as string | null,
+        expiresOn: null as string | null,
+        source: "scan" as const,
+      })),
+    ];
+    const res = await saveKitchenItems(items);
+    if (res.error) {
+      setState({ status: "error", message: res.error });
+    } else {
+      setState({ status: "saved", added: res.count ?? items.length });
+    }
+  }
+
   function closePreview() {
     stopCamera();
     setState({ status: "idle" });
@@ -122,26 +156,61 @@ export function ScanKitchenButton() {
         </div>
       )}
 
-      {state.status !== "preview" && (
-        <Button
-          size="md"
-          className="w-full"
-          disabled={state.status === "scanning"}
-          onClick={startCamera}
-        >
-          <ScanLine className="h-5 w-5" />
-          {state.status === "scanning" ? "Scanning…" : "Scan my kitchen"}
-        </Button>
-      )}
-
       {state.status === "done" && (
-        <div className="rounded-2xl bg-green-50 p-3 text-sm font-semibold text-green-700 ring-1 ring-green-100">
-          Found {state.result.ingredients.length} ingredients and{" "}
-          {state.result.equipment.length} tools. These will be{" "}
-          <strong>added</strong> to your kitchen — existing items won&apos;t be
-          removed.
+        <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-oat">
+          <p className="mb-2 text-sm font-bold">
+            Found {state.result.ingredients.length} ingredients and{" "}
+            {state.result.equipment.length} tools.
+          </p>
+          <ul className="mb-3 flex flex-wrap gap-1 text-sm font-semibold text-espresso-light">
+            {state.result.ingredients.map((i) => (
+              <li key={i.name} className="rounded-full bg-oat px-2 py-0.5">
+                {i.name}
+              </li>
+            ))}
+            {state.result.equipment.map((i) => (
+              <li key={i.name} className="rounded-full bg-oat px-2 py-0.5">
+                {i.name}
+              </li>
+            ))}
+          </ul>
+          <p className="mb-3 text-xs font-semibold text-espresso-light">
+            Existing items won&apos;t be removed — these will be merged in.
+          </p>
+          <Button
+            type="button"
+            className="w-full"
+            onClick={() => addToKitchen(state.result)}
+          >
+            Add to my kitchen
+          </Button>
         </div>
       )}
+
+      {state.status === "saved" && (
+        <div className="rounded-2xl bg-green-50 p-3 text-sm font-semibold text-green-700 ring-1 ring-green-100">
+          Added {state.added} item(s) to your kitchen. Visit the Kitchen page to
+          review.
+        </div>
+      )}
+
+      {state.status === "saving" && (
+        <p className="text-sm font-semibold text-espresso-light">Saving…</p>
+      )}
+
+      {state.status !== "preview" &&
+        state.status !== "done" &&
+        state.status !== "saving" && (
+          <Button
+            size="md"
+            className="w-full"
+            disabled={state.status === "scanning"}
+            onClick={startCamera}
+          >
+            <ScanLine className="h-5 w-5" />
+            {state.status === "scanning" ? "Scanning…" : "Scan my kitchen"}
+          </Button>
+        )}
 
       {state.status === "error" && (
         <div className="rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-700 ring-1 ring-red-100">

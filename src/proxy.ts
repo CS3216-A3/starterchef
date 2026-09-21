@@ -8,7 +8,7 @@ import { createServerClient } from "@supabase/ssr";
  * unauthenticated users away from the app shell routes.
  */
 
-const protectedPaths = ["/today", "/kitchen", "/recipes", "/cook"];
+const protectedPaths = ["/today", "/kitchen", "/recipes", "/cook", "/settings"];
 
 export async function proxy(request: NextRequest) {
   const supabaseResponse = NextResponse.next({ request });

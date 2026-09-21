@@ -4,13 +4,32 @@ import type { Metadata } from "next";
 import { FilterPills } from "@/components/filter-pills";
 import { KitchenPanel } from "@/components/kitchen-panel";
 import { RecipeCard } from "@/components/recipe-card";
-import { mockRecipes } from "@/lib/mock-data";
+import {
+  getActiveCookingSession,
+  getKitchenItems,
+  getRecipes,
+} from "@/lib/data";
+import { toRecipeCardModel } from "@/lib/recipe-view";
 
 export const metadata: Metadata = {
   title: "Today",
 };
 
-export default function TodayPage() {
+// Reads Supabase per-request — never prerender (also keeps builds working
+// when env vars aren't set).
+export const dynamic = "force-dynamic";
+
+export default async function TodayPage() {
+  const [recipes, kitchenItems, session] = await Promise.all([
+    getRecipes(4),
+    getKitchenItems(),
+    getActiveCookingSession(),
+  ]);
+
+  const ingredients = kitchenItems.filter((i) => i.kind === "ingredient");
+  const equipment = kitchenItems.filter((i) => i.kind === "equipment");
+  const activeRecipe = session?.recipe;
+
   return (
     <div className="flex flex-col gap-8">
       <section className="flex flex-col gap-4">
@@ -27,28 +46,35 @@ export default function TodayPage() {
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <section className="flex flex-col gap-4">
-          <Link
-            href="/cook/tomato-egg-stir-fry?step=3"
-            className="flex items-center justify-between rounded-3xl border-2 border-flame bg-flame-soft p-5 transition-colors hover:bg-[#fcd9b8]"
-          >
-            <span className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-card">
-                <Flame className="h-5 w-5 text-flame" />
-              </span>
-              <span>
-                <span className="block text-sm font-extrabold">
-                  Already cooking
+          {activeRecipe?.slug && (
+            <Link
+              href={`/cook/${activeRecipe.slug}?step=${session?.current_step ?? 1}`}
+              className="flex items-center justify-between rounded-3xl border-2 border-flame bg-flame-soft p-5 transition-colors hover:bg-[#fcd9b8]"
+            >
+              <span className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-card">
+                  <Flame className="h-5 w-5 text-flame" />
                 </span>
-                <span className="block text-xs font-semibold text-espresso-light">
-                  Continue Tomato Egg Stir-Fry from step 3
+                <span>
+                  <span className="block text-sm font-extrabold">
+                    Already cooking
+                  </span>
+                  <span className="block text-xs font-semibold text-espresso-light">
+                    Continue {activeRecipe.title ?? "your recipe"} from step{" "}
+                    {session?.current_step ?? 1}
+                  </span>
                 </span>
               </span>
-            </span>
-            <ArrowRight className="h-5 w-5 text-espresso-light" />
-          </Link>
+              <ArrowRight className="h-5 w-5 text-espresso-light" />
+            </Link>
+          )}
 
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-extrabold">A few ideas for tonight</h2>
+            <h2 className="text-xl font-extrabold">
+              {recipes.length > 0
+                ? "A few ideas for tonight"
+                : "No recipes yet"}
+            </h2>
             <Link
               href="/recipes"
               className="inline-flex items-center gap-1 text-sm font-bold text-espresso-light hover:text-espresso"
@@ -57,14 +83,23 @@ export default function TodayPage() {
             </Link>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            {mockRecipes.map((recipe) => (
-              <RecipeCard key={recipe.id} recipe={recipe} />
-            ))}
-          </div>
+          {recipes.length === 0 ? (
+            <p className="text-sm font-semibold text-espresso-light">
+              Add ingredients or save recipes to see suggestions here.
+            </p>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {recipes.map((recipe, i) => (
+                <RecipeCard
+                  key={recipe.id}
+                  recipe={toRecipeCardModel(recipe, { primaryCta: i === 0 })}
+                />
+              ))}
+            </div>
+          )}
         </section>
 
-        <KitchenPanel />
+        <KitchenPanel ingredients={ingredients} equipment={equipment} />
       </div>
     </div>
   );

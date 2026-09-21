@@ -3,7 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { VoiceAssistantButton } from "@/components/voice-assistant-button";
 import { Button } from "@/components/button";
-import { mockCookingSession, mockRecipes } from "@/lib/mock-data";
+import { FinishCookingButton } from "@/components/cook-buttons";
+import { getRecipeBySlug } from "@/lib/data";
+
+export const dynamic = "force-dynamic";
 
 export default async function CookPage({
   params,
@@ -15,10 +18,12 @@ export default async function CookPage({
   const { id } = await params;
   const { step } = await searchParams;
 
-  const recipe = mockRecipes.find((r) => r.id === id);
-  if (!recipe) notFound();
+  // [id] is the recipe slug (e.g. "tomato-egg-stir-fry").
+  const recipe = await getRecipeBySlug(id);
+  if (!recipe || recipe.steps.length === 0) notFound();
 
-  const { recipeTitle, steps } = mockCookingSession;
+  const recipeTitle = recipe.title;
+  const steps = recipe.steps;
   const stepIndex = Math.min(Math.max(Number(step ?? 1) || 1, 1), steps.length);
   const current = steps[stepIndex - 1];
   const progress = Math.round((stepIndex / steps.length) * 100);
@@ -75,21 +80,23 @@ export default async function CookPage({
         ) : null}
       </section>
 
-      <section className="rounded-3xl bg-oat p-4">
-        <h3 className="mb-2 text-xs font-extrabold tracking-wide text-espresso-light uppercase">
-          For this step
-        </h3>
-        <ul className="flex flex-wrap gap-2">
-          {current.ingredients.map((item) => (
-            <li
-              key={item}
-              className="rounded-full bg-card px-3 py-1.5 text-sm font-bold"
-            >
-              {item}
-            </li>
-          ))}
-        </ul>
-      </section>
+      {current.ingredients.length > 0 ? (
+        <section className="rounded-3xl bg-oat p-4">
+          <h3 className="mb-2 text-xs font-extrabold tracking-wide text-espresso-light uppercase">
+            For this step
+          </h3>
+          <ul className="flex flex-wrap gap-2">
+            {current.ingredients.map((item) => (
+              <li
+                key={item}
+                className="rounded-full bg-card px-3 py-1.5 text-sm font-bold"
+              >
+                {item}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {current.durationSeconds ? (
         <div className="flex items-center justify-between rounded-3xl bg-card p-4 shadow-sm ring-1 ring-oat">
@@ -125,9 +132,7 @@ export default async function CookPage({
             </Button>
           </Link>
         ) : (
-          <Link href="/today">
-            <Button size="md">Finish cooking</Button>
-          </Link>
+          <FinishCookingButton />
         )}
       </nav>
     </div>
