@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { AlertCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/button";
 
@@ -10,7 +11,8 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string>();
+  const [error, setError] = useState<string>();
+  const [success, setSuccess] = useState<string>();
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/today";
@@ -18,18 +20,19 @@ export function LoginForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setMessage(undefined);
+    setError(undefined);
+    setSuccess(undefined);
 
     const supabase = createClient();
-    const { error } =
+    const { error: authError } =
       mode === "signin"
         ? await supabase.auth.signInWithPassword({ email, password })
         : await supabase.auth.signUp({ email, password });
 
     setLoading(false);
 
-    if (error) {
-      setMessage(error.message);
+    if (authError) {
+      setError(authError.message);
       return;
     }
 
@@ -37,8 +40,8 @@ export function LoginForm() {
       router.push(next);
       router.refresh();
     } else {
-      setMessage(
-        "Check your email for a confirmation link, then sign in here.",
+      setSuccess(
+        "Account created. Check your email for a confirmation link, then sign in.",
       );
     }
   };
@@ -49,8 +52,41 @@ export function LoginForm() {
       className="flex w-full max-w-sm flex-col gap-4 rounded-3xl bg-card p-6 shadow-sm ring-1 ring-oat"
     >
       <h1 className="text-2xl font-extrabold">
-        {mode === "signin" ? "Sign in" : "Create account"}
+        {mode === "signin" ? "Welcome back" : "Create your account"}
       </h1>
+
+      <div className="grid grid-cols-2 gap-2 rounded-full bg-oat p-1">
+        <button
+          type="button"
+          onClick={() => {
+            setMode("signin");
+            setError(undefined);
+            setSuccess(undefined);
+          }}
+          className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${
+            mode === "signin"
+              ? "bg-card text-espresso shadow-sm"
+              : "text-espresso-light hover:text-espresso"
+          }`}
+        >
+          Sign in
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMode("signup");
+            setError(undefined);
+            setSuccess(undefined);
+          }}
+          className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${
+            mode === "signup"
+              ? "bg-card text-espresso shadow-sm"
+              : "text-espresso-light hover:text-espresso"
+          }`}
+        >
+          Sign up
+        </button>
+      </div>
 
       <div className="flex flex-col gap-1">
         <label htmlFor="email" className="text-sm font-extrabold">
@@ -81,6 +117,19 @@ export function LoginForm() {
         />
       </div>
 
+      {error && (
+        <div className="flex items-start gap-2 rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-700 ring-1 ring-red-100">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="rounded-2xl bg-green-50 p-3 text-sm font-semibold text-green-700 ring-1 ring-green-100">
+          {success}
+        </div>
+      )}
+
       <Button type="submit" disabled={loading}>
         {loading
           ? "Please wait…"
@@ -89,21 +138,39 @@ export function LoginForm() {
             : "Create account"}
       </Button>
 
-      <button
-        type="button"
-        onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
-        className="text-sm font-semibold text-espresso-light hover:text-espresso"
-      >
-        {mode === "signin"
-          ? "Don't have an account? Sign up"
-          : "Already have an account? Sign in"}
-      </button>
-
-      {message && (
-        <p className="text-center text-sm font-semibold text-flame-dark">
-          {message}
-        </p>
-      )}
+      <p className="text-center text-sm font-semibold text-espresso-light">
+        {mode === "signin" ? (
+          <>
+            Don&apos;t have an account?{" "}
+            <button
+              type="button"
+              onClick={() => {
+                setMode("signup");
+                setError(undefined);
+                setSuccess(undefined);
+              }}
+              className="font-extrabold text-flame hover:text-flame-dark"
+            >
+              Sign up
+            </button>
+          </>
+        ) : (
+          <>
+            Already have an account?{" "}
+            <button
+              type="button"
+              onClick={() => {
+                setMode("signin");
+                setError(undefined);
+                setSuccess(undefined);
+              }}
+              className="font-extrabold text-flame hover:text-flame-dark"
+            >
+              Sign in
+            </button>
+          </>
+        )}
+      </p>
     </form>
   );
 }

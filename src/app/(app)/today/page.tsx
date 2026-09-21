@@ -27,6 +27,26 @@ export default function TodayPage() {
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <section className="flex flex-col gap-4">
+          <Link
+            href="/cook/tomato-egg-stir-fry?step=3"
+            className="flex items-center justify-between rounded-3xl border-2 border-flame bg-flame-soft p-5 transition-colors hover:bg-[#fcd9b8]"
+          >
+            <span className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-card">
+                <Flame className="h-5 w-5 text-flame" />
+              </span>
+              <span>
+                <span className="block text-sm font-extrabold">
+                  Already cooking
+                </span>
+                <span className="block text-xs font-semibold text-espresso-light">
+                  Continue Tomato Egg Stir-Fry from step 3
+                </span>
+              </span>
+            </span>
+            <ArrowRight className="h-5 w-5 text-espresso-light" />
+          </Link>
+
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-extrabold">A few ideas for tonight</h2>
             <Link
@@ -42,26 +62,6 @@ export default function TodayPage() {
               <RecipeCard key={recipe.id} recipe={recipe} />
             ))}
           </div>
-
-          <Link
-            href="/cook/tomato-egg-stir-fry"
-            className="flex items-center justify-between rounded-3xl bg-oat p-5 transition-colors hover:bg-oat-dark"
-          >
-            <span className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-card">
-                <Flame className="h-5 w-5 text-flame" />
-              </span>
-              <span>
-                <span className="block text-sm font-extrabold">
-                  Already cooking?
-                </span>
-                <span className="block text-xs font-semibold text-espresso-light">
-                  Continue from step 3
-                </span>
-              </span>
-            </span>
-            <ArrowRight className="h-5 w-5 text-espresso-light" />
-          </Link>
         </section>
 
         <KitchenPanel />
