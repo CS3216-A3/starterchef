@@ -1,7 +1,7 @@
 import { ArrowLeft, ArrowRight, CookingPot, Play, Timer } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AskAssistantButton } from "@/components/ask-assistant-button";
+import { VoiceAssistantButton } from "@/components/voice-assistant-button";
 import { Button } from "@/components/button";
 import { mockCookingSession, mockRecipes } from "@/lib/mock-data";
 
@@ -100,7 +100,10 @@ export default async function CookPage({
         </div>
       ) : null}
 
-      <AskAssistantButton recipeTitle={recipeTitle} stepTitle={current.title} />
+      <VoiceAssistantButton
+        recipeTitle={recipeTitle}
+        stepTitle={current.title}
+      />
 
       <nav className="flex items-center justify-between gap-3">
         {stepIndex > 1 ? (
