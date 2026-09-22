@@ -32,5 +32,30 @@ export const recipeStepsSchema = z.object({
   steps: z.array(cookingStepSchema).min(1),
 });
 
+/**
+ * Feedback on a photo the user takes mid-step ("camera checkpoint").
+ * `looksRight` is null when the photo doesn't show the food clearly enough
+ * to judge.
+ */
+export const stepCheckSchema = z.object({
+  looksRight: z
+    .boolean()
+    .nullable()
+    .describe(
+      "true if the photo looks like a correct result, false if something is clearly off, null if the photo is unclear",
+    ),
+  feedback: z
+    .string()
+    .describe(
+      "1–3 short sentences of practical feedback on what the photo shows vs what the step expects",
+    ),
+  tip: z
+    .string()
+    .optional()
+    .describe("One concrete fix or next action, if anything needs adjusting"),
+});
+
+export type StepCheck = z.infer<typeof stepCheckSchema>;
+
 export type CookingStep = z.infer<typeof cookingStepSchema>;
 export type RecipeSteps = z.infer<typeof recipeStepsSchema>;

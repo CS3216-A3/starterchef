@@ -56,6 +56,8 @@ export function RecipeChat({
         tip: s.tip,
         photoCheckpoint: s.photoCheckpoint,
       })),
+      tags: recipe.tags,
+      why_good: recipe.why_good,
     };
   }
 
@@ -69,7 +71,7 @@ export function RecipeChat({
 
     startTransition(async () => {
       try {
-        const res = await fetch("/api/ai/adapt-recipe", {
+        const res = await fetch("/api/ai/edit-recipe", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

@@ -87,9 +87,9 @@ Fill in the measured numbers from `evals/results/text-model-comparison.json` and
 ### User flows
 
 1. **Import**: User pastes text/link/photo/video → AI returns structured preview → user saves to their library.
-2. **Overview**: `/recipes/[id]` shows hero image (or a designed placeholder), ingredients, equipment and steps, plus a "Customise with StarterChef" chat that adapts the recipe via `POST /api/ai/adapt-recipe` and saves an accepted suggestion as a personalised copy.
-3. **Edit**: `/recipes/[id]/edit` lets the owner fix ingredients, steps, servings, equipment and the cover image before cooking.
-4. **Cook**: `/cook/[id]` resolves by slug or by recipe id; users can attach their own photo to any step (stored on the recipe for owned recipes, on the session snapshot for catalogue ones).
+2. **Overview**: `/recipes/[id]` shows hero image (or a designed placeholder), ingredients, equipment and steps, plus a "Customise with StarterChef" chat that adapts the recipe via `POST /api/ai/edit-recipe` and saves an accepted suggestion as a personalised copy. Owners can delete their recipe from the overview or edit page.
+3. **Edit**: `/recipes/[id]/edit` lets the owner fix ingredients, steps, servings, equipment and the cover image before cooking — or ask StarterChef to edit via the tool-driven route (`POST /api/ai/edit-recipe`): the model mutates a server-side working copy through constrained tools (`updateMeta`, `setIngredients`, `updateStep`, `addStep`, `removeStep`), so edits always produce a valid recipe.
+4. **Cook**: `/cook/[id]` resolves by slug or by recipe id; users can attach their own photo to any step (stored on the recipe for owned recipes, on the session snapshot for catalogue ones), ask questions by text or voice, and share a camera checkpoint (`POST /api/ai/step-check`) for practical feedback on whether their result looks right.
 5. **Personalise**: On the last step, the "Finish cooking" button opens a feedback form; saving creates `My <title>` as a personalised child recipe and writes a `recipe_feedback` row.
 6. **Filter**: The time/servings/skill pills on `/today` write URL params (`?time=&servings=&skill=`) and filter the ideas list server-side. Servings/skill default to the user's profile (household size, skill level) when no param is set.
 7. **Onboarding**: New users land on `/onboarding` (redirected from `/today` until `profiles.onboarded_at` is set) — profile + household size, dietary needs, an optional first kitchen scan, and an optional first recipe import.

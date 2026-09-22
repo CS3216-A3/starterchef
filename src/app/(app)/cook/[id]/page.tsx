@@ -5,6 +5,7 @@ import { VoiceAssistantButton } from "@/components/voice-assistant-button";
 import { Button } from "@/components/button";
 import { FinishCookingButton } from "@/components/cook-buttons";
 import { StepPhotoUpload } from "@/components/step-photo-upload";
+import { StepAskBox, StepCheckButton } from "@/components/step-assist";
 import { getActiveCookingSession, getRecipeBySlug } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
@@ -136,6 +137,23 @@ export default async function CookPage({
       <VoiceAssistantButton
         recipeTitle={recipeTitle}
         stepTitle={current.title}
+      />
+
+      <StepAskBox
+        context={{
+          recipeTitle,
+          stepTitle: current.title,
+          instruction: current.instruction,
+        }}
+      />
+
+      <StepCheckButton
+        context={{
+          recipeTitle,
+          stepTitle: current.title,
+          instruction: current.instruction,
+          photoCheckpoint: current.photoCheckpoint,
+        }}
       />
 
       <nav className="flex items-center justify-between gap-3">

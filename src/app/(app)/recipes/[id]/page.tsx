@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Button } from "@/components/button";
 import { StartCookingButton } from "@/components/cook-buttons";
+import { DeleteRecipeButton } from "@/components/delete-recipe-button";
 import { RecipeChat } from "@/components/recipe-chat";
 import { RecipeImage } from "@/components/recipe-image";
 import { SaveRecipeButton } from "@/components/save-recipe-button";
@@ -184,6 +185,10 @@ export default async function RecipeOverviewPage({
       </section>
 
       <RecipeChat recipe={recipe} isOwner={isOwner} />
+
+      {isOwner && (
+        <DeleteRecipeButton recipeId={recipe.id} recipeTitle={recipe.title} />
+      )}
 
       <div>
         <Link href="/recipes">
