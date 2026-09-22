@@ -18,7 +18,7 @@ export function KitchenPanel({
 
       {ingredients.length === 0 ? (
         <p className="text-sm font-semibold text-espresso-light">
-          Nothing scanned yet — add ingredients so we can suggest meals.
+          Nothing scanned yet. Add ingredients so we can suggest meals.
         </p>
       ) : (
         <ul className="flex flex-wrap gap-2">

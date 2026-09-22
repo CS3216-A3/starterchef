@@ -15,7 +15,7 @@ export function friendlyAiError(err: unknown, fallback: string): string {
     msg.includes("503") ||
     msg.includes("unavailable")
   ) {
-    return "StarterChef is a bit busy right now — try again in a moment.";
+    return "StarterChef is a bit busy right now. Try again in a moment.";
   }
   if (
     msg.includes("rate limit") ||
@@ -23,14 +23,14 @@ export function friendlyAiError(err: unknown, fallback: string): string {
     msg.includes("429") ||
     msg.includes("too many requests")
   ) {
-    return "You're cooking faster than we can keep up — try again shortly.";
+    return "You're cooking faster than we can keep up. Try again shortly.";
   }
   if (
     msg.includes("timeout") ||
     msg.includes("timed out") ||
     msg.includes("deadline")
   ) {
-    return "That took too long — give it another try.";
+    return "That took too long. Give it another try.";
   }
   if (
     msg.includes("api key") ||
@@ -38,7 +38,7 @@ export function friendlyAiError(err: unknown, fallback: string): string {
     msg.includes("unauthorized") ||
     msg.includes("401")
   ) {
-    return "Our AI service isn't configured right — we've been notified.";
+    return "Our AI service isn't configured right. We've been notified.";
   }
   return fallback;
 }

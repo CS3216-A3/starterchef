@@ -3,7 +3,7 @@ import { Logo } from "@/components/logo";
 import { LoginForm } from "@/app/login/login-form";
 
 export const metadata = {
-  title: "Sign in — StarterChef",
+  title: "Sign in · StarterChef",
 };
 
 export default function LoginPage() {

@@ -11,7 +11,7 @@ import type { Metadata } from "next";
 import { Button } from "@/components/button";
 
 export const metadata: Metadata = {
-  title: "StarterChef — Cook with what you have",
+  title: "StarterChef · Cook with what you have",
 };
 
 const features = [
@@ -70,8 +70,7 @@ export default function LandingPage() {
         </h1>
         <p className="max-w-xl text-lg font-semibold text-espresso-light">
           StarterChef sees what&apos;s in your kitchen, suggests meals you can
-          actually make, and talks you through every step — no experience
-          needed.
+          actually make, and talks you through every step, no experience needed.
         </p>
         <div className="flex flex-col gap-3 sm:flex-row">
           <Link href="/today">

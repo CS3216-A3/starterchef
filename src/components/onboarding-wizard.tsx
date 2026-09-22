@@ -218,7 +218,7 @@ export function OnboardingWizard({ profile }: { profile: ProfileRow | null }) {
             <PillInput
               values={allergies}
               onChange={setAllergies}
-              placeholder="Type an allergy and press Enter — e.g. peanuts"
+              placeholder="Type an allergy and press Enter, e.g. peanuts"
             />
           </div>
         </div>
@@ -229,8 +229,8 @@ export function OnboardingWizard({ profile }: { profile: ProfileRow | null }) {
           <div>
             <h1 className="text-2xl font-extrabold">Scan your kitchen</h1>
             <p className="mt-1 text-sm font-semibold text-espresso-light">
-              Point your camera at your fridge or counter — we&apos;ll list what
-              you have so suggestions match your ingredients.
+              Point your camera at your fridge or counter and we&apos;ll list
+              what you have so suggestions match your ingredients.
             </p>
           </div>
           <ScanKitchenButton />
@@ -242,8 +242,8 @@ export function OnboardingWizard({ profile }: { profile: ProfileRow | null }) {
           <div>
             <h1 className="text-2xl font-extrabold">Add your first recipe</h1>
             <p className="mt-1 text-sm font-semibold text-espresso-light">
-              Import a recipe you already love — paste text, a link, a photo of
-              a recipe card, or a YouTube cooking video.
+              Import a recipe you already love: paste text, a link, a photo of a
+              recipe card, or a YouTube cooking video.
             </p>
           </div>
           <Button

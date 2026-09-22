@@ -177,7 +177,7 @@ export function ScanKitchenButton() {
             ))}
           </ul>
           <p className="mb-3 text-xs font-semibold text-espresso-light">
-            Existing items won&apos;t be removed — these will be merged in.
+            Existing items won&apos;t be removed. These will be merged in.
           </p>
           <Button
             type="button"

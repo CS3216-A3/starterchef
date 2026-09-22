@@ -102,7 +102,7 @@ export default function ImportRecipePage() {
     if (!file) return;
     if (file.size > 20 * 1024 * 1024) {
       setError(
-        "That video is over 20 MB — trim it or paste a YouTube link instead.",
+        "That video is over 20 MB. Trim it or paste a YouTube link instead.",
       );
       return;
     }
@@ -272,7 +272,7 @@ export default function ImportRecipePage() {
                   />
                 )}
                 <p className="text-xs font-semibold text-espresso-light">
-                  TikTok and Instagram links can&apos;t be read directly — save
+                  TikTok and Instagram links can&apos;t be read directly. Save
                   the video to your device and upload it here (max 20 MB).
                 </p>
               </div>

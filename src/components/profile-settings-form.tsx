@@ -206,7 +206,7 @@ export function ProfileSettingsForm({
           <PillInput
             values={allergies}
             onChange={setAllergies}
-            placeholder="Type an allergy and press Enter — e.g. peanuts"
+            placeholder="Type an allergy and press Enter, e.g. peanuts"
           />
         </div>
       </section>
@@ -220,7 +220,7 @@ export function ProfileSettingsForm({
         )}
         {status === "error" && (
           <span className="text-sm font-bold text-red-700">
-            Couldn&apos;t save — try again.
+            Couldn&apos;t save. Try again.
           </span>
         )}
       </div>

@@ -58,7 +58,7 @@ export function VoiceAddItems() {
       if (body.items.length === 0) {
         setState({
           status: "error",
-          message: "Didn't catch any items — try again?",
+          message: "Didn't catch any items. Try again?",
         });
         return;
       }

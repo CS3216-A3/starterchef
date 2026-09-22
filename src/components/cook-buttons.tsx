@@ -159,11 +159,11 @@ function CookingFeedbackForm({
           className="rounded-xl border-2 border-espresso/10 bg-oat p-2 text-sm font-semibold outline-none focus:border-flame"
         >
           <option value="">Skip</option>
-          <option value="1">1 — Would not make again</option>
+          <option value="1">1 · Would not make again</option>
           <option value="2">2</option>
-          <option value="3">3 — Okay</option>
+          <option value="3">3 · Okay</option>
           <option value="4">4</option>
-          <option value="5">5 — Loved it</option>
+          <option value="5">5 · Loved it</option>
         </select>
       </label>
 

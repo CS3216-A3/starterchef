@@ -26,8 +26,8 @@ export default async function KitchenPage() {
       <div>
         <h1 className="text-3xl font-extrabold tracking-tight">My Kitchen</h1>
         <p className="mt-1 font-semibold text-espresso-light">
-          What you have decides what we cook. Keep this list fresh — scan or
-          edit after groceries.
+          What you have decides what we cook. Keep this list fresh: scan or edit
+          after groceries.
         </p>
       </div>
 
@@ -141,7 +141,7 @@ export default async function KitchenPage() {
         <aside className="flex flex-col gap-4 rounded-3xl bg-oat p-5">
           <h2 className="text-lg font-extrabold">Scan my kitchen</h2>
           <p className="text-sm font-semibold text-espresso-light">
-            Point your camera at your fridge or pantry — you confirm before
+            Point your camera at your fridge or pantry. You confirm before
             anything is saved.
           </p>
           <ScanKitchenButton />

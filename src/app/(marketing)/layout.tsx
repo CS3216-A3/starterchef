@@ -37,7 +37,7 @@ export default function MarketingLayout({
       <footer className="border-t border-oat">
         <div className="mx-auto flex w-full max-w-5xl flex-col items-center justify-between gap-3 px-4 py-8 text-sm font-semibold text-espresso-light sm:flex-row sm:px-6">
           <Logo showWordmark={false} />
-          <p>StarterChef — your kitchen, your next meal.</p>
+          <p>StarterChef · Your kitchen, your next meal.</p>
           <p>CS3216 Assignment 3</p>
         </div>
       </footer>

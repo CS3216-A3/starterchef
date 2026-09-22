@@ -39,7 +39,7 @@ export default async function BrowseRecipesPage() {
 
       {recipes.length === 0 ? (
         <p className="text-sm font-semibold text-espresso-light">
-          The catalogue is empty right now — try importing a recipe instead.
+          The catalogue is empty right now. Try importing a recipe instead.
         </p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -77,7 +77,7 @@ export function CookAssist({
       if (videoRef.current) videoRef.current.srcObject = stream;
       setCameraOn(true);
     } catch {
-      setCameraError("Camera unavailable — check permission and try again.");
+      setCameraError("Camera unavailable. Check permission and try again.");
     }
   }
 
@@ -147,7 +147,7 @@ export function CookAssist({
               className="aspect-video w-full bg-espresso object-cover"
             />
             <p className="bg-card px-3 py-1.5 text-xs font-semibold text-espresso-light">
-              Camera on — your next question will include what it sees.
+              Camera on. Your next question will include what it sees.
             </p>
           </div>
         )}

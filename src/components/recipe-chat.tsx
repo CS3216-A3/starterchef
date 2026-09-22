@@ -161,7 +161,7 @@ export function RecipeChat({
         <Sparkles className="h-4 w-4 text-flame" aria-label="Uses AI credits" />
       </h2>
       <p className="text-sm font-semibold text-espresso-light">
-        Ask for changes — “make it serve 1”, “no oven”, “less spicy” — and
+        Ask for changes like “make it serve 1”, “no oven” or “less spicy”, and
         review the suggestion before anything is saved. StarterChef already
         knows your dietary needs, allergies and household size, and will flag or
         fix conflicts automatically.
