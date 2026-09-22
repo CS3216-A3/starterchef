@@ -23,11 +23,9 @@ create table public.recipes (
   -- `ingredients` list for the "For this step" chips).
   steps jsonb not null default '[]',
   tags text[] not null default '{}',
-  -- Provenance: where the recipe text came from and its license.
-  -- Defaults are honest placeholders; replace with real attribution before
-  -- publishing or distributing any recipe text.
-  source text not null default 'Unknown — verify before publication',
-  license text not null default 'Unknown — verify before publication',
+  -- Provenance: where the recipe text came from.
+  -- Keep empty or set to the actual source; do not invent a license.
+  source text not null default '',
   created_at timestamptz not null default now()
 );
 

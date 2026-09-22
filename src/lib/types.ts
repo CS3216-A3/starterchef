@@ -54,7 +54,6 @@ export interface RecipeRow {
   steps: RecipeStep[];
   tags: string[];
   source: string;
-  license: string;
   created_at: string;
 }
 

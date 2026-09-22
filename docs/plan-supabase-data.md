@@ -16,12 +16,9 @@ users can edit their profile after signup.
 
 ## 2. Recipe data source & license
 
-The seed set contains **6 common beginner dishes** used only as placeholder
-demo data. Their original authors and licenses are **unknown**. We do **not**
-claim they are original to this project or released under CC0. The
-`recipes.source` and `recipes.license` columns default to
-`'Unknown — verify before publication'` and must be updated with real
-attribution before any public release.
+The seed set contains **6 recipes sourced from TheMealDB** used only as
+placeholder demo data. `recipes.source` records the origin of each recipe;
+it should be set accurately and not invented.
 
 Seed recipes (in `supabase/seed/recipes.sql`):
 
@@ -45,7 +42,7 @@ New migration `supabase/migrations/0005_recipes.sql`:
 ('easy','medium','hard')`, `servings int`, `why_good text`, `icon text`
   (lucide icon name, mapped client-side), `image_tint text` (gradient token
   pair), `ingredients text[]`, `equipment text[]`, `steps jsonb`,
-  `tags text[]`, `source text`, `license text`, `created_at`.
+  `tags text[]`, `source text`, `created_at`.
 - `public.saved_recipes` — `user_id uuid → profiles`, `recipe_id uuid →
 recipes`, `created_at`, `primary key (user_id, recipe_id)`.
 - **RLS enabled on both.** `recipes`: `for select using
