@@ -211,30 +211,34 @@ export function CookAssist({
         </Button>
         {cameraOn && (
           <div className="overflow-hidden rounded-3xl ring-1 ring-oat">
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="aspect-video w-full bg-espresso object-cover"
-            />
-            <div className="flex flex-col gap-2 bg-card p-3">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={checkFood}
-                disabled={checking}
-                className="self-start"
-              >
-                <Camera className="h-4 w-4" />
-                {checking ? "Checking…" : "Check my food"}
-                {!checking && <Sparkles className="h-3.5 w-3.5" />}
-              </Button>
-              <p className="text-xs font-semibold text-espresso-light">
-                StarterChef can see this view. Tap Check my food for a verdict,
-                or just ask a question below.
-              </p>
-            </div>
+            <button
+              type="button"
+              onClick={checkFood}
+              disabled={checking}
+              aria-label="Capture this frame for a check"
+              className="group relative block w-full"
+            >
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="aspect-video w-full bg-espresso object-cover"
+              />
+              {/* Tap-to-capture overlay — the user picks the exact frame the
+                  AI sees instead of whatever happens to be up first. */}
+              <span className="absolute inset-0 flex items-end justify-center bg-espresso/0 pb-3 transition-colors group-hover:bg-espresso/20">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-card/90 px-3 py-1.5 text-xs font-extrabold text-espresso shadow-sm">
+                  <Camera className="h-3.5 w-3.5" />
+                  {checking ? "Checking…" : "Tap to check this frame"}
+                  {!checking && <Sparkles className="h-3 w-3 text-flame" />}
+                </span>
+              </span>
+            </button>
+            <p className="bg-card px-3 py-1.5 text-xs font-semibold text-espresso-light">
+              StarterChef sees what you capture. Tap the video for a verdict, or
+              ask a question below and this frame goes along.
+            </p>
           </div>
         )}
         {sentFrame && (
