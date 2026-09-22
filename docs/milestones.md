@@ -8,12 +8,12 @@ retrofitted at submission time. Full writeup goes in
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Prompt engineering                            | `prompts/*.md` — versioned, diff-able                                                                                                                                                                               |
 | Model choice vs ≥2 alternatives               | Text/vision: `npm run eval -- --report` writes `evals/results/text-model-comparison.json`. Voice: switch `NEXT_PUBLIC_VOICE_PROVIDER`; browser console emits `voice_session` metrics. See "Model comparison" below. |
-| AI patterns (structured output, tool calling) | `src/lib/ai/schemas/`, `src/lib/ai/tools.ts`                                                                                                                                                                        |
+| AI patterns (structured output, tool calling) | `src/lib/ai/schemas/`, `src/lib/ai/tools.ts`, `src/app/api/ai/import-recipe/`                                                                                                                                       |
 | LLMOps / evaluation                           | `evals/` datasets + `npm run eval` output                                                                                                                                                                           |
 | Production optimization                       | `ai_call` JSON logs (latency, tokens) → `ai_calls` table                                                                                                                                                            |
 | Safety & security                             | input zod validation on routes, output schema validation, RLS policies, rate limiting (TODO)                                                                                                                        |
 | Landing page + SEO/OG                         | `src/app/(marketing)/`                                                                                                                                                                                              |
-| Analytics                                     | `src/components/analytics.tsx` (PostHog)                                                                                                                                                                            |
+| Recipe import & personalisation               | `src/app/(app)/recipes/import/`, `src/app/api/ai/import-recipe/`, `supabase/migrations/0007_user_recipes.sql`, `src/components/cook-buttons.tsx` feedback flow                                                      |
 | Loop engineering                              | this file, `AGENTS.md`, `.devin/skills/`, CI, tests                                                                                                                                                                 |
 
 ## Model comparison
@@ -63,3 +63,27 @@ Use `NEXT_PUBLIC_VOICE_SIMULATE=true` to exercise the UI and metrics without spe
 ### Recording the results
 
 Fill in the measured numbers from `evals/results/text-model-comparison.json` and the browser console logs before the final submission writeup. Update `evals/costs.ts` if provider pricing changes.
+
+## Recipe import & personalisation
+
+### Import sources
+
+| Source               | Status         | Where it lives                                                                                                           |
+| -------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Pasted text          | Implemented    | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "text"`)                                                      |
+| Recipe URL           | Implemented    | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "url"`) using `recipe-scrapers` for JSON-LD/schema extraction |
+| Photo of recipe card | Implemented    | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "photo"`) with image input                                    |
+| Cooking video        | Placeholder UI | `/recipes/import` tab present; backend returns 501. Gemini video understanding can be wired in next.                     |
+
+### Data model
+
+- `recipes.user_id` — NULL for the shared catalogue, set for imported/personalised recipes.
+- `recipes.parent_recipe_id` + `recipes.is_personalized` — version chain for personalised copies.
+- `recipes.source_url` — original URL, surfaced on the recipe card.
+- `recipe_feedback` — substitutions, equipment work-arounds, scaled servings, notes and rating captured after cooking.
+
+### User flows
+
+1. **Import**: User pastes text/link/photo → AI returns structured preview → user saves to their library.
+2. **Cook**: `/cook/[id]` resolves by slug or by recipe id, so user recipes work the same as catalogue recipes.
+3. **Personalise**: On the last step, the "Finish cooking" button opens a feedback form; saving creates `My <title>` as a personalised child recipe and writes a `recipe_feedback` row.
