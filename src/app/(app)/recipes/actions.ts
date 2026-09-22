@@ -2,8 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { slugify } from "@/lib/slug";
+import type { ImportedRecipe } from "@/lib/ai/schemas/import";
 
-/** Save or unsave a recipe for the current user. */
+/** Save or unsave a catalogue recipe for the current user. */
 export async function toggleSavedRecipe(recipeId: string, save: boolean) {
   const supabase = await createClient();
   const {
@@ -26,5 +28,213 @@ export async function toggleSavedRecipe(recipeId: string, save: boolean) {
   }
 
   revalidatePath("/recipes");
+  return { ok: true };
+}
+
+export interface CreateRecipeInput extends ImportedRecipe {
+  source: string;
+  sourceUrl?: string;
+  parentRecipeId?: string;
+}
+
+/** Persist an imported or personalised recipe for the current user. */
+export async function createUserRecipe(input: CreateRecipeInput) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in" };
+
+  const baseSlug = slugify(input.title);
+  let slug = baseSlug;
+  let suffix = 2;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const { data: existing } = await supabase
+      .from("recipes")
+      .select("slug")
+      .eq("slug", slug)
+      .maybeSingle();
+    if (!existing) break;
+    slug = `${baseSlug}-${suffix}`;
+    suffix++;
+  }
+
+  const row = {
+    slug,
+    title: input.title,
+    description: input.description ?? "",
+    minutes: input.minutes,
+    difficulty: input.difficulty,
+    servings: input.servings,
+    why_good: input.whyGood ?? "",
+    icon: "cooking-pot",
+    image_tint: "from-oat to-oat-dark",
+    ingredients: input.ingredients,
+    equipment: input.equipment,
+    steps: input.steps.map((s) => ({
+      index: s.index,
+      title: s.title,
+      instruction: s.instruction,
+      durationSeconds: s.durationSeconds,
+      ingredients: s.ingredientsUsed,
+      tip: s.tip,
+    })),
+    tags: input.tags,
+    source: input.source,
+    source_url: input.sourceUrl ?? null,
+    user_id: user.id,
+    parent_recipe_id: input.parentRecipeId ?? null,
+    is_personalized: Boolean(input.parentRecipeId),
+  };
+
+  const { data, error } = await supabase
+    .from("recipes")
+    .insert(row)
+    .select("id, slug")
+    .single();
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/recipes");
+  revalidatePath("/today");
+  return { ok: true, id: data.id as string, slug: data.slug as string };
+}
+
+export interface UpdateRecipeInput {
+  id: string;
+  title?: string;
+  description?: string;
+  minutes?: number;
+  difficulty?: "easy" | "medium" | "hard";
+  servings?: number;
+  ingredients?: string[];
+  equipment?: string[];
+  steps?: {
+    index: number;
+    title: string;
+    instruction: string;
+    durationSeconds?: number;
+    ingredientsUsed: string[];
+    tip?: string;
+  }[];
+  tags?: string[];
+}
+
+/** Update a user-owned recipe. */
+export async function updateUserRecipe(input: UpdateRecipeInput) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in" };
+
+  const update: Record<string, unknown> = {};
+  if (input.title !== undefined) update.title = input.title;
+  if (input.description !== undefined) update.description = input.description;
+  if (input.minutes !== undefined) update.minutes = input.minutes;
+  if (input.difficulty !== undefined) update.difficulty = input.difficulty;
+  if (input.servings !== undefined) update.servings = input.servings;
+  if (input.ingredients !== undefined) update.ingredients = input.ingredients;
+  if (input.equipment !== undefined) update.equipment = input.equipment;
+  if (input.steps !== undefined)
+    update.steps = input.steps.map((s) => ({
+      index: s.index,
+      title: s.title,
+      instruction: s.instruction,
+      durationSeconds: s.durationSeconds,
+      ingredients: s.ingredientsUsed,
+      tip: s.tip,
+    }));
+  if (input.tags !== undefined) update.tags = input.tags;
+
+  const { error } = await supabase
+    .from("recipes")
+    .update(update)
+    .eq("id", input.id)
+    .eq("user_id", user.id);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/recipes");
+  revalidatePath("/today");
+  revalidatePath(`/cook/${input.id}`);
+  return { ok: true };
+}
+
+export interface RecipeFeedbackInput {
+  recipeId: string;
+  rating?: number;
+  substitutionsMade: string[];
+  equipmentAdjusted: string[];
+  scaledServings?: number;
+  wouldCookAgain?: boolean;
+  notes: string;
+}
+
+/** Save feedback after cooking and optionally create a personalised version. */
+export async function saveRecipeFeedback(
+  input: RecipeFeedbackInput,
+  options?: { createPersonalizedCopy?: ImportedRecipe },
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in" };
+
+  const { error: feedbackError } = await supabase
+    .from("recipe_feedback")
+    .insert({
+      user_id: user.id,
+      recipe_id: input.recipeId,
+      rating: input.rating,
+      substitutions_made: input.substitutionsMade,
+      equipment_adjusted: input.equipmentAdjusted,
+      scaled_servings: input.scaledServings,
+      would_cook_again: input.wouldCookAgain,
+      notes: input.notes,
+    });
+
+  if (feedbackError) return { error: feedbackError.message };
+
+  if (options?.createPersonalizedCopy) {
+    const personalized = {
+      ...options.createPersonalizedCopy,
+      source: "personalized",
+    };
+    const result = await createUserRecipe({
+      ...personalized,
+      parentRecipeId: input.recipeId,
+    });
+    if (result.error) return result;
+    return {
+      ok: true,
+      personalizedRecipeId: result.id,
+      personalizedSlug: result.slug,
+    };
+  }
+
+  revalidatePath("/recipes");
+  return { ok: true };
+}
+
+/** Delete a user-owned recipe. */
+export async function deleteUserRecipe(recipeId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in" };
+
+  const { error } = await supabase
+    .from("recipes")
+    .delete()
+    .eq("id", recipeId)
+    .eq("user_id", user.id);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/recipes");
+  revalidatePath("/today");
   return { ok: true };
 }

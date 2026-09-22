@@ -132,7 +132,7 @@ export default async function CookPage({
             </Button>
           </Link>
         ) : (
-          <FinishCookingButton />
+          <FinishCookingButton recipe={recipe} />
         )}
       </nav>
     </div>

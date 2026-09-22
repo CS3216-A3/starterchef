@@ -54,6 +54,23 @@ export interface RecipeRow {
   steps: RecipeStep[];
   tags: string[];
   source: string;
+  source_url: string | null;
+  user_id: string | null;
+  parent_recipe_id: string | null;
+  is_personalized: boolean;
+  created_at: string;
+}
+
+export interface RecipeFeedbackRow {
+  id: string;
+  user_id: string;
+  recipe_id: string;
+  rating: number | null;
+  substitutions_made: string[];
+  equipment_adjusted: string[];
+  scaled_servings: number | null;
+  would_cook_again: boolean | null;
+  notes: string;
   created_at: string;
 }
 

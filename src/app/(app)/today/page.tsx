@@ -1,4 +1,4 @@
-import { ArrowRight, Flame } from "lucide-react";
+import { ArrowRight, Flame, Plus } from "lucide-react";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { FilterPills } from "@/components/filter-pills";
@@ -8,6 +8,7 @@ import {
   getActiveCookingSession,
   getKitchenItems,
   getRecipes,
+  getUserRecipes,
 } from "@/lib/data";
 import { toRecipeCardModel } from "@/lib/recipe-view";
 
@@ -20,8 +21,9 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function TodayPage() {
-  const [recipes, kitchenItems, session] = await Promise.all([
+  const [recipes, myRecipes, kitchenItems, session] = await Promise.all([
     getRecipes(4),
+    getUserRecipes(),
     getKitchenItems(),
     getActiveCookingSession(),
   ]);
@@ -70,10 +72,38 @@ export default async function TodayPage() {
           )}
 
           <div className="flex items-center justify-between">
+            <h2 className="text-xl font-extrabold">Your recipes</h2>
+            <Link
+              href="/recipes/import"
+              className="inline-flex items-center gap-1 text-sm font-bold text-flame hover:text-flame-dark"
+            >
+              <Plus className="h-4 w-4" /> Import recipe
+            </Link>
+          </div>
+
+          {myRecipes.length === 0 ? (
+            <div className="rounded-3xl bg-card p-5 ring-1 ring-oat">
+              <p className="text-sm font-semibold text-espresso-light">
+                You have not imported any recipes yet. Import one from a link,
+                photo or pasted text.
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {myRecipes.slice(0, 2).map((recipe) => (
+                <RecipeCard
+                  key={recipe.id}
+                  recipe={toRecipeCardModel(recipe)}
+                />
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
             <h2 className="text-xl font-extrabold">
               {recipes.length > 0
                 ? "A few ideas for tonight"
-                : "No recipes yet"}
+                : "No catalogue recipes"}
             </h2>
             <Link
               href="/recipes"
@@ -85,7 +115,7 @@ export default async function TodayPage() {
 
           {recipes.length === 0 ? (
             <p className="text-sm font-semibold text-espresso-light">
-              Add ingredients or save recipes to see suggestions here.
+              Add ingredients or import recipes to see suggestions here.
             </p>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">

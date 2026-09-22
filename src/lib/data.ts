@@ -62,7 +62,32 @@ export async function getRecipeBySlug(slug: string): Promise<RecipeRow | null> {
     .select("*")
     .eq("slug", slug)
     .maybeSingle();
+  if (data) return data as RecipeRow;
+  // User recipes may be linked by id instead of slug.
+  return getRecipeById(slug);
+}
+
+export async function getRecipeById(id: string): Promise<RecipeRow | null> {
+  const { supabase, user } = await getUserId();
+  if (!user) return null;
+  const { data } = await supabase
+    .from("recipes")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
   return (data as RecipeRow | null) ?? null;
+}
+
+/** Recipes imported or personalised by the current user. */
+export async function getUserRecipes(): Promise<RecipeRow[]> {
+  const { supabase, user } = await getUserId();
+  if (!user) return [];
+  const { data } = await supabase
+    .from("recipes")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
+  return (data as RecipeRow[] | null) ?? [];
 }
 
 /** Recipes the user has saved, joined through saved_recipes. */
