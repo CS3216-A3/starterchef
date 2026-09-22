@@ -62,14 +62,14 @@ export default async function TodayPage({
     ? skillToDifficulty[effectiveSkill]
     : undefined;
   const hasFilters = Boolean(time || servings || skill);
-  const recipes = allRecipes
-    .filter(
-      (r) =>
-        (!maxMinutes || r.minutes <= maxMinutes) &&
-        (!minServings || r.servings >= minServings) &&
-        (!difficulty || r.difficulty === difficulty),
-    )
-    .slice(0, 4);
+  const matchesFilters = (r: (typeof allRecipes)[number]) =>
+    (!maxMinutes || r.minutes <= maxMinutes) &&
+    (!minServings || r.servings >= minServings) &&
+    (!difficulty || r.difficulty === difficulty);
+  // The pills filter everything on the page — your library and the
+  // catalogue ideas alike.
+  const recipes = allRecipes.filter(matchesFilters).slice(0, 4);
+  const filteredMine = myRecipes.filter(matchesFilters).slice(0, 2);
 
   return (
     <div className="flex flex-col gap-8">
@@ -133,9 +133,16 @@ export default async function TodayPage({
                 photo or pasted text.
               </p>
             </div>
+          ) : filteredMine.length === 0 ? (
+            <p className="text-sm font-semibold text-espresso-light">
+              None of your recipes match the current filters.{" "}
+              <Link href="/today" className="font-bold text-flame underline">
+                Reset filters
+              </Link>
+            </p>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
-              {myRecipes.slice(0, 2).map((recipe) => (
+              {filteredMine.map((recipe) => (
                 <RecipeCard
                   key={recipe.id}
                   recipe={toRecipeCardModel(recipe)}

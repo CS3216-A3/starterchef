@@ -52,7 +52,17 @@ export async function POST(request: Request) {
     }
     const { question, context, sessionId, stepIndex, channel } = parsed.data;
 
-    const memory = await getCookingMemory(supabase, user.id);
+    const [memory, { data: profile }] = await Promise.all([
+      getCookingMemory(supabase, user.id),
+      supabase
+        .from("profiles")
+        .select("dietary_restrictions, allergies")
+        .eq("id", user.id)
+        .maybeSingle(),
+    ]);
+
+    const list = (v: string[] | null | undefined) =>
+      v && v.length > 0 ? v.join(", ") : "none";
 
     const { object } = (await measuredGenerate("cooking-assistant", {
       model: getModel(),
@@ -64,6 +74,8 @@ export async function POST(request: Request) {
         memory: memory.length
           ? memory.map((f) => `- ${f}`).join("\n")
           : "- Nothing recorded yet — this may be their first session.",
+        dietaryRestrictions: list(profile?.dietary_restrictions),
+        allergies: list(profile?.allergies),
       }),
       prompt: question,
     })) as { object: z.infer<typeof assistantReplySchema> };

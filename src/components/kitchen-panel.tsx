@@ -1,9 +1,10 @@
-import { ScanLine } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
-import { ScanKitchenButton } from "@/components/scan-kitchen-button";
 import { equipmentIcon, ingredientIcon } from "@/lib/item-icons";
 import type { KitchenItemRow } from "@/lib/types";
 
+/** Compact kitchen summary for the today page: ingredient/equipment pills
+ *  and a single link to /kitchen where scan, voice and manual add live. */
 export function KitchenPanel({
   ingredients,
   equipment,
@@ -20,21 +21,19 @@ export function KitchenPanel({
           Nothing scanned yet — add ingredients so we can suggest meals.
         </p>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className="flex flex-wrap gap-2">
           {ingredients.map((item) => {
             const Icon = ingredientIcon(item.name);
             return (
               <li
                 key={item.id}
-                className="flex items-center gap-3 text-sm font-bold"
+                className="inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-bold"
               >
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-card">
-                  <Icon className="h-4 w-4 text-espresso" />
-                </span>
+                <Icon className="h-3.5 w-3.5 text-espresso-light" />
                 {item.name}
                 {item.quantity ? (
-                  <span className="text-xs font-semibold text-espresso-light">
-                    {item.quantity}
+                  <span className="font-semibold text-espresso-light">
+                    · {item.quantity}
                   </span>
                 ) : null}
               </li>
@@ -43,46 +42,34 @@ export function KitchenPanel({
         </ul>
       )}
 
-      <div className="border-t border-espresso/10 pt-4">
-        <h3 className="mb-3 text-sm font-extrabold tracking-wide text-espresso-light uppercase">
-          Your equipment
-        </h3>
-        {equipment.length === 0 ? (
-          <p className="text-sm font-semibold text-espresso-light">
-            No equipment listed yet.
-          </p>
-        ) : (
-          <ul className="flex flex-col gap-3">
+      {equipment.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-xs font-extrabold tracking-wide text-espresso-light uppercase">
+            Equipment
+          </h3>
+          <ul className="flex flex-wrap gap-2">
             {equipment.map((item) => {
               const Icon = equipmentIcon(item.name);
               return (
                 <li
                   key={item.id}
-                  className="flex items-center gap-3 text-sm font-bold"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-bold"
                 >
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-card">
-                    <Icon className="h-4 w-4 text-espresso" />
-                  </span>
+                  <Icon className="h-3.5 w-3.5 text-espresso-light" />
                   {item.name}
                 </li>
               );
             })}
           </ul>
-        )}
-      </div>
-
-      <ScanKitchenButton />
+        </div>
+      )}
 
       <Link
         href="/kitchen"
-        className="text-center text-sm font-bold text-espresso-light underline underline-offset-2 hover:text-espresso"
+        className="inline-flex items-center justify-center gap-2 rounded-full bg-espresso px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-espresso-light"
       >
-        Edit ingredients
+        Manage my kitchen <ArrowRight className="h-4 w-4" />
       </Link>
-
-      <p className="sr-only">
-        <ScanLine className="h-4 w-4" /> Scan your kitchen to update this list.
-      </p>
     </aside>
   );
 }

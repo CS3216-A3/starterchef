@@ -72,12 +72,28 @@ export async function POST(request: Request) {
     );
     const { tools, changes } = createRecipeEditTools(working);
 
+    // Personalise edits: restrictions/allergies are hard constraints the
+    // model must respect — and proactively fix — without being asked.
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("dietary_restrictions, allergies, skill_level, household_size")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    const list = (v: string[] | null | undefined) =>
+      v && v.length > 0 ? v.join(", ") : "none";
+
     const result = await generateText({
       model: getModel(),
       tools,
       stopWhen: stepCountIs(12),
       temperature: 0.3,
-      system: renderPrompt("edit-recipe", {}),
+      system: renderPrompt("edit-recipe", {
+        dietaryRestrictions: list(profile?.dietary_restrictions),
+        allergies: list(profile?.allergies),
+        skillLevel: profile?.skill_level ?? "beginner",
+        householdSize: String(profile?.household_size ?? 2),
+      }),
       prompt: `Current recipe:\n${JSON.stringify(parsed.data.recipe, null, 1)}\n\nRequest: ${parsed.data.request}`,
       telemetry: { functionId: "edit-recipe" },
     });

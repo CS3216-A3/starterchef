@@ -161,7 +161,9 @@ export function RecipeChat({
       </h2>
       <p className="text-sm font-semibold text-espresso-light">
         Ask for changes — “make it serve 1”, “no oven”, “less spicy” — and
-        review the suggestion before anything is saved.
+        review the suggestion before anything is saved. StarterChef already
+        knows your dietary needs, allergies and household size, and will flag or
+        fix conflicts automatically.
       </p>
 
       {messages.length > 0 && (
