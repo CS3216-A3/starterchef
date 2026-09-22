@@ -2,6 +2,7 @@ import { Clock, Pencil, Sparkles, Users } from "lucide-react";
 import Link from "next/link";
 import { SaveRecipeButton } from "@/components/save-recipe-button";
 import { StartCookingButton } from "@/components/cook-buttons";
+import { RecipeImage } from "@/components/recipe-image";
 import type { RecipeCardModel } from "@/lib/recipe-view";
 
 export function RecipeCard({
@@ -13,32 +14,37 @@ export function RecipeCard({
   saved?: boolean;
   editHref?: string;
 }) {
-  const Icon = recipe.icon;
+  const href = `/recipes/${recipe.slug}`;
 
   return (
     <article className="relative flex flex-col overflow-hidden rounded-3xl bg-card shadow-sm ring-1 ring-oat">
-      <div
-        className={`flex aspect-[16/9] items-center justify-center bg-gradient-to-br ${recipe.imageTint}`}
-        aria-hidden="true"
-      >
-        <Icon className="h-12 w-12 text-espresso/30" strokeWidth={1.5} />
-      </div>
+      <Link href={href} className="relative block aspect-[16/9]">
+        <RecipeImage
+          imageUrl={recipe.imageUrl}
+          title={recipe.title}
+          icon={recipe.icon}
+        />
+      </Link>
       {editHref && (
         <Link
           href={editHref}
-          className="absolute top-3 left-3 flex h-9 w-9 items-center justify-center rounded-full bg-card/80 text-espresso-light ring-1 ring-oat transition-colors hover:bg-oat hover:text-espresso"
+          className="absolute top-3 left-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-card/80 text-espresso-light ring-1 ring-oat transition-colors hover:bg-oat hover:text-espresso"
           aria-label="Edit recipe"
         >
           <Pencil className="h-4 w-4" />
         </Link>
       )}
       {saved !== undefined && (
-        <div className="absolute top-3 right-3">
+        <div className="absolute top-3 right-3 z-10">
           <SaveRecipeButton recipeId={recipe.id} saved={saved} />
         </div>
       )}
       <div className="flex flex-1 flex-col gap-2 p-4">
-        <h3 className="text-lg leading-snug font-extrabold">{recipe.title}</h3>
+        <h3 className="text-lg leading-snug font-extrabold">
+          <Link href={href} className="hover:text-flame">
+            {recipe.title}
+          </Link>
+        </h3>
         <p className="flex items-center gap-3 text-xs font-semibold text-espresso-light">
           <span className="inline-flex items-center gap-1">
             <Clock className="h-3.5 w-3.5" /> {recipe.minutes} min
@@ -53,12 +59,22 @@ export function RecipeCard({
         <p className="inline-flex items-center gap-1.5 text-xs font-bold text-flame">
           <Sparkles className="h-3.5 w-3.5" /> {recipe.whyGood}
         </p>
-        <div className="mt-auto pt-2">
-          <StartCookingButton
-            slug={recipe.slug}
-            primary={recipe.primaryCta}
-            label={recipe.primaryCta ? "Let's cook" : "View recipe"}
-          />
+        <div className="mt-auto flex gap-2 pt-2">
+          <Link href={href} className="flex-1">
+            <button
+              type="button"
+              className="w-full rounded-xl border-2 border-espresso/10 px-3 py-2 text-sm font-bold text-espresso transition-colors hover:border-flame/50"
+            >
+              View recipe
+            </button>
+          </Link>
+          <div className="flex-1">
+            <StartCookingButton
+              slug={recipe.slug}
+              primary={recipe.primaryCta}
+              label="Let's cook"
+            />
+          </div>
         </div>
       </div>
     </article>

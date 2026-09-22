@@ -30,7 +30,9 @@ export default function ImportRecipePage() {
     videoDataUrl: "",
   });
   const [loading, setLoading] = useState(false);
-  const [draft, setDraft] = useState<ImportedRecipe | null>(null);
+  const [draft, setDraft] = useState<
+    (ImportedRecipe & { imageUrl?: string }) | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleExtract(e: React.FormEvent) {
@@ -46,12 +48,13 @@ export default function ImportRecipePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = (await res.json()) as ImportedRecipe | { error: string };
+      const data = (await res.json()) as
+        (ImportedRecipe & { imageUrl?: string }) | { error: string };
       if (!res.ok) {
         setError("error" in data ? data.error : "Import failed");
         return;
       }
-      setDraft(data as ImportedRecipe);
+      setDraft(data as ImportedRecipe & { imageUrl?: string });
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -66,6 +69,7 @@ export default function ImportRecipePage() {
       ...draft,
       source: sourceLabel(state.source),
       sourceUrl: state.url || undefined,
+      imageUrl: draft.imageUrl,
     });
     if (result.error) {
       setError(result.error);
@@ -230,6 +234,17 @@ export default function ImportRecipePage() {
         </form>
       ) : (
         <div className="flex flex-col gap-6 rounded-3xl bg-card p-6 shadow-sm ring-1 ring-oat">
+          {draft.imageUrl && (
+            <div className="relative aspect-[16/9] overflow-hidden rounded-2xl">
+              <Image
+                src={draft.imageUrl}
+                alt={draft.title}
+                fill
+                unoptimized
+                className="object-cover"
+              />
+            </div>
+          )}
           <div>
             <h2 className="text-xl font-extrabold">{draft.title}</h2>
             <p className="text-sm font-semibold text-espresso-light">

@@ -1,5 +1,6 @@
 import { ArrowRight, Flame, Plus } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { FilterPills } from "@/components/filter-pills";
 import { KitchenPanel } from "@/components/kitchen-panel";
@@ -20,9 +21,20 @@ export const metadata: Metadata = {
 // when env vars aren't set).
 export const dynamic = "force-dynamic";
 
-export default async function TodayPage() {
-  const [recipes, myRecipes, kitchenItems, session] = await Promise.all([
-    getRecipes(4),
+const skillToDifficulty: Record<string, string> = {
+  beginner: "easy",
+  intermediate: "medium",
+  advanced: "hard",
+};
+
+export default async function TodayPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ time?: string; servings?: string; skill?: string }>;
+}) {
+  const { time, servings, skill } = await searchParams;
+  const [allRecipes, myRecipes, kitchenItems, session] = await Promise.all([
+    getRecipes(),
     getUserRecipes(),
     getKitchenItems(),
     getActiveCookingSession(),
@@ -31,6 +43,20 @@ export default async function TodayPage() {
   const ingredients = kitchenItems.filter((i) => i.kind === "ingredient");
   const equipment = kitchenItems.filter((i) => i.kind === "equipment");
   const activeRecipe = session?.recipe;
+
+  // Apply the filter pills (?time=&servings=&skill=).
+  const maxMinutes = time ? Number(time) : undefined;
+  const minServings = servings ? Number(servings) : undefined;
+  const difficulty = skill ? skillToDifficulty[skill] : undefined;
+  const hasFilters = Boolean(maxMinutes || minServings || difficulty);
+  const recipes = allRecipes
+    .filter(
+      (r) =>
+        (!maxMinutes || r.minutes <= maxMinutes) &&
+        (!minServings || r.servings >= minServings) &&
+        (!difficulty || r.difficulty === difficulty),
+    )
+    .slice(0, 4);
 
   return (
     <div className="flex flex-col gap-8">
@@ -43,7 +69,9 @@ export default async function TodayPage() {
             Good food starts with what you have.
           </p>
         </div>
-        <FilterPills />
+        <Suspense fallback={null}>
+          <FilterPills />
+        </Suspense>
       </section>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -115,7 +143,19 @@ export default async function TodayPage() {
 
           {recipes.length === 0 ? (
             <p className="text-sm font-semibold text-espresso-light">
-              Add ingredients or import recipes to see suggestions here.
+              {hasFilters ? (
+                <>
+                  Nothing matches those filters.{" "}
+                  <Link
+                    href="/today"
+                    className="font-bold text-flame underline"
+                  >
+                    Reset filters
+                  </Link>
+                </>
+              ) : (
+                "Add ingredients or import recipes to see suggestions here."
+              )}
             </p>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">

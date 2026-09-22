@@ -35,6 +35,7 @@ export interface CreateRecipeInput extends ImportedRecipe {
   source: string;
   sourceUrl?: string;
   parentRecipeId?: string;
+  imageUrl?: string;
 }
 
 /** Persist an imported or personalised recipe for the current user. */
@@ -78,10 +79,12 @@ export async function createUserRecipe(input: CreateRecipeInput) {
       durationSeconds: s.durationSeconds,
       ingredients: s.ingredientsUsed,
       tip: s.tip,
+      photoCheckpoint: s.photoCheckpoint,
     })),
     tags: input.tags,
     source: input.source,
     source_url: input.sourceUrl ?? null,
+    image_url: input.imageUrl ?? null,
     user_id: user.id,
     parent_recipe_id: input.parentRecipeId ?? null,
     is_personalized: Boolean(input.parentRecipeId),
@@ -116,8 +119,10 @@ export interface UpdateRecipeInput {
     durationSeconds?: number;
     ingredientsUsed: string[];
     tip?: string;
+    photoCheckpoint?: string;
   }[];
   tags?: string[];
+  imageUrl?: string;
 }
 
 /** Update a user-owned recipe. */
@@ -144,8 +149,10 @@ export async function updateUserRecipe(input: UpdateRecipeInput) {
       durationSeconds: s.durationSeconds,
       ingredients: s.ingredientsUsed,
       tip: s.tip,
+      photoCheckpoint: s.photoCheckpoint,
     }));
   if (input.tags !== undefined) update.tags = input.tags;
+  if (input.imageUrl !== undefined) update.image_url = input.imageUrl;
 
   const { error } = await supabase
     .from("recipes")
@@ -216,6 +223,42 @@ export async function saveRecipeFeedback(
 
   revalidatePath("/recipes");
   return { ok: true };
+}
+
+/**
+ * Upload a cover/step image to the `recipe-images` bucket under the user's
+ * own folder and return its public URL.
+ */
+export async function uploadRecipeImage(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in" };
+
+  const file = formData.get("file");
+  const recipeId = String(formData.get("recipeId") ?? "misc");
+  const name = String(formData.get("name") ?? "image");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "No file provided" };
+  }
+  if (!file.type.startsWith("image/")) {
+    return { error: "File must be an image" };
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    return { error: "Image must be under 5 MB" };
+  }
+
+  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+  const path = `${user.id}/${recipeId}/${name}-${Date.now()}.${ext}`;
+
+  const { error } = await supabase.storage
+    .from("recipe-images")
+    .upload(path, file, { contentType: file.type });
+  if (error) return { error: error.message };
+
+  const { data } = supabase.storage.from("recipe-images").getPublicUrl(path);
+  return { ok: true, url: data.publicUrl };
 }
 
 /** Delete a user-owned recipe. */

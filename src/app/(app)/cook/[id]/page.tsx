@@ -1,10 +1,11 @@
-import { ArrowLeft, ArrowRight, CookingPot, Play, Timer } from "lucide-react";
+import { ArrowLeft, ArrowRight, Play, Timer } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { VoiceAssistantButton } from "@/components/voice-assistant-button";
 import { Button } from "@/components/button";
 import { FinishCookingButton } from "@/components/cook-buttons";
-import { getRecipeBySlug } from "@/lib/data";
+import { StepPhotoUpload } from "@/components/step-photo-upload";
+import { getActiveCookingSession, getRecipeBySlug } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +20,27 @@ export default async function CookPage({
   const { step } = await searchParams;
 
   // [id] is the recipe slug (e.g. "tomato-egg-stir-fry").
-  const recipe = await getRecipeBySlug(id);
+  const [recipe, session] = await Promise.all([
+    getRecipeBySlug(id),
+    getActiveCookingSession(),
+  ]);
   if (!recipe || recipe.steps.length === 0) notFound();
 
   const recipeTitle = recipe.title;
-  const steps = recipe.steps;
+  // Step photos taken during this session live on the session snapshot for
+  // catalogue recipes — merge them over the base steps.
+  const sessionSteps =
+    session?.recipe?.slug === recipe.slug ? session.recipe.steps : undefined;
+  const sessionPhotos = new Map(
+    (sessionSteps ?? [])
+      .filter((s) => s.photoUrl)
+      .map((s) => [s.index, s.photoUrl] as const),
+  );
+  const steps = recipe.steps.map((s) =>
+    sessionPhotos.has(s.index)
+      ? { ...s, photoUrl: sessionPhotos.get(s.index) }
+      : s,
+  );
   const stepIndex = Math.min(Math.max(Number(step ?? 1) || 1, 1), steps.length);
   const current = steps[stepIndex - 1];
   const progress = Math.round((stepIndex / steps.length) * 100);
@@ -60,12 +77,18 @@ export default async function CookPage({
         </div>
       </header>
 
-      <div className="flex aspect-video items-center justify-center rounded-3xl bg-gradient-to-br from-flame-soft to-oat">
-        <CookingPot
-          className="h-14 w-14 text-espresso/25"
-          strokeWidth={1.5}
-          aria-hidden="true"
+      <div className="flex flex-col gap-1">
+        <StepPhotoUpload
+          recipeId={recipe.id}
+          recipeSlug={recipe.slug}
+          stepIndex={current.index}
+          initialPhotoUrl={current.photoUrl}
         />
+        {current.photoCheckpoint ? (
+          <p className="text-xs font-semibold text-espresso-light">
+            What it should look like: {current.photoCheckpoint}
+          </p>
+        ) : null}
       </div>
 
       <section className="flex flex-col gap-2">

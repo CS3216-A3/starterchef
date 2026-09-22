@@ -15,7 +15,7 @@ import type { RecipeDifficulty, RecipeRow } from "@/lib/types";
  * and a display label.
  */
 
-const iconMap: Record<string, LucideIcon> = {
+export const iconMap: Record<string, LucideIcon> = {
   "cooking-pot": CookingPot,
   "utensils-crossed": UtensilsCrossed,
   wheat: Wheat,
@@ -40,6 +40,7 @@ export interface RecipeCardModel {
   whyGood: string;
   icon: LucideIcon;
   imageTint: string;
+  imageUrl: string | null;
 }
 
 export function toRecipeCardModel(
@@ -56,6 +57,7 @@ export function toRecipeCardModel(
     whyGood: recipe.why_good,
     icon: iconMap[recipe.icon] ?? CookingPot,
     imageTint: recipe.image_tint,
+    imageUrl: recipe.image_url,
     primaryCta: opts?.primaryCta ?? false,
   };
 }

@@ -7,6 +7,10 @@ const nextConfig: NextConfig = {
     "/api/**/*": ["./prompts/**/*"],
   },
   allowedDevOrigins: ["127.0.0.1"],
+  images: {
+    // Imported recipes carry image URLs from arbitrary source sites.
+    remotePatterns: [{ protocol: "https", hostname: "**" }],
+  },
 };
 
 export default nextConfig;

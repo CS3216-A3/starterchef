@@ -16,6 +16,7 @@ Rules:
   - `durationSeconds`: optional natural timer for this step
   - `ingredientsUsed`: ingredients used in this step (subset of the full list)
   - `tip`: optional one-line helpful note
+  - `photoCheckpoint`: for steps where appearance signals doneness (e.g. "golden and bubbling"), a short description of what a correct result looks like
 - `tags`: 1–4 tags like 'quick', 'vegetarian', 'baking', 'leftovers'.
 - `whyGood`: one short, warm sentence for a recipe card (e.g. "Uses pantry staples you already have").
 

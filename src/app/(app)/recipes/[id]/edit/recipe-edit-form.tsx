@@ -1,9 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/button";
-import { updateUserRecipe } from "@/app/(app)/recipes/actions";
+import {
+  updateUserRecipe,
+  uploadRecipeImage,
+} from "@/app/(app)/recipes/actions";
 import type { RecipeRow } from "@/lib/types";
 
 export function RecipeEditForm({ recipe }: { recipe: RecipeRow }) {
@@ -19,6 +23,8 @@ export function RecipeEditForm({ recipe }: { recipe: RecipeRow }) {
   const [ingredients, setIngredients] = useState(recipe.ingredients.join("\n"));
   const [equipment, setEquipment] = useState(recipe.equipment.join("\n"));
   const [tags, setTags] = useState(recipe.tags.join(", "));
+  const [imageUrl, setImageUrl] = useState(recipe.image_url ?? "");
+  const [uploading, setUploading] = useState(false);
   const [steps, setSteps] = useState(
     recipe.steps.map((s) => ({
       index: s.index,
@@ -60,6 +66,7 @@ export function RecipeEditForm({ recipe }: { recipe: RecipeRow }) {
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean),
+      imageUrl: imageUrl.trim() || "",
       steps: steps.map((s) => ({
         index: s.index,
         title: s.title.trim(),
@@ -142,6 +149,52 @@ export function RecipeEditForm({ recipe }: { recipe: RecipeRow }) {
         value={tags}
         onChange={setTags}
       />
+
+      <div className="flex flex-col gap-2">
+        <TextField
+          label="Cover image URL"
+          value={imageUrl}
+          onChange={setImageUrl}
+          placeholder="https://… or upload below"
+        />
+        <input
+          type="file"
+          accept="image/*"
+          className="text-sm font-semibold file:mr-3 file:rounded-full file:bg-flame file:px-4 file:py-2 file:text-white"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            setUploading(true);
+            const formData = new FormData();
+            formData.set("file", file);
+            formData.set("recipeId", recipe.id);
+            formData.set("name", "hero");
+            const result = await uploadRecipeImage(formData);
+            setUploading(false);
+            if ("error" in result && result.error) {
+              setError(result.error);
+            } else if ("url" in result && result.url) {
+              setImageUrl(result.url);
+            }
+          }}
+        />
+        {uploading && (
+          <p className="text-xs font-semibold text-espresso-light">
+            Uploading…
+          </p>
+        )}
+        {imageUrl && (
+          <div className="relative aspect-[16/9] max-w-xs overflow-hidden rounded-2xl ring-1 ring-oat">
+            <Image
+              src={imageUrl}
+              alt="Cover preview"
+              fill
+              unoptimized
+              className="object-cover"
+            />
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-col gap-3">
         <h2 className="text-lg font-extrabold">Steps</h2>

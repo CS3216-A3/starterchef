@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { cookingStepSchema } from "./cooking";
 
 export const recipeSuggestionSchema = z.object({
   title: z.string(),
@@ -32,3 +33,27 @@ export const recipeSuggestionsSchema = z.object({
 
 export type RecipeSuggestion = z.infer<typeof recipeSuggestionSchema>;
 export type RecipeSuggestions = z.infer<typeof recipeSuggestionsSchema>;
+
+/**
+ * A fully adapted recipe returned by the customisation chat, plus a human
+ * summary of what changed. Mirrors the import shape so the result can be
+ * persisted directly as a personalised copy.
+ */
+export const adaptedRecipeSchema = z.object({
+  changeSummary: z
+    .string()
+    .max(300)
+    .describe("One or two sentences explaining what changed and why"),
+  title: z.string().min(1),
+  description: z.string().max(500).optional(),
+  minutes: z.number().int().positive(),
+  difficulty: z.enum(["easy", "medium", "hard"]),
+  servings: z.number().int().positive(),
+  ingredients: z.array(z.string()).min(1),
+  equipment: z.array(z.string()),
+  steps: z.array(cookingStepSchema).min(1),
+  tags: z.array(z.string()).default([]),
+  whyGood: z.string().max(200).optional(),
+});
+
+export type AdaptedRecipe = z.infer<typeof adaptedRecipeSchema>;

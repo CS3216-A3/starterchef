@@ -79,12 +79,16 @@ Fill in the measured numbers from `evals/results/text-model-comparison.json` and
 
 - `recipes.user_id` — NULL for the shared catalogue, set for imported/personalised recipes.
 - `recipes.parent_recipe_id` + `recipes.is_personalized` — version chain for personalised copies.
-- `recipes.source_url` — original URL, surfaced on the recipe card.
+- `recipes.source_url` — original URL, surfaced on the recipe overview.
+- `recipes.image_url` — hero photo from the import source or a user upload (`recipe-images` storage bucket).
+- `recipes.steps[].photoUrl` — per-step photos taken while cooking.
 - `recipe_feedback` — substitutions, equipment work-arounds, scaled servings, notes and rating captured after cooking.
 
 ### User flows
 
 1. **Import**: User pastes text/link/photo/video → AI returns structured preview → user saves to their library.
-2. **Edit**: `/recipes/[id]/edit` lets the owner fix ingredients, steps, servings and equipment before cooking.
-3. **Cook**: `/cook/[id]` resolves by slug or by recipe id, so user recipes work the same as catalogue recipes.
-4. **Personalise**: On the last step, the "Finish cooking" button opens a feedback form; saving creates `My <title>` as a personalised child recipe and writes a `recipe_feedback` row.
+2. **Overview**: `/recipes/[id]` shows hero image (or a designed placeholder), ingredients, equipment and steps, plus a "Customise with StarterChef" chat that adapts the recipe via `POST /api/ai/adapt-recipe` and saves an accepted suggestion as a personalised copy.
+3. **Edit**: `/recipes/[id]/edit` lets the owner fix ingredients, steps, servings, equipment and the cover image before cooking.
+4. **Cook**: `/cook/[id]` resolves by slug or by recipe id; users can attach their own photo to any step (stored on the recipe for owned recipes, on the session snapshot for catalogue ones).
+5. **Personalise**: On the last step, the "Finish cooking" button opens a feedback form; saving creates `My <title>` as a personalised child recipe and writes a `recipe_feedback` row.
+6. **Filter**: The time/servings/skill pills on `/today` write URL params (`?time=&servings=&skill=`) and filter the ideas list server-side.

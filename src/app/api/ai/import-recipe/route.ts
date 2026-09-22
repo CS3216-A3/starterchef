@@ -71,7 +71,12 @@ export async function POST(request: Request) {
 
     const result = await measuredGenerate("import-recipe", generateArgs.args);
 
-    return NextResponse.json(result.object);
+    // Attach the scraped source image (URL imports only) so the client can
+    // store it as the recipe's hero photo.
+    return NextResponse.json({
+      ...(result.object as Record<string, unknown>),
+      imageUrl: generateArgs.imageUrl,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Recipe import failed";
     return NextResponse.json({ error: message }, { status: 502 });
@@ -79,11 +84,12 @@ export async function POST(request: Request) {
 }
 
 type GenerateArgsResult =
-  | { ok: true; args: Parameters<typeof generateObject>[0] }
+  | { ok: true; args: Parameters<typeof generateObject>[0]; imageUrl?: string }
   | { ok: false; error: string; status: number };
 
 type ExtractionResult =
-  { ok: true; prompt: string } | { ok: false; error: string; status: number };
+  | { ok: true; prompt: string; imageUrl?: string }
+  | { ok: false; error: string; status: number };
 
 async function buildGenerateArgs(
   input: z.infer<typeof requestSchema>,
@@ -106,7 +112,11 @@ async function buildGenerateArgs(
     case "url": {
       const extraction = await extractSourceText(input);
       if (!extraction.ok) return extraction;
-      return { ok: true, args: { ...baseArgs, prompt: extraction.prompt } };
+      return {
+        ok: true,
+        args: { ...baseArgs, prompt: extraction.prompt },
+        imageUrl: extraction.imageUrl,
+      };
     }
 
     case "photo": {
@@ -223,11 +233,19 @@ async function extractSourceText(
           cookTime?: string;
           totalTime?: string;
           recipeYield?: string;
-          image?: string;
+          image?: string | { url?: string }[];
         };
+        const image = recipe.image;
+        const imageUrl =
+          typeof image === "string"
+            ? image
+            : Array.isArray(image)
+              ? image[0]?.url
+              : undefined;
         return {
           ok: true,
           prompt: buildPromptFromScraped(url, recipe),
+          imageUrl,
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -277,7 +295,7 @@ function buildPromptFromScraped(
     cookTime?: string;
     totalTime?: string;
     recipeYield?: string;
-    image?: string;
+    image?: string | { url?: string }[];
   },
 ): string {
   const instructions = (recipe.recipeInstructions ?? [])

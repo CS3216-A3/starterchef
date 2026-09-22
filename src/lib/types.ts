@@ -34,6 +34,8 @@ export interface RecipeStep {
   durationSeconds?: number;
   ingredients: string[];
   tip?: string;
+  photoUrl?: string;
+  photoCheckpoint?: string;
 }
 
 export type RecipeDifficulty = "easy" | "medium" | "hard";
@@ -49,6 +51,7 @@ export interface RecipeRow {
   why_good: string;
   icon: string;
   image_tint: string;
+  image_url: string | null;
   ingredients: string[];
   equipment: string[];
   steps: RecipeStep[];
