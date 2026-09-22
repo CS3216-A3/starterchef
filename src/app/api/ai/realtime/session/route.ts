@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { VOICE_PROVIDERS, type VoiceProvider } from "@/lib/ai/voice";
 import { checkRateLimit, createRateLimitResponse } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
+import { friendlyAiError } from "@/lib/ai/errors";
 
 /**
  * POST /api/ai/realtime/session
@@ -92,8 +93,7 @@ export async function POST(request: Request) {
           expiresAt: data.client_secret.expires_at,
         });
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "OpenAI session failed";
+        const message = friendlyAiError(err, "OpenAI session failed");
         return NextResponse.json({ error: message }, { status: 502 });
       }
     }
@@ -111,8 +111,7 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Realtime session failed";
+    const message = friendlyAiError(err, "Realtime session failed");
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

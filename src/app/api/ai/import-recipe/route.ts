@@ -8,6 +8,7 @@ import { renderPrompt } from "@/lib/ai/prompts";
 import { importedRecipeSchema } from "@/lib/ai/schemas/import";
 import { checkRateLimit, createRateLimitResponse } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
+import { friendlyAiError } from "@/lib/ai/errors";
 
 const requestSchema = z.discriminatedUnion("source", [
   z.object({
@@ -107,7 +108,7 @@ export async function POST(request: Request) {
       imageUrl: generateArgs.imageUrl,
     });
   } catch (err) {
-    const raw = err instanceof Error ? err.message : "Recipe import failed";
+    const raw = friendlyAiError(err, "Recipe import failed");
     // Model/provider failures on video input are common (private video,
     // region lock, unsupported format) — translate them into something a
     // user can act on instead of a raw provider error.

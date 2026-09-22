@@ -5,6 +5,7 @@ import { renderPrompt } from "@/lib/ai/prompts";
 import { kitchenScanSchema } from "@/lib/ai/schemas/kitchen-scan";
 import { checkRateLimit, createRateLimitResponse } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
+import { friendlyAiError } from "@/lib/ai/errors";
 
 /**
  * POST /api/ai/kitchen-scan
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(object);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Kitchen scan failed";
+    const message = friendlyAiError(err, "Kitchen scan failed");
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

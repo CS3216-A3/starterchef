@@ -9,6 +9,7 @@ import {
 } from "@/lib/ai/recipe-edit-tools";
 import { checkRateLimit, createRateLimitResponse } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
+import { friendlyAiError } from "@/lib/ai/errors";
 
 const requestSchema = z.object({
   request: z.string().min(1).max(1000),
@@ -122,7 +123,7 @@ export async function POST(request: Request) {
       whyGood: working.why_good,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Recipe edit failed";
+    const message = friendlyAiError(err, "Recipe edit failed");
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

@@ -7,6 +7,7 @@ import { assistantReplySchema } from "@/lib/ai/schemas/assistant";
 import { checkRateLimit, createRateLimitResponse } from "@/lib/rate-limit";
 import { getCookingMemory, logSessionEvent } from "@/lib/session-events";
 import { createClient } from "@/lib/supabase/server";
+import { friendlyAiError } from "@/lib/ai/errors";
 
 const requestSchema = z.object({
   question: z.string().min(1).max(1000),
@@ -90,8 +91,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(object);
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Assistant request failed";
+    const message = friendlyAiError(err, "Assistant request failed");
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

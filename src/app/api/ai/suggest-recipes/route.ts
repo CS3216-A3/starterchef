@@ -6,6 +6,7 @@ import { renderPrompt } from "@/lib/ai/prompts";
 import { recipeSuggestionsSchema } from "@/lib/ai/schemas/recipe";
 import { checkRateLimit, createRateLimitResponse } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
+import { friendlyAiError } from "@/lib/ai/errors";
 
 const requestSchema = z.object({
   ingredients: z.array(z.string()).default([]),
@@ -68,8 +69,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(object);
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Recipe suggestion failed";
+    const message = friendlyAiError(err, "Recipe suggestion failed");
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

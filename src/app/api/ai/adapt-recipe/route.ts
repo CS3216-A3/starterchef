@@ -6,6 +6,7 @@ import { renderPrompt } from "@/lib/ai/prompts";
 import { adaptedRecipeSchema } from "@/lib/ai/schemas/recipe";
 import { checkRateLimit, createRateLimitResponse } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
+import { friendlyAiError } from "@/lib/ai/errors";
 
 const requestSchema = z.object({
   request: z.string().min(1).max(1000),
@@ -73,8 +74,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(object);
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Recipe adaptation failed";
+    const message = friendlyAiError(err, "Recipe adaptation failed");
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

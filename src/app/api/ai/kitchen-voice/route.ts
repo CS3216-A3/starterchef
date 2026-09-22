@@ -6,6 +6,7 @@ import { renderPrompt } from "@/lib/ai/prompts";
 import { kitchenVoiceSchema } from "@/lib/ai/schemas/kitchen-scan";
 import { checkRateLimit, createRateLimitResponse } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
+import { friendlyAiError } from "@/lib/ai/errors";
 
 const requestSchema = z.object({
   transcript: z.string().min(1).max(2000),
@@ -50,8 +51,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(object);
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Could not parse that list";
+    const message = friendlyAiError(err, "Could not parse that list");
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

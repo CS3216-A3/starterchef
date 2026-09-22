@@ -1,9 +1,11 @@
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 export type BuddyState = "idle" | "listening" | "thinking" | "speaking";
 
 /**
- * The StarterChef flame as a living buddy you "speak to".
+ * The StarterChef mascot (public/logo.png — the flame with the chef hat) as a
+ * living buddy you "speak to".
  * - idle: gentle float + fire flicker
  * - listening: orange glow + pulse ring
  * - thinking: side-to-side bob
@@ -14,7 +16,7 @@ export type BuddyState = "idle" | "listening" | "thinking" | "speaking";
 export function ChefBuddy({
   state,
   blip = 0,
-  size = 64,
+  size = 72,
 }: {
   state: BuddyState;
   /** Increment to retrigger a quick pop (e.g. per spoken word). */
@@ -37,27 +39,26 @@ export function ChefBuddy({
       )}
       <span
         className={cn(
-          "relative flex items-center justify-center rounded-full bg-flame transition-shadow",
+          "relative flex items-center justify-center rounded-full bg-flame-soft transition-shadow",
           state === "listening" && "shadow-[0_0_28px_6px] shadow-flame/60",
           motion,
         )}
         style={{ width: size, height: size }}
       >
-        <svg
+        <Image
           key={`${state}-${blip}`}
-          viewBox="0 0 64 64"
+          src="/logo.png"
+          alt=""
+          width={Math.round(size * 0.82)}
+          height={Math.round(size * 0.82)}
+          unoptimized
           className={cn(
+            "object-contain",
             state === "speaking"
               ? "animate-[buddy-blip_0.4s_ease-out]"
               : "animate-[buddy-flicker_2.6s_ease-in-out_infinite]",
           )}
-          style={{ width: size * 0.62, height: size * 0.62 }}
-        >
-          <path
-            fill="#fffdfa"
-            d="M32 8c2 8-8 12-8 22a8 8 0 0 0 16 0c0-4-2-6-3-9 6 2 11 7 11 14a16 16 0 1 1-32 0C16 22 26 16 32 8z"
-          />
-        </svg>
+        />
       </span>
     </span>
   );
