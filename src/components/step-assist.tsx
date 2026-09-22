@@ -97,7 +97,7 @@ export function StepAskBox({
           onKeyDown={(e) => {
             if (e.key === "Enter") void handleAsk();
           }}
-          placeholder="Ask about this step…"
+          placeholder="Type a question here about this step…"
           className="flex-1 rounded-xl border-2 border-espresso/10 bg-card p-2.5 text-sm font-semibold outline-none focus:border-flame"
         />
         <Button

@@ -172,8 +172,8 @@ export async function updateUserRecipe(input: UpdateRecipeInput) {
 export interface RecipeFeedbackInput {
   recipeId: string;
   rating?: number;
-  substitutionsMade: string[];
-  equipmentAdjusted: string[];
+  substitutionsMade?: string[];
+  equipmentAdjusted?: string[];
   scaledServings?: number;
   wouldCookAgain?: boolean;
   notes: string;

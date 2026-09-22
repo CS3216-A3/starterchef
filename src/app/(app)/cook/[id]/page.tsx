@@ -3,7 +3,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Button } from "@/components/button";
 import { CookAssist } from "@/components/cook-assist";
-import { FinishCookingButton } from "@/components/cook-buttons";
 import { StepTracker } from "@/components/step-tracker";
 import { getActiveCookingSession, getRecipeBySlug } from "@/lib/data";
 
@@ -151,7 +150,11 @@ export default async function CookPage({
             </Button>
           </Link>
         ) : (
-          <FinishCookingButton recipe={recipe} />
+          <Link href={`/cook/${id}/finish`}>
+            <Button size="md">
+              Finish cooking <ArrowRight className="h-4 w-4" />
+            </Button>
+          </Link>
         )}
       </nav>
     </div>
