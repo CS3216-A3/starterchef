@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { FinishForm } from "@/app/(app)/cook/[id]/finish/finish-form";
+import { FinishForm } from "./finish-form";
 import { getRecipeBySlug } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
