@@ -14,3 +14,9 @@ Rules:
   was said.
 - Ignore non-item speech ("um", "what else", "that's it").
 - Return an empty list if nothing recognisable was dictated.
+- `icon`: pick the best-fitting key for each item — "egg", "milk", "apple",
+  "citrus", "carrot" (vegetables), "salad" (leafy/herbs), "beef" (red meat),
+  "drumstick" (poultry), "fish" (seafood), "wheat" (grains/bread/pasta),
+  "coffee", "wine", "soup", "droplets" (oils/sauces), "utensils" (tools),
+  "cooking-pot" (pans/pots), "microwave" (appliances), "chef-hat" (gadgets),
+  "package" (anything else).

@@ -1,6 +1,6 @@
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
-import { equipmentIcon, ingredientIcon } from "@/lib/item-icons";
+import { kitchenIcon } from "@/lib/item-icons";
 import type { KitchenItemRow } from "@/lib/types";
 
 /** Compact kitchen summary for the today page: ingredient/equipment pills
@@ -23,7 +23,7 @@ export function KitchenPanel({
       ) : (
         <ul className="flex flex-wrap gap-2">
           {ingredients.map((item) => {
-            const Icon = ingredientIcon(item.name);
+            const Icon = kitchenIcon(item);
             return (
               <li
                 key={item.id}
@@ -49,7 +49,7 @@ export function KitchenPanel({
           </h3>
           <ul className="flex flex-wrap gap-2">
             {equipment.map((item) => {
-              const Icon = equipmentIcon(item.name);
+              const Icon = kitchenIcon(item);
               return (
                 <li
                   key={item.id}

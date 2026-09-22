@@ -1,7 +1,9 @@
 "use client";
 
+import { Minus, Plus } from "lucide-react";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/button";
+import { PillInput } from "@/components/pill-input";
 import { updateProfile } from "@/app/(app)/settings/actions";
 import { trackEvent } from "@/lib/posthog/events";
 import type { ProfileRow } from "@/lib/types";
@@ -18,17 +20,29 @@ const DIETARY_OPTIONS = [
 ] as const;
 
 const SKILL_OPTIONS = [
-  { value: "beginner", label: "Beginner" },
-  { value: "intermediate", label: "Intermediate" },
-  { value: "advanced", label: "Advanced" },
+  {
+    value: "beginner",
+    label: "Beginner",
+    blurb: "I'm learning the basics",
+  },
+  {
+    value: "intermediate",
+    label: "Intermediate",
+    blurb: "I can follow most recipes",
+  },
+  {
+    value: "advanced",
+    label: "Advanced",
+    blurb: "I cook without a recipe",
+  },
 ] as const;
 
 const inputClass =
   "h-11 w-full rounded-full border-2 border-oat bg-cream px-4 text-sm font-semibold outline-none placeholder:text-espresso-light/60 focus:border-flame";
 
 /**
- * Post-signup profile form — dietary restrictions, allergies, skill level,
- * household size. Saves to public.profiles via the updateProfile action.
+ * Profile editor — the info StarterChef's AI uses to personalise recipes:
+ * who you are, dietary needs, allergies, skill and household size.
  */
 export function ProfileSettingsForm({
   profile,
@@ -39,8 +53,8 @@ export function ProfileSettingsForm({
   const [restrictions, setRestrictions] = useState<string[]>(
     profile?.dietary_restrictions ?? [],
   );
-  const [allergiesText, setAllergiesText] = useState(
-    (profile?.allergies ?? []).join(", "),
+  const [allergies, setAllergies] = useState<string[]>(
+    profile?.allergies ?? [],
   );
   const [skillLevel, setSkillLevel] = useState(
     profile?.skill_level ?? "beginner",
@@ -65,7 +79,7 @@ export function ProfileSettingsForm({
       const res = await updateProfile({
         displayName,
         dietaryRestrictions: restrictions,
-        allergies: allergiesText.split(","),
+        allergies,
         skillLevel: skillLevel as ProfileRow["skill_level"],
         householdSize,
       }).catch(() => ({ error: "Save failed" }));
@@ -82,87 +96,130 @@ export function ProfileSettingsForm({
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="flex flex-col gap-6 rounded-3xl bg-card p-6 shadow-sm ring-1 ring-oat"
-    >
-      <label className="flex flex-col gap-2">
-        <span className="text-sm font-extrabold">Display name</span>
-        <input
-          type="text"
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
-          placeholder="What should we call you?"
-          className={inputClass}
-        />
-      </label>
-
-      <fieldset className="flex flex-col gap-2">
-        <legend className="text-sm font-extrabold">Dietary needs</legend>
-        <div className="flex flex-wrap gap-2">
-          {DIETARY_OPTIONS.map((option) => {
-            const active = restrictions.includes(option);
-            return (
-              <button
-                key={option}
-                type="button"
-                onClick={() => toggleRestriction(option)}
-                aria-pressed={active}
-                className={cn(
-                  "rounded-full px-4 py-2 text-sm font-bold transition-colors",
-                  active
-                    ? "bg-flame text-white"
-                    : "bg-oat text-espresso hover:bg-oat-dark",
-                )}
-              >
-                {option}
-              </button>
-            );
-          })}
+    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+      <section className="flex flex-col gap-5 rounded-3xl bg-card p-6 shadow-sm ring-1 ring-oat">
+        <div>
+          <h2 className="text-lg font-extrabold">About you</h2>
+          <p className="text-sm font-semibold text-espresso-light">
+            Used to greet you and to scale recipes to your table.
+          </p>
         </div>
-      </fieldset>
-
-      <label className="flex flex-col gap-2">
-        <span className="text-sm font-extrabold">Allergies</span>
-        <input
-          type="text"
-          value={allergiesText}
-          onChange={(e) => setAllergiesText(e.target.value)}
-          placeholder="e.g. peanuts, shellfish — comma separated"
-          className={inputClass}
-        />
-      </label>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="flex flex-col gap-2">
-          <span className="text-sm font-extrabold">Skill level</span>
-          <select
-            value={skillLevel}
-            onChange={(e) =>
-              setSkillLevel(e.target.value as ProfileRow["skill_level"])
-            }
-            className={inputClass}
-          >
-            {SKILL_OPTIONS.map(({ value, label }) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
 
         <label className="flex flex-col gap-2">
-          <span className="text-sm font-extrabold">Household size</span>
+          <span className="text-sm font-extrabold">Display name</span>
           <input
-            type="number"
-            min={1}
-            max={20}
-            value={householdSize}
-            onChange={(e) => setHouseholdSize(Number(e.target.value))}
+            type="text"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="What should we call you?"
             className={inputClass}
           />
         </label>
-      </div>
+
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-extrabold">Household size</span>
+          <div className="inline-flex w-fit items-center gap-3 rounded-full border-2 border-oat bg-cream px-2 py-1.5">
+            <button
+              type="button"
+              onClick={() => setHouseholdSize((n) => Math.max(1, n - 1))}
+              aria-label="Fewer people"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-oat text-espresso hover:bg-oat-dark"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
+            <span className="min-w-16 text-center text-sm font-extrabold">
+              {householdSize} {householdSize === 1 ? "person" : "people"}
+            </span>
+            <button
+              type="button"
+              onClick={() => setHouseholdSize((n) => Math.min(20, n + 1))}
+              aria-label="More people"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-oat text-espresso hover:bg-oat-dark"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
+          <p className="text-xs font-semibold text-espresso-light">
+            Recipes default to this many servings.
+          </p>
+        </div>
+
+        <fieldset className="flex flex-col gap-2">
+          <legend className="text-sm font-extrabold">Skill level</legend>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {SKILL_OPTIONS.map(({ value, label, blurb }) => {
+              const active = skillLevel === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setSkillLevel(value)}
+                  aria-pressed={active}
+                  className={cn(
+                    "rounded-2xl border-2 p-3 text-left transition-colors",
+                    active
+                      ? "border-flame bg-flame-soft"
+                      : "border-oat bg-cream hover:border-oat-dark",
+                  )}
+                >
+                  <span className="block text-sm font-extrabold">{label}</span>
+                  <span className="block text-xs font-semibold text-espresso-light">
+                    {blurb}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs font-semibold text-espresso-light">
+            We match recipe difficulty and how much guidance the assistant gives
+            you.
+          </p>
+        </fieldset>
+      </section>
+
+      <section className="flex flex-col gap-5 rounded-3xl bg-card p-6 shadow-sm ring-1 ring-oat">
+        <div>
+          <h2 className="text-lg font-extrabold">Diet & allergies</h2>
+          <p className="text-sm font-semibold text-espresso-light">
+            We&apos;ll never suggest a recipe that conflicts with these — and
+            the assistant flags them if one slips through.
+          </p>
+        </div>
+
+        <fieldset className="flex flex-col gap-2">
+          <legend className="text-sm font-extrabold">Dietary needs</legend>
+          <div className="flex flex-wrap gap-2">
+            {DIETARY_OPTIONS.map((option) => {
+              const active = restrictions.includes(option);
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => toggleRestriction(option)}
+                  aria-pressed={active}
+                  className={cn(
+                    "rounded-full px-4 py-2 text-sm font-bold transition-colors",
+                    active
+                      ? "bg-flame text-white"
+                      : "bg-oat text-espresso hover:bg-oat-dark",
+                  )}
+                >
+                  {option}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-extrabold">Allergies</span>
+          <PillInput
+            values={allergies}
+            onChange={setAllergies}
+            placeholder="Type an allergy and press Enter — e.g. peanuts"
+          />
+        </div>
+      </section>
 
       <div className="flex items-center gap-3">
         <Button type="submit" size="md" disabled={pending}>

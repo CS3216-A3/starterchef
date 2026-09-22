@@ -9,6 +9,7 @@ export interface KitchenItemInput {
   name: string;
   quantity?: string | null;
   expiresOn?: string | null;
+  icon?: string | null;
   source?: "manual" | "scan";
 }
 
@@ -38,6 +39,7 @@ export async function saveKitchenItems(items: KitchenItemInput[]) {
       name: item.name.trim(),
       quantity: item.quantity ?? null,
       expires_on: item.expiresOn ?? null,
+      icon: item.icon ?? null,
       source: item.source ?? "manual",
     }));
   if (rows.length === 0) return { error: "Nothing to save" };
@@ -65,6 +67,8 @@ export async function saveKitchenItems(items: KitchenItemInput[]) {
         .update({
           quantity: row.quantity,
           expires_on: row.expires_on,
+          // A manual re-add shouldn't wipe an AI-picked icon.
+          ...(row.icon ? { icon: row.icon } : {}),
           source: row.source,
         })
         .eq("id", existingId);

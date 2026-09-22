@@ -68,6 +68,8 @@ export function VoiceAddItems() {
             kind: item.kind,
             name: item.name,
             quantity: item.quantity,
+            icon: item.icon,
+            source: "manual",
           })),
         );
         if ("error" in result && result.error) {

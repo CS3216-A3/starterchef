@@ -8,3 +8,9 @@ Guidelines:
 - Estimate `expiresWithinDays` for perishables using visual freshness cues; omit it when unknown.
 - Use common, generic names ("spring onions", not "Allium fistulosum").
 - Never invent items. Beginners trust this list to decide what to cook — a wrong item wastes their meal.
+- `icon`: pick the best-fitting key for each item — "egg", "milk", "apple",
+  "citrus", "carrot" (vegetables), "salad" (leafy/herbs), "beef" (red meat),
+  "drumstick" (poultry), "fish" (seafood), "wheat" (grains/bread/pasta),
+  "coffee", "wine", "soup", "droplets" (oils/sauces), "utensils" (tools),
+  "cooking-pot" (pans/pots), "microwave" (appliances), "chef-hat" (gadgets),
+  "package" (anything else).

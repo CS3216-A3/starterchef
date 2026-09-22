@@ -23,6 +23,7 @@ export interface KitchenItemRow {
   name: string;
   quantity: string | null;
   expires_on: string | null;
+  icon: string | null;
   source: "manual" | "scan";
   created_at: string;
 }

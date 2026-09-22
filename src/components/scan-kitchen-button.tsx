@@ -96,6 +96,7 @@ export function ScanKitchenButton() {
               .toISOString()
               .slice(0, 10)
           : null,
+        icon: i.icon,
         source: "scan" as const,
       })),
       ...result.equipment.map((i) => ({
@@ -103,6 +104,7 @@ export function ScanKitchenButton() {
         name: i.name,
         quantity: null as string | null,
         expiresOn: null as string | null,
+        icon: i.icon,
         source: "scan" as const,
       })),
     ];

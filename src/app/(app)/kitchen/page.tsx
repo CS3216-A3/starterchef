@@ -4,7 +4,7 @@ import { ScanKitchenButton } from "@/components/scan-kitchen-button";
 import { VoiceAddItems } from "@/components/voice-add-items";
 import { addKitchenItem, removeKitchenItem } from "@/app/(app)/kitchen/actions";
 import { getKitchenItems, getProfile } from "@/lib/data";
-import { equipmentIcon, ingredientIcon } from "@/lib/item-icons";
+import { kitchenIcon } from "@/lib/item-icons";
 
 export const metadata: Metadata = {
   title: "My Kitchen",
@@ -48,7 +48,7 @@ export default async function KitchenPage() {
             ) : (
               <ul className="flex flex-wrap gap-2">
                 {ingredients.map((item) => {
-                  const Icon = ingredientIcon(item.name);
+                  const Icon = kitchenIcon(item);
                   return (
                     <li
                       key={item.id}
@@ -81,7 +81,7 @@ export default async function KitchenPage() {
             ) : (
               <ul className="flex flex-wrap gap-2">
                 {equipment.map((item) => {
-                  const Icon = equipmentIcon(item.name);
+                  const Icon = kitchenIcon(item);
                   return (
                     <li
                       key={item.id}

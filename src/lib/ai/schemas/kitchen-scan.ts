@@ -1,4 +1,9 @@
 import { z } from "zod";
+import { KITCHEN_ICON_KEYS } from "@/lib/item-icons";
+
+const iconKey = z
+  .enum(KITCHEN_ICON_KEYS)
+  .describe("Best-fitting icon for this item");
 
 /**
  * Result of scanning a photo of the user's kitchen (fridge, pantry, counter).
@@ -12,12 +17,14 @@ export const kitchenScanSchema = z.object({
       confidence: z.enum(["high", "medium", "low"]),
       estimatedQuantity: z.string().optional(),
       expiresWithinDays: z.number().int().positive().optional(),
+      icon: iconKey,
     }),
   ),
   equipment: z.array(
     z.object({
       name: z.string(),
       confidence: z.enum(["high", "medium", "low"]),
+      icon: iconKey,
     }),
   ),
   uncertainItems: z
@@ -40,6 +47,7 @@ export const kitchenVoiceSchema = z.object({
         .string()
         .optional()
         .describe("Amount if spoken, e.g. '2', '500g', 'a bunch'"),
+      icon: iconKey,
     }),
   ),
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { Settings } from "lucide-react";
+import { UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/logo";
@@ -41,7 +41,7 @@ export function AppHeader() {
         <div className="flex items-center gap-1">
           <Link
             href="/settings"
-            aria-label="Settings"
+            aria-label="Your profile"
             className={cn(
               "flex h-9 w-9 items-center justify-center rounded-full transition-colors",
               pathname.startsWith("/settings")
@@ -49,7 +49,7 @@ export function AppHeader() {
                 : "text-espresso-light hover:text-espresso",
             )}
           >
-            <Settings className="h-5 w-5" />
+            <UserRound className="h-5 w-5" />
           </Link>
           <SignOutButton />
         </div>
