@@ -16,6 +16,10 @@ update public.recipes set user_id = null where user_id is null;
 -- Drop the old read-only catalogue policy and replace with one that lets users
 -- read catalogue rows plus their own imported/personalised recipes.
 drop policy if exists "recipes: read by authenticated users" on public.recipes;
+drop policy if exists "recipes: read catalogue and own rows" on public.recipes;
+drop policy if exists "recipes: insert own rows" on public.recipes;
+drop policy if exists "recipes: update own rows" on public.recipes;
+drop policy if exists "recipes: delete own rows" on public.recipes;
 
 create policy "recipes: read catalogue and own rows"
   on public.recipes
@@ -39,7 +43,7 @@ create policy "recipes: delete own rows"
   using (auth.uid() = user_id);
 
 -- Feedback captured after cooking a recipe, used to improve future suggestions.
-create table public.recipe_feedback (
+create table if not exists public.recipe_feedback (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles (id) on delete cascade,
   recipe_id uuid not null references public.recipes (id) on delete cascade,
@@ -53,6 +57,8 @@ create table public.recipe_feedback (
 );
 
 alter table public.recipe_feedback enable row level security;
+
+drop policy if exists "recipe_feedback: own rows only" on public.recipe_feedback;
 
 create policy "recipe_feedback: own rows only"
   on public.recipe_feedback
