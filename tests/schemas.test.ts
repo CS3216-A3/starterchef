@@ -8,9 +8,16 @@ describe("kitchenScanSchema", () => {
   it("accepts a valid scan result", () => {
     const result = kitchenScanSchema.safeParse({
       ingredients: [
-        { name: "Eggs", confidence: "high", estimatedQuantity: "6" },
+        {
+          name: "Eggs",
+          confidence: "high",
+          estimatedQuantity: "6",
+          icon: "egg",
+        },
       ],
-      equipment: [{ name: "Frying pan", confidence: "medium" }],
+      equipment: [
+        { name: "Frying pan", confidence: "medium", icon: "cooking-pot" },
+      ],
       uncertainItems: ["possibly butter"],
     });
     expect(result.success).toBe(true);
