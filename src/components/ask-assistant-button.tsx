@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { createMetrics, logMetrics } from "@/lib/ai/voice-metrics";
 import type { VoiceAssistantMetrics } from "@/lib/ai/voice";
+import type { AssistantReply } from "@/lib/ai/schemas/assistant";
 
 type AskState =
   | { status: "idle" }
@@ -52,11 +53,22 @@ export function AskAssistantButton({
   stepTitle,
   sessionId,
   stepIndex,
+  instruction,
+  photoCheckpoint,
+  snapFrame,
+  onAction,
 }: {
   recipeTitle: string;
   stepTitle: string;
   sessionId?: string;
   stepIndex?: number;
+  /** Extra context passed to step-check when a camera frame is attached. */
+  instruction?: string;
+  photoCheckpoint?: string;
+  /** "Show and ask": returns a camera frame to send with the question. */
+  snapFrame?: () => string | null;
+  /** Structured intent from the assistant (set-timer, goto-step…). */
+  onAction?: (action: NonNullable<AssistantReply["action"]>) => void;
 }) {
   const [state, setState] = useState<AskState>({ status: "idle" });
   const metricsRef = useRef<VoiceAssistantMetrics>(createMetrics("web-speech"));
@@ -71,23 +83,45 @@ export function AskAssistantButton({
   async function ask(question: string) {
     setState({ status: "thinking" });
     try {
-      const res = await fetch("/api/ai/assistant", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question,
-          context: { recipeTitle, stepTitle },
-          sessionId,
-          stepIndex,
-          channel: "voice",
-        }),
-      });
+      const frame = snapFrame?.() ?? null;
+      const res = await fetch(
+        frame ? "/api/ai/step-check" : "/api/ai/assistant",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            frame
+              ? {
+                  image: frame,
+                  question,
+                  context: {
+                    recipeTitle,
+                    stepTitle,
+                    instruction: instruction ?? stepTitle,
+                    photoCheckpoint,
+                  },
+                  sessionId,
+                  stepIndex,
+                }
+              : {
+                  question,
+                  context: { recipeTitle, stepTitle },
+                  sessionId,
+                  stepIndex,
+                  channel: "voice",
+                },
+          ),
+        },
+      );
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Assistant failed");
 
       metricsRef.current.firstResponseAt ??= performance.now();
-      setState({ status: "answered", answer: body.answer });
-      speak(body.answer);
+      // step-check returns {feedback}; assistant returns {answer, action?}.
+      const answer = frame ? body.feedback : body.answer;
+      if (!frame && body.action) onAction?.(body.action);
+      setState({ status: "answered", answer });
+      speak(answer);
     } catch (err) {
       metricsRef.current.error =
         err instanceof Error ? err.message : "Assistant failed";

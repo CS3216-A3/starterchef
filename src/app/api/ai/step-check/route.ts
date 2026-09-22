@@ -18,6 +18,9 @@ const requestSchema = z.object({
   }),
   sessionId: z.string().uuid().optional(),
   stepIndex: z.number().int().min(1).optional(),
+  // "Show and ask": when the camera is on, a question comes with a snapped
+  // frame — the model answers it using what it sees.
+  question: z.string().min(1).max(1000).optional(),
 });
 
 /** Persist the checkpoint photo so the verdict in the timeline keeps its
@@ -68,7 +71,7 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    const { image, context, sessionId, stepIndex } = parsed.data;
+    const { image, context, sessionId, stepIndex, question } = parsed.data;
 
     const { object } = (await measuredGenerate("step-check", {
       model: getModel(),
@@ -88,7 +91,9 @@ export async function POST(request: Request) {
                 context.photoCheckpoint
                   ? `Expected result: ${context.photoCheckpoint}`
                   : "",
-                "Does this look right?",
+                question
+                  ? `The cook asks: "${question}" — answer it using the photo, then judge whether it looks right.`
+                  : "Does this look right?",
               ]
                 .filter(Boolean)
                 .join("\n"),
@@ -113,6 +118,7 @@ export async function POST(request: Request) {
         kind: "photo_check",
         payload: {
           photoUrl: photoUrl ?? undefined,
+          question: question ?? undefined,
           looksRight: object.looksRight,
           feedback: object.feedback,
           tip: object.tip,

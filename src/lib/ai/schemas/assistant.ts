@@ -16,11 +16,18 @@ export const assistantReplySchema = z.object({
         "substitute-ingredient",
         "adjust-step",
         "set-timer",
+        "goto-step",
         "repeat-step",
         "needs-human",
       ]),
       detail: z.string().optional(),
       timerSeconds: z.number().int().positive().optional(),
+      stepIndex: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe("For goto-step: the 1-based step to navigate to"),
     })
     .optional(),
 });

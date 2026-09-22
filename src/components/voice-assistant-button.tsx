@@ -2,6 +2,7 @@
 
 import { AskAssistantButton } from "@/components/ask-assistant-button";
 import { RealtimeAssistantButton } from "@/components/realtime-assistant-button";
+import type { AssistantReply } from "@/lib/ai/schemas/assistant";
 import { getVoiceProvider } from "@/lib/ai/voice";
 
 export function VoiceAssistantButton({
@@ -9,11 +10,19 @@ export function VoiceAssistantButton({
   stepTitle,
   sessionId,
   stepIndex,
+  instruction,
+  photoCheckpoint,
+  snapFrame,
+  onAction,
 }: {
   recipeTitle: string;
   stepTitle: string;
   sessionId?: string;
   stepIndex?: number;
+  instruction?: string;
+  photoCheckpoint?: string;
+  snapFrame?: () => string | null;
+  onAction?: (action: NonNullable<AssistantReply["action"]>) => void;
 }) {
   const provider = getVoiceProvider();
 
@@ -24,6 +33,10 @@ export function VoiceAssistantButton({
         stepTitle={stepTitle}
         sessionId={sessionId}
         stepIndex={stepIndex}
+        instruction={instruction}
+        photoCheckpoint={photoCheckpoint}
+        snapFrame={snapFrame}
+        onAction={onAction}
       />
     );
   }

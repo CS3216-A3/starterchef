@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { Camera, Send, Sparkles } from "lucide-react";
 import { Button } from "@/components/button";
+import type { AssistantReply } from "@/lib/ai/schemas/assistant";
 import type { StepCheck } from "@/lib/ai/schemas/cooking";
 
 interface StepContext {
@@ -107,13 +108,19 @@ export function StepCheckButton({
   );
 }
 
-/** Text Q&A for the current step — same assistant the voice button uses. */
+/** Text Q&A for the current step — same assistant the voice button uses.
+ *  When `snapFrame` returns a frame ("Show my food" is on), the question is
+ *  answered through step-check so the model can see what the user means. */
 export function StepAskBox({
   context,
   sessionId,
   stepIndex,
+  snapFrame,
+  onAction,
 }: {
   context: StepContext;
+  snapFrame?: () => string | null;
+  onAction?: (action: NonNullable<AssistantReply["action"]>) => void;
 } & SessionLink) {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
@@ -126,23 +133,38 @@ export function StepAskBox({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/ai/assistant", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question: text,
-          context: {
-            recipeTitle: context.recipeTitle,
-            stepTitle: context.stepTitle,
-          },
-          sessionId,
-          stepIndex,
-          channel: "text",
-        }),
-      });
+      const frame = snapFrame?.() ?? null;
+      const res = await fetch(
+        frame ? "/api/ai/step-check" : "/api/ai/assistant",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            frame
+              ? {
+                  image: frame,
+                  question: text,
+                  context,
+                  sessionId,
+                  stepIndex,
+                }
+              : {
+                  question: text,
+                  context: {
+                    recipeTitle: context.recipeTitle,
+                    stepTitle: context.stepTitle,
+                  },
+                  sessionId,
+                  stepIndex,
+                  channel: "text",
+                },
+          ),
+        },
+      );
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Assistant failed");
-      setAnswer(body.answer);
+      if (!frame && body.action) onAction?.(body.action);
+      setAnswer(frame ? body.feedback : body.answer);
       setQuestion("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");

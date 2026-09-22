@@ -1,11 +1,9 @@
-import { ArrowLeft, ArrowRight, Play, Timer } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { VoiceAssistantButton } from "@/components/voice-assistant-button";
 import { Button } from "@/components/button";
+import { CookAssist } from "@/components/cook-assist";
 import { FinishCookingButton } from "@/components/cook-buttons";
-import { StepPhotoUpload } from "@/components/step-photo-upload";
-import { StepAskBox, StepCheckButton } from "@/components/step-assist";
 import { StepTracker } from "@/components/step-tracker";
 import { getActiveCookingSession, getRecipeBySlug } from "@/lib/data";
 
@@ -29,32 +27,13 @@ export default async function CookPage({
   if (!recipe || recipe.steps.length === 0) notFound();
 
   const recipeTitle = recipe.title;
-  // Step photos taken during this session live on the session snapshot for
-  // catalogue recipes — merge them over the base steps.
-  const sessionSteps =
-    session?.recipe?.slug === recipe.slug ? session.recipe.steps : undefined;
-  const sessionPhotos = new Map(
-    (sessionSteps ?? [])
-      .filter((s) => s.photoUrl)
-      .map((s) => [s.index, s.photoUrl] as const),
-  );
-  const steps = recipe.steps.map((s) =>
-    sessionPhotos.has(s.index)
-      ? { ...s, photoUrl: sessionPhotos.get(s.index) }
-      : s,
-  );
+  const steps = recipe.steps;
   const stepIndex = Math.min(Math.max(Number(step ?? 1) || 1, 1), steps.length);
   const current = steps[stepIndex - 1];
   // Only log to the session actually cooking this recipe.
   const sessionId =
     session?.recipe?.slug === recipe.slug ? session.id : undefined;
   const progress = Math.round((stepIndex / steps.length) * 100);
-
-  function formatDuration(seconds: number) {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  }
 
   return (
     <div className="mx-auto flex max-w-lg flex-col gap-6">
@@ -83,25 +62,16 @@ export default async function CookPage({
         </div>
       </header>
 
-      <div className="flex flex-col gap-1">
-        <StepPhotoUpload
-          recipeId={recipe.id}
-          recipeSlug={recipe.slug}
-          stepIndex={current.index}
-          initialPhotoUrl={current.photoUrl}
-        />
-        {current.photoCheckpoint ? (
-          <p className="text-xs font-semibold text-espresso-light">
-            What it should look like: {current.photoCheckpoint}
-          </p>
-        ) : null}
-      </div>
-
       <section className="flex flex-col gap-2">
         <h2 className="text-2xl font-extrabold">{current.title}</h2>
         <p className="leading-relaxed font-semibold text-espresso-light">
           {current.instruction}
         </p>
+        {current.photoCheckpoint ? (
+          <p className="text-xs font-semibold text-espresso-light">
+            What it should look like: {current.photoCheckpoint}
+          </p>
+        ) : null}
         {current.tip ? (
           <p className="rounded-2xl bg-flame-soft p-3 text-sm font-semibold">
             Tip: {current.tip}
@@ -127,36 +97,7 @@ export default async function CookPage({
         </section>
       ) : null}
 
-      {current.durationSeconds ? (
-        <div className="flex items-center justify-between rounded-3xl bg-card p-4 shadow-sm ring-1 ring-oat">
-          <span className="inline-flex items-center gap-2 text-2xl font-extrabold tabular-nums">
-            <Timer className="h-6 w-6 text-espresso-light" />
-            {formatDuration(current.durationSeconds)}
-          </span>
-          <Button variant="secondary" size="sm">
-            <Play className="h-4 w-4" /> Start timer
-          </Button>
-        </div>
-      ) : null}
-
-      <VoiceAssistantButton
-        recipeTitle={recipeTitle}
-        stepTitle={current.title}
-        sessionId={sessionId}
-        stepIndex={stepIndex}
-      />
-
-      <StepAskBox
-        context={{
-          recipeTitle,
-          stepTitle: current.title,
-          instruction: current.instruction,
-        }}
-        sessionId={sessionId}
-        stepIndex={stepIndex}
-      />
-
-      <StepCheckButton
+      <CookAssist
         context={{
           recipeTitle,
           stepTitle: current.title,
@@ -165,6 +106,9 @@ export default async function CookPage({
         }}
         sessionId={sessionId}
         stepIndex={stepIndex}
+        cookUrl={`/cook/${id}`}
+        totalSteps={steps.length}
+        durationSeconds={current.durationSeconds}
       />
 
       <nav className="flex items-center justify-between gap-3">
