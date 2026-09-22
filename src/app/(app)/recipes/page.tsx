@@ -49,7 +49,11 @@ export default async function RecipesPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {myRecipes.map((recipe) => (
-            <RecipeCard key={recipe.id} recipe={toRecipeCardModel(recipe)} />
+            <RecipeCard
+              key={recipe.id}
+              recipe={toRecipeCardModel(recipe)}
+              editHref={`/recipes/${recipe.id}/edit`}
+            />
           ))}
         </div>
       )}

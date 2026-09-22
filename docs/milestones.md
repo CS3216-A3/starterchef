@@ -13,7 +13,7 @@ retrofitted at submission time. Full writeup goes in
 | Production optimization                       | `ai_call` JSON logs (latency, tokens) → `ai_calls` table                                                                                                                                                            |
 | Safety & security                             | input zod validation on routes, output schema validation, RLS policies, rate limiting (TODO)                                                                                                                        |
 | Landing page + SEO/OG                         | `src/app/(marketing)/`                                                                                                                                                                                              |
-| Recipe import & personalisation               | `src/app/(app)/recipes/import/`, `src/app/api/ai/import-recipe/`, `supabase/migrations/0007_user_recipes.sql`, `src/components/cook-buttons.tsx` feedback flow                                                      |
+| Recipe import & personalisation               | `src/app/(app)/recipes/import/`, `src/app/(app)/recipes/[id]/edit/`, `src/app/api/ai/import-recipe/`, `supabase/migrations/0007_user_recipes.sql`, `src/components/cook-buttons.tsx` feedback flow                  |
 | Loop engineering                              | this file, `AGENTS.md`, `.devin/skills/`, CI, tests                                                                                                                                                                 |
 
 ## Model comparison
@@ -68,12 +68,12 @@ Fill in the measured numbers from `evals/results/text-model-comparison.json` and
 
 ### Import sources
 
-| Source               | Status         | Where it lives                                                                                                           |
-| -------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Pasted text          | Implemented    | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "text"`)                                                      |
-| Recipe URL           | Implemented    | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "url"`) using `recipe-scrapers` for JSON-LD/schema extraction |
-| Photo of recipe card | Implemented    | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "photo"`) with image input                                    |
-| Cooking video        | Placeholder UI | `/recipes/import` tab present; backend returns 501. Gemini video understanding can be wired in next.                     |
+| Source               | Status      | Where it lives                                                                                                           |
+| -------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Pasted text          | Implemented | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "text"`)                                                      |
+| Recipe URL           | Implemented | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "url"`) using `recipe-scrapers` for JSON-LD/schema extraction |
+| Photo of recipe card | Implemented | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "photo"`) with image input                                    |
+| Cooking video        | Implemented | `/recipes/import` tab accepts a short video upload; backend passes it to Gemini as a file input.                         |
 
 ### Data model
 
@@ -84,6 +84,7 @@ Fill in the measured numbers from `evals/results/text-model-comparison.json` and
 
 ### User flows
 
-1. **Import**: User pastes text/link/photo → AI returns structured preview → user saves to their library.
-2. **Cook**: `/cook/[id]` resolves by slug or by recipe id, so user recipes work the same as catalogue recipes.
-3. **Personalise**: On the last step, the "Finish cooking" button opens a feedback form; saving creates `My <title>` as a personalised child recipe and writes a `recipe_feedback` row.
+1. **Import**: User pastes text/link/photo/video → AI returns structured preview → user saves to their library.
+2. **Edit**: `/recipes/[id]/edit` lets the owner fix ingredients, steps, servings and equipment before cooking.
+3. **Cook**: `/cook/[id]` resolves by slug or by recipe id, so user recipes work the same as catalogue recipes.
+4. **Personalise**: On the last step, the "Finish cooking" button opens a feedback form; saving creates `My <title>` as a personalised child recipe and writes a `recipe_feedback` row.

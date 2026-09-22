@@ -20,6 +20,11 @@ async function getUserId() {
   return { supabase, user };
 }
 
+export async function getUser() {
+  const { user } = await getUserId();
+  return user;
+}
+
 export async function getProfile(): Promise<ProfileRow | null> {
   const { supabase, user } = await getUserId();
   if (!user) return null;

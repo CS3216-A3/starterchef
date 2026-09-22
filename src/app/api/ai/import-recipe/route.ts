@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { generateObject } from "ai";
 import { z } from "zod";
 import { scrapeRecipe } from "recipe-scrapers";
 import { measuredGenerate } from "@/lib/ai/instrument";
@@ -24,7 +25,7 @@ const requestSchema = z.discriminatedUnion("source", [
   }),
   z.object({
     source: z.literal("video"),
-    url: z.string().url(),
+    video: z.string().min(1).max(50_000_000),
   }),
 ]);
 
@@ -60,47 +61,15 @@ export async function POST(request: Request) {
 
     const input = parsed.data;
 
-    if (input.source === "video") {
+    const generateArgs = await buildGenerateArgs(input);
+    if (!generateArgs.ok) {
       return NextResponse.json(
-        { error: "Video import is not yet implemented" },
-        { status: 501 },
+        { error: generateArgs.error },
+        { status: generateArgs.status },
       );
     }
 
-    const extraction = await extractSourceText(input);
-    if (!extraction.ok) {
-      return NextResponse.json(
-        { error: extraction.error },
-        { status: extraction.status },
-      );
-    }
-
-    const generateArgs =
-      input.source === "photo"
-        ? {
-            model: getModel(),
-            schema: importedRecipeSchema,
-            temperature: 0.4,
-            system: renderPrompt("import-recipe", {}),
-            messages: [
-              {
-                role: "user" as const,
-                content: [
-                  { type: "text" as const, text: extraction.prompt },
-                  { type: "image" as const, image: input.image },
-                ],
-              },
-            ],
-          }
-        : {
-            model: getModel(),
-            schema: importedRecipeSchema,
-            temperature: 0.4,
-            system: renderPrompt("import-recipe", {}),
-            prompt: extraction.prompt,
-          };
-
-    const result = await measuredGenerate("import-recipe", generateArgs);
+    const result = await measuredGenerate("import-recipe", generateArgs.args);
 
     return NextResponse.json(result.object);
   } catch (err) {
@@ -109,8 +78,93 @@ export async function POST(request: Request) {
   }
 }
 
+type GenerateArgsResult =
+  | { ok: true; args: Parameters<typeof generateObject>[0] }
+  | { ok: false; error: string; status: number };
+
 type ExtractionResult =
   { ok: true; prompt: string } | { ok: false; error: string; status: number };
+
+async function buildGenerateArgs(
+  input: z.infer<typeof requestSchema>,
+): Promise<GenerateArgsResult> {
+  const baseArgs = {
+    model: getModel(),
+    schema: importedRecipeSchema,
+    temperature: 0.4,
+    system: renderPrompt("import-recipe", {}),
+  };
+
+  switch (input.source) {
+    case "text": {
+      return {
+        ok: true,
+        args: { ...baseArgs, prompt: input.content },
+      };
+    }
+
+    case "url": {
+      const extraction = await extractSourceText(input);
+      if (!extraction.ok) return extraction;
+      return { ok: true, args: { ...baseArgs, prompt: extraction.prompt } };
+    }
+
+    case "photo": {
+      return {
+        ok: true,
+        args: {
+          ...baseArgs,
+          messages: [
+            {
+              role: "user" as const,
+              content: [
+                {
+                  type: "text" as const,
+                  text: "Extract the recipe from this photo of a recipe card, page, or screenshot.",
+                },
+                { type: "image" as const, image: input.image },
+              ],
+            },
+          ],
+        },
+      };
+    }
+
+    case "video": {
+      const video = parseDataUrl(input.video);
+      if (!video) {
+        return {
+          ok: false,
+          error:
+            "Invalid video upload. Provide a base64 data URL (data:video/mp4;base64,...).",
+          status: 400,
+        };
+      }
+      return {
+        ok: true,
+        args: {
+          ...baseArgs,
+          messages: [
+            {
+              role: "user" as const,
+              content: [
+                {
+                  type: "text" as const,
+                  text: "Extract the recipe from this cooking video. Include timestamps where useful.",
+                },
+                {
+                  type: "file" as const,
+                  data: video.data,
+                  mediaType: video.mimeType,
+                },
+              ],
+            },
+          ],
+        },
+      };
+    }
+  }
+}
 
 async function extractSourceText(
   input: z.infer<typeof requestSchema>,
@@ -195,6 +249,20 @@ async function extractSourceText(
 
     case "video":
       return { ok: false, error: "Not implemented", status: 501 };
+  }
+}
+
+function parseDataUrl(
+  dataUrl: string,
+): { data: Buffer; mimeType: string } | null {
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return null;
+  const mimeType = match[1];
+  try {
+    const data = Buffer.from(match[2], "base64");
+    return { data, mimeType };
+  } catch {
+    return null;
   }
 }
 

@@ -23,9 +23,9 @@ create table public.recipes (
   -- `ingredients` list for the "For this step" chips).
   steps jsonb not null default '[]',
   tags text[] not null default '{}',
-  -- Provenance: where the recipe text came from and its license.
-  source text not null default 'StarterChef original',
-  license text not null default 'CC0-1.0',
+  -- Provenance: where the recipe text came from.
+  -- Keep empty or set to the actual source; do not invent a license.
+  source text not null default '',
   created_at timestamptz not null default now()
 );
 

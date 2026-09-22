@@ -16,7 +16,7 @@ interface ImportState {
   url: string;
   htmlFallback: string;
   photoDataUrl: string;
-  videoUrl: string;
+  videoDataUrl: string;
 }
 
 export default function ImportRecipePage() {
@@ -27,7 +27,7 @@ export default function ImportRecipePage() {
     url: "",
     htmlFallback: "",
     photoDataUrl: "",
-    videoUrl: "",
+    videoDataUrl: "",
   });
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState<ImportedRecipe | null>(null);
@@ -65,7 +65,7 @@ export default function ImportRecipePage() {
     const result = await createUserRecipe({
       ...draft,
       source: sourceLabel(state.source),
-      sourceUrl: state.url || state.videoUrl || undefined,
+      sourceUrl: state.url || undefined,
     });
     if (result.error) {
       setError(result.error);
@@ -81,6 +81,16 @@ export default function ImportRecipePage() {
     const reader = new FileReader();
     reader.onload = () => {
       setState((s) => ({ ...s, photoDataUrl: reader.result as string }));
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function handleVideoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setState((s) => ({ ...s, videoDataUrl: reader.result as string }));
     };
     reader.readAsDataURL(file);
   }
@@ -190,19 +200,27 @@ export default function ImportRecipePage() {
           )}
 
           {state.source === "video" && (
-            <div className="rounded-2xl bg-oat p-6 text-center">
-              <p className="text-sm font-semibold text-espresso-light">
-                Video import is coming soon. For now, paste the video URL or
-                transcribe the steps as text.
-              </p>
+            <div className="flex flex-col gap-4">
+              <input
+                type="file"
+                accept="video/*"
+                onChange={handleVideoFile}
+                className="rounded-2xl border-2 border-dashed border-espresso/20 bg-card p-4 text-sm font-semibold file:mr-4 file:rounded-full file:bg-flame file:px-4 file:py-2 file:text-white"
+                required
+              />
+              {state.videoDataUrl && (
+                <video
+                  src={state.videoDataUrl}
+                  controls
+                  className="max-h-64 rounded-2xl"
+                />
+              )}
             </div>
           )}
 
-          {state.source !== "video" && (
-            <Button type="submit" disabled={loading} size="lg">
-              {loading ? "Reading recipe…" : "Extract recipe"}
-            </Button>
-          )}
+          <Button type="submit" disabled={loading} size="lg">
+            {loading ? "Reading recipe…" : "Extract recipe"}
+          </Button>
 
           {error && (
             <p className="rounded-2xl bg-red-50 p-3 text-sm font-bold text-red-700">
@@ -314,7 +332,7 @@ function buildRequestBody(state: ImportState): unknown {
     case "photo":
       return { source: "photo", image: state.photoDataUrl };
     case "video":
-      return { source: "video", url: state.videoUrl };
+      return { source: "video", video: state.videoDataUrl };
   }
 }
 

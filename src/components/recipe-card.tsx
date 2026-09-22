@@ -1,4 +1,5 @@
-import { Clock, Sparkles, Users } from "lucide-react";
+import { Clock, Pencil, Sparkles, Users } from "lucide-react";
+import Link from "next/link";
 import { SaveRecipeButton } from "@/components/save-recipe-button";
 import { StartCookingButton } from "@/components/cook-buttons";
 import type { RecipeCardModel } from "@/lib/recipe-view";
@@ -6,9 +7,11 @@ import type { RecipeCardModel } from "@/lib/recipe-view";
 export function RecipeCard({
   recipe,
   saved,
+  editHref,
 }: {
   recipe: RecipeCardModel & { primaryCta?: boolean };
   saved?: boolean;
+  editHref?: string;
 }) {
   const Icon = recipe.icon;
 
@@ -20,6 +23,15 @@ export function RecipeCard({
       >
         <Icon className="h-12 w-12 text-espresso/30" strokeWidth={1.5} />
       </div>
+      {editHref && (
+        <Link
+          href={editHref}
+          className="absolute top-3 left-3 flex h-9 w-9 items-center justify-center rounded-full bg-card/80 text-espresso-light ring-1 ring-oat transition-colors hover:bg-oat hover:text-espresso"
+          aria-label="Edit recipe"
+        >
+          <Pencil className="h-4 w-4" />
+        </Link>
+      )}
       {saved !== undefined && (
         <div className="absolute top-3 right-3">
           <SaveRecipeButton recipeId={recipe.id} saved={saved} />
