@@ -49,9 +49,19 @@ const filters = [
   },
 ] as const;
 
-export function FilterPills() {
+export function FilterPills({
+  defaultServings,
+  defaultSkill,
+}: {
+  defaultServings?: string;
+  defaultSkill?: string;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const defaults: Record<string, string | undefined> = {
+    servings: defaultServings,
+    skill: defaultSkill,
+  };
   const [openKey, setOpenKey] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -77,6 +87,7 @@ export function FilterPills() {
     <div ref={containerRef} className="flex flex-wrap gap-2">
       {filters.map(({ key, icon: Icon, label, options }) => {
         const current = searchParams.get(key);
+        const displayed = current ?? defaults[key] ?? null;
         const active = Boolean(current);
         return (
           <div key={key} className="relative">
@@ -96,7 +107,7 @@ export function FilterPills() {
                   active ? "text-white" : "text-espresso-light",
                 )}
               />
-              {label(current)}
+              {label(displayed)}
               <ChevronDown
                 className={cn(
                   "h-3.5 w-3.5",

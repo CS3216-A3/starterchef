@@ -36,6 +36,7 @@ export function RecipeChat({
   const [input, setInput] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
 
   function recipePayload() {
     return {
@@ -187,6 +188,14 @@ export function RecipeChat({
                   <div className="flex flex-wrap gap-2">
                     <Button
                       size="sm"
+                      variant="outline"
+                      disabled={pending}
+                      onClick={() => setPreviewIndex(i)}
+                    >
+                      View changes
+                    </Button>
+                    <Button
+                      size="sm"
                       disabled={pending}
                       onClick={() => applySuggestion(i, "copy")}
                     >
@@ -241,6 +250,159 @@ export function RecipeChat({
           {error}
         </p>
       )}
+
+      {previewIndex !== null &&
+        messages[previewIndex]?.role === "assistant" && (
+          <AdaptPreviewModal
+            original={recipe}
+            adapted={messages[previewIndex].adapted}
+            pending={pending}
+            isOwner={isOwner}
+            onApply={(mode) => {
+              setPreviewIndex(null);
+              applySuggestion(previewIndex, mode);
+            }}
+            onClose={() => setPreviewIndex(null)}
+          />
+        )}
     </section>
+  );
+}
+
+/** Full-screen preview of an adapted recipe — old vs new meta plus the full
+ *  new ingredient/step lists, with apply/dismiss actions. */
+function AdaptPreviewModal({
+  original,
+  adapted,
+  pending,
+  isOwner,
+  onApply,
+  onClose,
+}: {
+  original: RecipeRow;
+  adapted: AdaptedRecipe;
+  pending: boolean;
+  isOwner: boolean;
+  onApply: (mode: "copy" | "update") => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-espresso/40 p-4 backdrop-blur-sm sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Preview recipe changes"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[85vh] w-full max-w-lg flex-col gap-4 overflow-y-auto rounded-3xl bg-card p-5 shadow-xl ring-1 ring-oat"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div>
+          <h3 className="text-lg font-extrabold">{adapted.title}</h3>
+          <p className="text-sm font-semibold text-espresso-light">
+            {adapted.changeSummary}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <MetaDiff
+            label="Servings"
+            before={String(original.servings)}
+            after={String(adapted.servings)}
+          />
+          <MetaDiff
+            label="Time"
+            before={`${original.minutes} min`}
+            after={`${adapted.minutes} min`}
+          />
+          <MetaDiff
+            label="Level"
+            before={original.difficulty}
+            after={adapted.difficulty}
+          />
+        </div>
+
+        <section>
+          <h4 className="mb-1 text-xs font-extrabold tracking-wide text-espresso-light uppercase">
+            Ingredients
+          </h4>
+          <ul className="flex flex-wrap gap-1.5">
+            {adapted.ingredients.map((ing) => (
+              <li
+                key={ing}
+                className="rounded-full bg-oat px-2.5 py-1 text-xs font-bold"
+              >
+                {ing}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section>
+          <h4 className="mb-1 text-xs font-extrabold tracking-wide text-espresso-light uppercase">
+            Steps
+          </h4>
+          <ol className="flex flex-col gap-2">
+            {adapted.steps.map((step) => (
+              <li key={step.index} className="flex gap-2 text-sm">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-flame text-xs font-extrabold text-white">
+                  {step.index}
+                </span>
+                <span>
+                  <span className="font-extrabold">{step.title}.</span>{" "}
+                  <span className="font-semibold text-espresso-light">
+                    {step.instruction}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-oat bg-card pt-3">
+          <Button size="sm" disabled={pending} onClick={() => onApply("copy")}>
+            Save as my version
+          </Button>
+          {isOwner && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={pending}
+              onClick={() => onApply("update")}
+            >
+              Update this recipe
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MetaDiff({
+  label,
+  before,
+  after,
+}: {
+  label: string;
+  before: string;
+  after: string;
+}) {
+  const changed = before !== after;
+  return (
+    <span
+      className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${
+        changed
+          ? "bg-flame-soft text-espresso ring-flame/40"
+          : "bg-oat text-espresso-light ring-oat"
+      }`}
+    >
+      {label}: {before}
+      {changed && <span className="text-flame"> → {after}</span>}
+    </span>
   );
 }

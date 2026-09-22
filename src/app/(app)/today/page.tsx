@@ -5,9 +5,11 @@ import type { Metadata } from "next";
 import { FilterPills } from "@/components/filter-pills";
 import { KitchenPanel } from "@/components/kitchen-panel";
 import { RecipeCard } from "@/components/recipe-card";
+import { redirect } from "next/navigation";
 import {
   getActiveCookingSession,
   getKitchenItems,
+  getProfile,
   getRecipes,
   getUserRecipes,
 } from "@/lib/data";
@@ -33,22 +35,32 @@ export default async function TodayPage({
   searchParams: Promise<{ time?: string; servings?: string; skill?: string }>;
 }) {
   const { time, servings, skill } = await searchParams;
-  const [allRecipes, myRecipes, kitchenItems, session] = await Promise.all([
-    getRecipes(),
-    getUserRecipes(),
-    getKitchenItems(),
-    getActiveCookingSession(),
-  ]);
+  const [allRecipes, myRecipes, kitchenItems, session, profile] =
+    await Promise.all([
+      getRecipes(),
+      getUserRecipes(),
+      getKitchenItems(),
+      getActiveCookingSession(),
+      getProfile(),
+    ]);
+
+  // First-run users go through the onboarding wizard before landing here.
+  if (profile && !profile.onboarded_at) redirect("/onboarding");
 
   const ingredients = kitchenItems.filter((i) => i.kind === "ingredient");
   const equipment = kitchenItems.filter((i) => i.kind === "equipment");
   const activeRecipe = session?.recipe;
 
-  // Apply the filter pills (?time=&servings=&skill=).
+  // Apply the filter pills (?time=&servings=&skill=). When the user hasn't
+  // chosen a value, fall back to their profile (household size, skill).
+  const effectiveServings = servings ?? profile?.household_size?.toString();
+  const effectiveSkill = skill ?? profile?.skill_level;
   const maxMinutes = time ? Number(time) : undefined;
-  const minServings = servings ? Number(servings) : undefined;
-  const difficulty = skill ? skillToDifficulty[skill] : undefined;
-  const hasFilters = Boolean(maxMinutes || minServings || difficulty);
+  const minServings = effectiveServings ? Number(effectiveServings) : undefined;
+  const difficulty = effectiveSkill
+    ? skillToDifficulty[effectiveSkill]
+    : undefined;
+  const hasFilters = Boolean(time || servings || skill);
   const recipes = allRecipes
     .filter(
       (r) =>
@@ -70,7 +82,10 @@ export default async function TodayPage({
           </p>
         </div>
         <Suspense fallback={null}>
-          <FilterPills />
+          <FilterPills
+            defaultServings={effectiveServings}
+            defaultSkill={effectiveSkill}
+          />
         </Suspense>
       </section>
 

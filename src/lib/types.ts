@@ -11,6 +11,7 @@ export interface ProfileRow {
   taste_preferences: Record<string, unknown>;
   skill_level: "beginner" | "intermediate" | "advanced";
   household_size: number;
+  onboarded_at: string | null;
 }
 
 export type KitchenItemKind = "ingredient" | "equipment";

@@ -91,4 +91,6 @@ Fill in the measured numbers from `evals/results/text-model-comparison.json` and
 3. **Edit**: `/recipes/[id]/edit` lets the owner fix ingredients, steps, servings, equipment and the cover image before cooking.
 4. **Cook**: `/cook/[id]` resolves by slug or by recipe id; users can attach their own photo to any step (stored on the recipe for owned recipes, on the session snapshot for catalogue ones).
 5. **Personalise**: On the last step, the "Finish cooking" button opens a feedback form; saving creates `My <title>` as a personalised child recipe and writes a `recipe_feedback` row.
-6. **Filter**: The time/servings/skill pills on `/today` write URL params (`?time=&servings=&skill=`) and filter the ideas list server-side.
+6. **Filter**: The time/servings/skill pills on `/today` write URL params (`?time=&servings=&skill=`) and filter the ideas list server-side. Servings/skill default to the user's profile (household size, skill level) when no param is set.
+7. **Onboarding**: New users land on `/onboarding` (redirected from `/today` until `profiles.onboarded_at` is set) — profile + household size, dietary needs, an optional first kitchen scan, and an optional first recipe import.
+8. **Images**: URL imports keep the source hero image (`recipes.image_url`, `recipe-images` bucket); missing images render a deterministic illustrated placeholder. The adapt chat shows a "View changes" modal comparing the adapted recipe before the user applies it.
