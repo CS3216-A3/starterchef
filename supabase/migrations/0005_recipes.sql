@@ -24,8 +24,10 @@ create table public.recipes (
   steps jsonb not null default '[]',
   tags text[] not null default '{}',
   -- Provenance: where the recipe text came from and its license.
-  source text not null default 'StarterChef original',
-  license text not null default 'CC0-1.0',
+  -- Defaults are honest placeholders; replace with real attribution before
+  -- publishing or distributing any recipe text.
+  source text not null default 'Unknown — verify before publication',
+  license text not null default 'Unknown — verify before publication',
   created_at timestamptz not null default now()
 );
 

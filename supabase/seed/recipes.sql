@@ -1,8 +1,10 @@
 -- StarterChef seed recipes.
--- All six recipes are ORIGINAL, written for this project by the StarterChef
--- team and released under CC0 (public domain). No third-party recipe text
--- was copied or scraped. Run after the migrations, e.g. paste into the
--- Supabase SQL editor. Idempotent: safe to re-run.
+-- These six recipes are common beginner-friendly dishes included only as
+-- placeholder/demo data. Their original authors and licenses are unknown.
+-- Do not treat them as public-domain or project-original. Replace them
+-- with properly attributed recipes before any public release.
+-- Run after the migrations, e.g. paste into the Supabase SQL editor.
+-- Idempotent: safe to re-run.
 
 insert into public.recipes (
   slug, title, description, minutes, difficulty, servings, why_good,
@@ -26,7 +28,7 @@ insert into public.recipes (
     {"index":6,"title":"Serve","instruction":"Spoon over hot rice and garnish with spring onion if you have it.","ingredients":["Cooked rice","Spring onion (optional)"]}
   ]'::jsonb,
   array['quick', 'vegetarian', 'one-pan'],
-  'StarterChef original', 'CC0-1.0'
+  'Unknown — verify before publication', 'Unknown — verify before publication'
 ),
 (
   'garlic-butter-mushrooms',
@@ -44,7 +46,7 @@ insert into public.recipes (
     {"index":4,"title":"Toast and serve","instruction":"Toast the bread, pile the mushrooms on top, and scatter with parsley.","ingredients":["1 slice bread","Parsley (optional)"]}
   ]'::jsonb,
   array['quick', 'vegetarian'],
-  'StarterChef original', 'CC0-1.0'
+  'Unknown — verify before publication', 'Unknown — verify before publication'
 ),
 (
   'mushroom-noodles',
@@ -62,7 +64,7 @@ insert into public.recipes (
     {"index":4,"title":"Toss together","instruction":"Add the noodles and toss until every strand is coated. Finish with sesame oil.","durationSeconds":60,"ingredients":["1 tsp sesame oil","Spring onion (optional)"]}
   ]'::jsonb,
   array['one-pan', 'vegetarian'],
-  'StarterChef original', 'CC0-1.0'
+  'Unknown — verify before publication', 'Unknown — verify before publication'
 ),
 (
   'anything-fried-rice',
@@ -80,7 +82,7 @@ insert into public.recipes (
     {"index":4,"title":"Season and serve","instruction":"Add soy sauce around the edge of the pan, return the egg, toss, and taste for salt.","durationSeconds":60,"ingredients":["2 tbsp soy sauce"]}
   ]'::jsonb,
   array['quick', 'leftovers'],
-  'StarterChef original', 'CC0-1.0'
+  'Unknown — verify before publication', 'Unknown — verify before publication'
 ),
 (
   'creamy-pantry-pasta',
@@ -98,7 +100,7 @@ insert into public.recipes (
     {"index":4,"title":"Bring it together","instruction":"Toss in the pasta and parmesan, loosen with pasta water until glossy, and season.","durationSeconds":90,"ingredients":["30g parmesan","Pepper"]}
   ]'::jsonb,
   array['vegetarian', 'comfort'],
-  'StarterChef original', 'CC0-1.0'
+  'Unknown — verify before publication', 'Unknown — verify before publication'
 ),
 (
   'sheet-pan-sausage-veg',
@@ -117,6 +119,6 @@ insert into public.recipes (
     {"index":5,"title":"Rest and serve","instruction":"Rest 2 minutes, then serve straight from the tray — fewer dishes.","durationSeconds":120,"ingredients":[]}
   ]'::jsonb,
   array['hands-off', 'oven'],
-  'StarterChef original', 'CC0-1.0'
+  'Unknown — verify before publication', 'Unknown — verify before publication'
 )
 on conflict (slug) do nothing;

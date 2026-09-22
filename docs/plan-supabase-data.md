@@ -16,11 +16,12 @@ users can edit their profile after signup.
 
 ## 2. Recipe data source & license
 
-**No scraping.** The seed set is **6 original recipes written for this
-project** (StarterChef team) — simple beginner dishes using common pantry
-items. Because they are written by us, there is no third-party copyright; we
-release them under **CC0 / public domain** and record that in the
-`recipes.license` column (`"CC0-1.0"`, `source = "StarterChef original"`).
+The seed set contains **6 common beginner dishes** used only as placeholder
+demo data. Their original authors and licenses are **unknown**. We do **not**
+claim they are original to this project or released under CC0. The
+`recipes.source` and `recipes.license` columns default to
+`'Unknown — verify before publication'` and must be updated with real
+attribution before any public release.
 
 Seed recipes (in `supabase/seed/recipes.sql`):
 
