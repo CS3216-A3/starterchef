@@ -21,6 +21,20 @@ kitchen → get recipes that fit → cook step-by-step with a voice assistant.
 - `npm run dev` · `npm run lint` · `npm run typecheck` · `npm test` ·
   `npm run eval` (AI evals, needs a provider key) · `npm run format`.
 
+## Verify before commit
+
+- **Always run `npm run build` before committing.** Turbopack catches things
+  `tsc` and ESLint don't: unresolvable lazy `import()`s (e.g. optional peer
+  deps), missing Suspense boundaries for `useSearchParams`, and
+  client/server component violations. CI and Vercel run the same build —
+  a green typecheck is not enough.
+- Shell is git-bash, not cmd: use `2>/dev/null` (never `2>nul` — it creates a
+  stray `nul` file) and Unix utilities.
+- After `git push`, confirm CI went green:
+  `gh run list --limit 1` then `gh run watch` or `gh run view --log-failed`
+  for failures. Vercel deploys surface as GitHub checks on the commit.
+- Run `/pre-push-checks` for the full commit/push verification loop.
+
 ## Conventions
 
 - **Design tokens only.** Colors come from `@theme` in `src/app/globals.css`

@@ -48,9 +48,43 @@ changed, to keep the live Supabase project in sync with the repo.
 
 ## Safety rules
 
-- Always use `if not exists` / `if exists` for destructive DDL when possible.
+- Always use `if not exists` / `if exists` / `drop policy if exists` so
+  migrations are idempotent — the remote schema is sometimes applied manually
+  ahead of the repo, and re-runnable SQL survives partial applies.
 - Never commit secrets or the Supabase service role key.
 - If a migration fails mid-push, check the error, fix the SQL, and re-run
   `supabase db push`. Do not hand-edit migration history on the server.
 - When removing a column that contains data, warn the user and ask before
   running the push.
+
+## Every table needs grants
+
+PostgREST roles do NOT inherit broad privileges. Every `create table` must be
+followed by explicit grants or the app gets `42501 permission denied`:
+
+```sql
+grant select, insert, update, delete on table public.<table>
+  to authenticated, service_role;
+grant usage, select on all sequences in schema public
+  to authenticated, service_role;
+```
+
+## Remote schema drift (applied SQL, missing history)
+
+If `db push` fails with "relation already exists" on early migrations, the
+remote was provisioned manually and has no migration history:
+
+1. Probe what actually exists — query the REST API with the service key, or
+   check the dashboard. `400/42703` = column missing, `403/42501` = table
+   exists but no grants, `404` = table missing.
+2. Mark the already-applied versions without re-running them:
+
+   ```bash
+   supabase migration repair <version> --status applied
+   ```
+
+3. Make the remaining migrations idempotent (they may be partially applied)
+   and `supabase db push` again.
+
+4. Verify afterwards with `supabase migration list` and a REST query for the
+   new columns/tables.
