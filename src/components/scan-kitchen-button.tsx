@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, ScanLine, X } from "lucide-react";
+import { Camera, ScanLine, Sparkles, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/button";
 import { saveKitchenItems } from "@/app/(app)/kitchen/actions";
@@ -211,6 +211,7 @@ export function ScanKitchenButton() {
           >
             <ScanLine className="h-5 w-5" />
             {state.status === "scanning" ? "Scanning…" : "Scan my kitchen"}
+            {state.status !== "scanning" && <Sparkles className="h-4 w-4" />}
           </Button>
         )}
 

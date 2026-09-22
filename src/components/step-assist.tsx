@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Camera, Send } from "lucide-react";
+import { Camera, Send, Sparkles } from "lucide-react";
 import { Button } from "@/components/button";
 import type { StepCheck } from "@/lib/ai/schemas/cooking";
 
@@ -81,6 +81,7 @@ export function StepCheckButton({
       >
         <Camera className="h-4 w-4" />
         {loading ? "Checking…" : "Check my progress with a photo"}
+        {!loading && <Sparkles className="h-3.5 w-3.5" />}
       </Button>
       {result && (
         <div className="rounded-2xl bg-oat p-3">
@@ -168,6 +169,7 @@ export function StepAskBox({
           onClick={handleAsk}
         >
           <Send className="h-4 w-4" />
+          <Sparkles className="h-3 w-3" />
         </Button>
       </div>
       {answer && (

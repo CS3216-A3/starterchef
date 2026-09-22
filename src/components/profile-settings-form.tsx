@@ -100,9 +100,6 @@ export function ProfileSettingsForm({
       <section className="flex flex-col gap-5 rounded-3xl bg-card p-6 shadow-sm ring-1 ring-oat">
         <div>
           <h2 className="text-lg font-extrabold">About you</h2>
-          <p className="text-sm font-semibold text-espresso-light">
-            Used to greet you and to scale recipes to your table.
-          </p>
         </div>
 
         <label className="flex flex-col gap-2">
@@ -139,9 +136,6 @@ export function ProfileSettingsForm({
               <Plus className="h-4 w-4" />
             </button>
           </div>
-          <p className="text-xs font-semibold text-espresso-light">
-            Recipes default to this many servings.
-          </p>
         </div>
 
         <fieldset className="flex flex-col gap-2">
@@ -170,10 +164,6 @@ export function ProfileSettingsForm({
               );
             })}
           </div>
-          <p className="text-xs font-semibold text-espresso-light">
-            We match recipe difficulty and how much guidance the assistant gives
-            you.
-          </p>
         </fieldset>
       </section>
 
@@ -181,8 +171,8 @@ export function ProfileSettingsForm({
         <div>
           <h2 className="text-lg font-extrabold">Diet & allergies</h2>
           <p className="text-sm font-semibold text-espresso-light">
-            We&apos;ll never suggest a recipe that conflicts with these — and
-            the assistant flags them if one slips through.
+            StarterChef will take note of these needs when customising recipes
+            for you.
           </p>
         </div>
 

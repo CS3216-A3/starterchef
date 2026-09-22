@@ -1,6 +1,6 @@
 "use client";
 
-import { Mic } from "lucide-react";
+import { Mic, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { saveKitchenItems } from "@/app/(app)/kitchen/actions";
@@ -133,6 +133,7 @@ export function VoiceAddItems() {
           : state.status === "parsing"
             ? "Adding…"
             : "Add by voice"}
+        {state.status === "idle" && <Sparkles className="h-3.5 w-3.5" />}
       </button>
       {state.status === "listening" && (
         <p className="text-xs font-semibold text-espresso-light">

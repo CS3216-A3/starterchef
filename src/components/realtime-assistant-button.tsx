@@ -1,6 +1,6 @@
 "use client";
 
-import { Mic } from "lucide-react";
+import { Mic, Sparkles } from "lucide-react";
 import { useRealtimeAssistant } from "@/hooks/use-realtime-assistant";
 import { cn } from "@/lib/utils";
 
@@ -32,7 +32,9 @@ export function RealtimeAssistantButton({
         <Mic className="h-7 w-7 text-white" />
       </button>
 
-      <p className="text-sm font-extrabold">Ask StarterChef</p>
+      <p className="inline-flex items-center gap-1.5 text-sm font-extrabold">
+        Ask StarterChef <Sparkles className="h-3.5 w-3.5 text-flame" />
+      </p>
       <p className="text-xs font-semibold text-espresso-light">
         {state.status === "connecting" && "Connecting…"}
         {state.status === "listening" && "Listening…"}

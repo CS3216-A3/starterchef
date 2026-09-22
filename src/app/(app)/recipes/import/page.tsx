@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { FileImage, Link2, Type, Video } from "lucide-react";
+import { FileImage, Link2, Sparkles, Type, Video } from "lucide-react";
 import { Button } from "@/components/button";
 import { createUserRecipe } from "@/app/(app)/recipes/actions";
 import type { ImportedRecipe } from "@/lib/ai/schemas/import";
@@ -290,6 +290,7 @@ export default function ImportRecipePage() {
             size="lg"
           >
             {loading ? "Reading recipe…" : "Extract recipe"}
+            {!loading && <Sparkles className="h-4 w-4" />}
           </Button>
 
           {error && (

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { Sparkles } from "lucide-react";
 import { Button } from "@/components/button";
 import { DeleteRecipeButton } from "@/components/delete-recipe-button";
 import {
@@ -442,7 +443,9 @@ function AiEditBox({
 
   return (
     <div className="flex flex-col gap-3 rounded-2xl bg-flame-soft p-4 ring-1 ring-flame/30">
-      <p className="text-sm font-extrabold">Edit with StarterChef</p>
+      <p className="inline-flex items-center gap-1.5 text-sm font-extrabold">
+        Edit with StarterChef <Sparkles className="h-3.5 w-3.5 text-flame" />
+      </p>
       <div className="flex gap-2">
         <input
           value={prompt}

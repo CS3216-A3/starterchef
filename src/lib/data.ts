@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getDailyAiLimit } from "@/lib/rate-limit";
 import type {
   CookingSessionRow,
   KitchenItemRow,
@@ -34,6 +35,25 @@ export async function getProfile(): Promise<ProfileRow | null> {
     .eq("id", user.id)
     .maybeSingle();
   return (data as ProfileRow | null) ?? null;
+}
+
+/** Today's AI usage for the signed-in user. The quota row only ever holds
+ * the current UTC day's count — a stale date means the day rolled over. */
+export async function getAiUsageToday(): Promise<{
+  used: number;
+  limit: number;
+}> {
+  const { supabase, user } = await getUserId();
+  const limit = getDailyAiLimit();
+  if (!user) return { used: 0, limit };
+  const { data } = await supabase
+    .from("ai_usage_quota")
+    .select("count, date")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const today = new Date().toISOString().slice(0, 10);
+  const used = data?.date === today ? (data.count ?? 0) : 0;
+  return { used, limit };
 }
 
 export async function getKitchenItems(): Promise<KitchenItemRow[]> {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Mic } from "lucide-react";
+import { Mic, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { createMetrics, logMetrics } from "@/lib/ai/voice-metrics";
@@ -141,7 +141,9 @@ export function AskAssistantButton({
       >
         <Mic className="h-7 w-7 text-white" />
       </button>
-      <p className="text-sm font-extrabold">Ask StarterChef</p>
+      <p className="inline-flex items-center gap-1.5 text-sm font-extrabold">
+        Ask StarterChef <Sparkles className="h-3.5 w-3.5 text-flame" />
+      </p>
       <p className="text-xs font-semibold text-espresso-light">
         {state.status === "listening"
           ? "Listening…"

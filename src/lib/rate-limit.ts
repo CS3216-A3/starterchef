@@ -12,7 +12,7 @@ export interface RateLimitResult {
 
 const DEFAULT_AI_DAILY_LIMIT = 50;
 
-function getDailyLimit(): number {
+export function getDailyAiLimit(): number {
   const raw = process.env.AI_DAILY_LIMIT;
   if (!raw) return DEFAULT_AI_DAILY_LIMIT;
   const parsed = parseInt(raw, 10);
@@ -37,7 +37,7 @@ export async function checkRateLimit(
   userId: string,
   client = createAdminClient(),
 ): Promise<RateLimitResult> {
-  const limit = getDailyLimit();
+  const limit = getDailyAiLimit();
 
   const { data, error } = await client.rpc("increment_ai_usage", {
     p_user_id: userId,

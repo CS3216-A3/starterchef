@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChefHat, Send } from "lucide-react";
+import { ChefHat, Send, Sparkles } from "lucide-react";
 import { Button } from "@/components/button";
 import {
   createUserRecipe,
@@ -158,6 +158,7 @@ export function RecipeChat({
       <h2 className="flex items-center gap-2 text-lg font-extrabold">
         <ChefHat className="h-5 w-5 text-flame" />
         Customise with StarterChef
+        <Sparkles className="h-4 w-4 text-flame" aria-label="Uses AI credits" />
       </h2>
       <p className="text-sm font-semibold text-espresso-light">
         Ask for changes — “make it serve 1”, “no oven”, “less spicy” — and
