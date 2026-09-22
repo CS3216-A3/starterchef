@@ -68,6 +68,7 @@ export function AskAssistantButton({
   recipeId,
   recipeSlug,
   snapFrame,
+  busy,
   onAction,
 }: {
   recipeTitle: string;
@@ -81,6 +82,8 @@ export function AskAssistantButton({
   recipeSlug?: string;
   /** "Show and ask": returns a camera frame to send with the question. */
   snapFrame?: () => string | null;
+  /** A camera check is processing — show thinking and block a second ask. */
+  busy?: boolean;
   /** Structured intent from the assistant (set-timer, goto-step…). */
   onAction?: (action: NonNullable<AssistantReply["action"]>) => void;
 }) {
@@ -188,15 +191,16 @@ export function AskAssistantButton({
       <button
         type="button"
         onClick={handleTap}
+        disabled={busy}
         aria-label="Ask StarterChef"
-        className="rounded-full transition-transform hover:scale-105"
+        className="rounded-full transition-transform hover:scale-105 disabled:opacity-60"
       >
         <ChefBuddy
           state={
-            state.status === "listening"
-              ? "listening"
-              : state.status === "thinking"
-                ? "thinking"
+            busy || state.status === "thinking"
+              ? "thinking"
+              : state.status === "listening"
+                ? "listening"
                 : state.status === "speaking"
                   ? "speaking"
                   : "idle"
@@ -208,10 +212,10 @@ export function AskAssistantButton({
         Ask StarterChef <Sparkles className="h-3.5 w-3.5 text-flame" />
       </p>
       <p className="text-xs font-semibold text-espresso-light">
-        {state.status === "listening"
-          ? "Listening…"
-          : state.status === "thinking"
-            ? "Thinking…"
+        {busy || state.status === "thinking"
+          ? "Thinking…"
+          : state.status === "listening"
+            ? "Listening…"
             : state.status === "speaking"
               ? "Speaking…"
               : "Tap to speak"}

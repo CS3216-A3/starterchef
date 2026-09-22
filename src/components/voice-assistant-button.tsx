@@ -15,6 +15,7 @@ export function VoiceAssistantButton({
   recipeId,
   recipeSlug,
   snapFrame,
+  busy,
   onAction,
 }: {
   recipeTitle: string;
@@ -26,6 +27,8 @@ export function VoiceAssistantButton({
   recipeId?: string;
   recipeSlug?: string;
   snapFrame?: () => string | null;
+  /** A camera check is processing — show thinking and block a second ask. */
+  busy?: boolean;
   onAction?: (action: NonNullable<AssistantReply["action"]>) => void;
 }) {
   const provider = getVoiceProvider();
@@ -42,6 +45,7 @@ export function VoiceAssistantButton({
         recipeId={recipeId}
         recipeSlug={recipeSlug}
         snapFrame={snapFrame}
+        busy={busy}
         onAction={onAction}
       />
     );

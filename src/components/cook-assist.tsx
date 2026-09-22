@@ -59,6 +59,9 @@ export function CookAssist({
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [check, setCheck] = useState<StepCheck | null>(null);
+  // The last frame sent to the model — shown to the user so what the AI saw
+  // is never a mystery.
+  const [sentFrame, setSentFrame] = useState<string | null>(null);
   const [timerSeconds, setTimerSeconds] = useState<number | undefined>(
     durationSeconds,
   );
@@ -80,6 +83,8 @@ export function CookAssist({
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     setCameraOn(false);
+    setSentFrame(null);
+    setCheck(null);
   }, []);
 
   useEffect(() => stopCamera, [stopCamera]);
@@ -125,9 +130,16 @@ export function CookAssist({
     return canvas.toDataURL("image/jpeg", 0.8);
   }, []);
 
+  /** Snap a frame and surface it in the UI as "sent to StarterChef". */
+  const snapAndShow = useCallback((): string | null => {
+    const frame = snapFrame();
+    if (frame) setSentFrame(frame);
+    return frame;
+  }, [snapFrame]);
+
   /** Snap a frame and ask the model whether the step looks right. */
   async function checkFood() {
-    const frame = snapFrame();
+    const frame = snapAndShow();
     if (!frame) return;
     setChecking(true);
     setCheck(null);
@@ -225,6 +237,19 @@ export function CookAssist({
             </div>
           </div>
         )}
+        {sentFrame && (
+          <div className="flex items-center gap-3 rounded-2xl bg-card p-2 ring-1 ring-oat">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={sentFrame}
+              alt="Frame sent to StarterChef"
+              className="h-14 w-20 rounded-xl object-cover"
+            />
+            <p className="text-xs font-semibold text-espresso-light">
+              {checking ? "Checking this frame…" : "Sent to StarterChef"}
+            </p>
+          </div>
+        )}
         {check && (
           <div className="rounded-2xl bg-oat p-3">
             <p className="text-sm font-extrabold">
@@ -258,7 +283,8 @@ export function CookAssist({
         photoCheckpoint={context.photoCheckpoint}
         recipeId={context.recipeId}
         recipeSlug={context.recipeSlug}
-        snapFrame={cameraOn ? snapFrame : undefined}
+        snapFrame={cameraOn ? snapAndShow : undefined}
+        busy={checking}
         onAction={handleAction}
       />
 
@@ -266,7 +292,7 @@ export function CookAssist({
         context={context}
         sessionId={sessionId}
         stepIndex={stepIndex}
-        snapFrame={cameraOn ? snapFrame : undefined}
+        snapFrame={cameraOn ? snapAndShow : undefined}
         onAction={handleAction}
       />
     </div>

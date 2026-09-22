@@ -145,6 +145,30 @@ export async function POST(request: Request) {
       recipeSlug,
     } = parsed.data;
 
+    // Give the model memory of past checkpoints: the most recent photo from
+    // this session goes along so it can compare progress ("still too pale").
+    let previousPhoto: string | null = null;
+    if (sessionId) {
+      const { data: pastChecks } = await supabase
+        .from("session_events")
+        .select("payload")
+        .eq("session_id", sessionId)
+        .eq("kind", "photo_check")
+        .order("created_at", { ascending: false })
+        .limit(5);
+      previousPhoto =
+        pastChecks
+          ?.map((e) => (e.payload as { photoUrl?: string }).photoUrl)
+          .find(Boolean) ?? null;
+    }
+
+    const imageParts = previousPhoto
+      ? ([
+          { type: "image" as const, image: previousPhoto },
+          { type: "image" as const, image },
+        ] as const)
+      : ([{ type: "image" as const, image }] as const);
+
     const { object } = (await measuredGenerate("step-check", {
       model: getModel(),
       schema: stepCheckSchema,
@@ -163,6 +187,9 @@ export async function POST(request: Request) {
                 context.photoCheckpoint
                   ? `Expected result: ${context.photoCheckpoint}`
                   : "",
+                previousPhoto
+                  ? "Two photos attached: the first is an earlier checkpoint from this cook, the second is the current view. Use the earlier one to judge progress."
+                  : "",
                 question
                   ? `The cook asks: "${question}" — answer it using the photo, then judge whether it looks right.`
                   : "Does this look right?",
@@ -170,7 +197,7 @@ export async function POST(request: Request) {
                 .filter(Boolean)
                 .join("\n"),
             },
-            { type: "image" as const, image },
+            ...imageParts,
           ],
         },
       ],
