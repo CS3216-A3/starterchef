@@ -4,6 +4,7 @@ import { Mic, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { saveKitchenItems } from "@/app/(app)/kitchen/actions";
+import { trackEvent } from "@/lib/posthog/events";
 import type { KitchenVoiceResult } from "@/lib/ai/schemas/kitchen-scan";
 import { cn } from "@/lib/utils";
 
@@ -76,6 +77,10 @@ export function VoiceAddItems() {
           setState({ status: "error", message: result.error });
           return;
         }
+        trackEvent("pantry_item_added", {
+          method: "voice",
+          item_count: body.items.length,
+        });
         setState({ status: "idle" });
         router.refresh();
       });

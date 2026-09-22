@@ -13,6 +13,7 @@ import { StartCookingButton } from "@/components/cook-buttons";
 import { DeleteRecipeButton } from "@/components/delete-recipe-button";
 import { RecipeChat } from "@/components/recipe-chat";
 import { RecipeImage } from "@/components/recipe-image";
+import { RecipeViewTracker } from "@/components/recipe-view-tracker";
 import { SaveRecipeButton } from "@/components/save-recipe-button";
 import { getRecipeBySlug, getSavedRecipeIds, getUser } from "@/lib/data";
 import { iconMap } from "@/lib/recipe-view";
@@ -58,6 +59,11 @@ export default async function RecipeOverviewPage({
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
+      <RecipeViewTracker
+        recipeId={recipe.id}
+        recipeSlug={recipe.slug}
+        isOwner={isOwner}
+      />
       {/* Hero */}
       <div className="relative aspect-[16/9] overflow-hidden rounded-3xl">
         <RecipeImage

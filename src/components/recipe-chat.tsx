@@ -8,6 +8,7 @@ import {
   createUserRecipe,
   updateUserRecipe,
 } from "@/app/(app)/recipes/actions";
+import { trackEvent } from "@/lib/posthog/events";
 import type { AdaptedRecipe } from "@/lib/ai/schemas/recipe";
 import type { RecipeRow } from "@/lib/types";
 
@@ -81,6 +82,10 @@ export function RecipeChat({
         });
         const body = await res.json();
         if (!res.ok) throw new Error(body.error ?? "Adaptation failed");
+        trackEvent("recipe_adaptation_generated", {
+          recipe_id: recipe.id,
+          request: text,
+        });
         setMessages((prev) => [
           ...prev,
           {
@@ -127,6 +132,11 @@ export function RecipeChat({
         return;
       }
 
+      trackEvent("recipe_adaptation_accepted", {
+        recipe_id: recipe.id,
+        mode,
+      });
+
       setMessages((prev) =>
         prev.map((m, i) =>
           i === index && m.role === "assistant"
@@ -144,6 +154,7 @@ export function RecipeChat({
   }
 
   function dismissSuggestion(index: number) {
+    trackEvent("recipe_adaptation_dismissed", { recipe_id: recipe.id });
     setMessages((prev) =>
       prev.map((m, i) =>
         i === index && m.role === "assistant"

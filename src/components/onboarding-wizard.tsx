@@ -7,6 +7,7 @@ import { Button } from "@/components/button";
 import { PillInput } from "@/components/pill-input";
 import { ScanKitchenButton } from "@/components/scan-kitchen-button";
 import { completeOnboarding, skipOnboarding } from "@/app/onboarding/actions";
+import { trackEvent } from "@/lib/posthog/events";
 import { cn } from "@/lib/utils";
 import type { ProfileRow } from "@/lib/types";
 
@@ -85,6 +86,11 @@ export function OnboardingWizard({ profile }: { profile: ProfileRow | null }) {
         setError(res.error);
         return;
       }
+      trackEvent("profile_completed", {
+        skill_level: skillLevel,
+        dietary_restriction_count: restrictions.length,
+        allergy_count: allergies.length,
+      });
       router.push("/today");
     });
   }
