@@ -23,13 +23,19 @@ const requestSchema = z.discriminatedUnion("source", [
     source: z.literal("photo"),
     image: z.string().min(1).max(5_000_000),
   }),
-  z.object({
-    source: z.literal("video"),
-    url: z
-      .string()
-      .url()
-      .refine(isYouTubeUrl, "Only YouTube links are supported"),
-  }),
+  z
+    .object({
+      source: z.literal("video"),
+      url: z
+        .string()
+        .url()
+        .refine(isYouTubeUrl, "Only YouTube links are supported")
+        .optional(),
+      video: z.string().min(1).max(30_000_000).optional(),
+    })
+    .refine((v) => Boolean(v.url) !== Boolean(v.video), {
+      message: "Provide either a YouTube link or a video file, not both",
+    }),
 ]);
 
 function isYouTubeUrl(raw: string): boolean {
@@ -47,11 +53,17 @@ function isYouTubeUrl(raw: string): boolean {
  * POST /api/ai/import-recipe
  * Converts a pasted recipe, recipe URL, photo of a recipe card, or a YouTube
  * cooking video into a structured ImportedRecipe object. The caller is
- * responsible for saving it to the user's recipe library. Video import is
- * YouTube-only: the link goes to Gemini as a file URI and it fetches the
- * video itself.
+ * responsible for saving it to the user's recipe library. Video import:
+ * YouTube links go to Gemini as a file URI (it fetches the video itself);
+ * TikTok/Instagram can't be fetched by link, so users upload a saved video
+ * file which we pass inline to the model.
  */
+/** Video analysis can take a while — give the route room (platforms clamp
+ *  this to their own limit). */
+export const maxDuration = 120;
+
 export async function POST(request: Request) {
+  let isVideo = false;
   try {
     const supabase = await createClient();
     const {
@@ -76,6 +88,7 @@ export async function POST(request: Request) {
     }
 
     const input = parsed.data;
+    isVideo = input.source === "video";
 
     const generateArgs = await buildGenerateArgs(input);
     if (!generateArgs.ok) {
@@ -94,7 +107,13 @@ export async function POST(request: Request) {
       imageUrl: generateArgs.imageUrl,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Recipe import failed";
+    const raw = err instanceof Error ? err.message : "Recipe import failed";
+    // Model/provider failures on video input are common (private video,
+    // region lock, unsupported format) — translate them into something a
+    // user can act on instead of a raw provider error.
+    const message = isVideo
+      ? "We couldn't read that video. Make sure the YouTube video is public, or try a shorter clip or a different link."
+      : raw;
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }
@@ -157,6 +176,50 @@ async function buildGenerateArgs(
     }
 
     case "video": {
+      if (input.url) {
+        return {
+          ok: true,
+          args: {
+            ...baseArgs,
+            messages: [
+              {
+                role: "user" as const,
+                content: [
+                  {
+                    type: "text" as const,
+                    text: "Extract the recipe from this YouTube cooking video. Use the video's spoken and on-screen instructions; include timestamps where useful.",
+                  },
+                  {
+                    type: "file" as const,
+                    data: new URL(input.url),
+                    mediaType: "video/mp4",
+                  },
+                ],
+              },
+            ],
+          },
+          imageUrl: youTubeThumbnail(input.url),
+        };
+      }
+
+      // Uploaded file (e.g. a saved TikTok/Instagram clip) — sent inline.
+      const video = parseDataUrl(input.video ?? "");
+      if (!video || !video.mimeType.startsWith("video/")) {
+        return {
+          ok: false,
+          error:
+            "That file doesn't look like a video. Upload a saved TikTok/Instagram clip or paste a YouTube link.",
+          status: 400,
+        };
+      }
+      if (video.data.byteLength > 20 * 1024 * 1024) {
+        return {
+          ok: false,
+          error:
+            "That video is too large — keep it under 20 MB (trim the clip or paste a YouTube link instead).",
+          status: 413,
+        };
+      }
       return {
         ok: true,
         args: {
@@ -167,18 +230,17 @@ async function buildGenerateArgs(
               content: [
                 {
                   type: "text" as const,
-                  text: "Extract the recipe from this YouTube cooking video. Use the video's spoken and on-screen instructions; include timestamps where useful.",
+                  text: "Extract the recipe from this cooking video. Use the video's spoken and on-screen instructions; include timestamps where useful.",
                 },
                 {
                   type: "file" as const,
-                  data: new URL(input.url),
-                  mediaType: "video/mp4",
+                  data: video.data,
+                  mediaType: video.mimeType,
                 },
               ],
             },
           ],
         },
-        imageUrl: youTubeThumbnail(input.url),
       };
     }
   }
@@ -275,6 +337,20 @@ async function extractSourceText(
 
     case "video":
       return { ok: false, error: "Not implemented", status: 501 };
+  }
+}
+
+function parseDataUrl(
+  dataUrl: string,
+): { data: Buffer; mimeType: string } | null {
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return null;
+  const mimeType = match[1];
+  try {
+    const data = Buffer.from(match[2], "base64");
+    return { data, mimeType };
+  } catch {
+    return null;
   }
 }
 

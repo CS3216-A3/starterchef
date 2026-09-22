@@ -68,12 +68,13 @@ Fill in the measured numbers from `evals/results/text-model-comparison.json` and
 
 ### Import sources
 
-| Source               | Status      | Where it lives                                                                                                             |
-| -------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Pasted text          | Implemented | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "text"`)                                                        |
-| Recipe URL           | Implemented | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "url"`) using `recipe-scrapers` for JSON-LD/schema extraction   |
-| Photo of recipe card | Implemented | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "photo"`) with image input                                      |
-| YouTube video        | Implemented | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "video"`) — YouTube links only; passed to Gemini as a file URI. |
+| Source               | Status      | Where it lives                                                                                                                                                                             |
+| -------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Pasted text          | Implemented | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "text"`)                                                                                                                        |
+| Recipe URL           | Implemented | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "url"`) using `recipe-scrapers` for JSON-LD/schema extraction                                                                   |
+| Photo of recipe card | Implemented | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "photo"`) with image input                                                                                                      |
+| YouTube video        | Implemented | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "video"` + `url`) — public YouTube links; passed to Gemini as a file URI.                                                       |
+| Saved video file     | Implemented | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "video"` + `video`) — for TikTok/Instagram clips, which can't be fetched by link; uploaded file goes to Gemini inline (≤20 MB). |
 
 ### Data model
 

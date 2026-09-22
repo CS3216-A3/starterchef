@@ -17,6 +17,7 @@ interface ImportState {
   htmlFallback: string;
   photoDataUrl: string;
   videoUrl: string;
+  videoDataUrl: string;
 }
 
 export default function ImportRecipePage() {
@@ -28,6 +29,7 @@ export default function ImportRecipePage() {
     htmlFallback: "",
     photoDataUrl: "",
     videoUrl: "",
+    videoDataUrl: "",
   });
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState<
@@ -48,8 +50,14 @@ export default function ImportRecipePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = (await res.json()) as
-        (ImportedRecipe & { imageUrl?: string }) | { error: string };
+      const data = (await res.json().catch(() => null)) as
+        ((ImportedRecipe & { imageUrl?: string }) | { error: string }) | null;
+      if (!data) {
+        setError(
+          "The import service returned an unexpected response. Please try again.",
+        );
+        return;
+      }
       if (!res.ok) {
         setError("error" in data ? data.error : "Import failed");
         return;
@@ -85,6 +93,26 @@ export default function ImportRecipePage() {
     const reader = new FileReader();
     reader.onload = () => {
       setState((s) => ({ ...s, photoDataUrl: reader.result as string }));
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function handleVideoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) {
+      setError(
+        "That video is over 20 MB — trim it or paste a YouTube link instead.",
+      );
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setState((s) => ({
+        ...s,
+        videoDataUrl: reader.result as string,
+        videoUrl: "",
+      }));
     };
     reader.readAsDataURL(file);
   }
@@ -195,30 +223,72 @@ export default function ImportRecipePage() {
           )}
 
           {state.source === "video" && (
-            <div className="flex flex-col gap-2">
-              <label className="flex items-center gap-2 text-sm font-extrabold">
-                <Video className="h-4 w-4 text-flame" />
-                YouTube video link
-              </label>
-              <input
-                type="url"
-                value={state.videoUrl}
-                onChange={(e) =>
-                  setState((s) => ({ ...s, videoUrl: e.target.value }))
-                }
-                placeholder="https://www.youtube.com/watch?v=…"
-                className="rounded-2xl border-2 border-espresso/10 bg-card p-4 text-sm font-semibold outline-none focus:border-flame"
-                required
-              />
-              <p className="text-xs font-semibold text-espresso-light">
-                YouTube links only — paste a public YouTube cooking video
-                (youtube.com or youtu.be). Other video sites and file uploads
-                aren&apos;t supported yet.
-              </p>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center gap-2 text-sm font-extrabold">
+                  <Video className="h-4 w-4 text-flame" />
+                  YouTube video link
+                </label>
+                <input
+                  type="url"
+                  value={state.videoUrl}
+                  onChange={(e) =>
+                    setState((s) => ({
+                      ...s,
+                      videoUrl: e.target.value,
+                      videoDataUrl: "",
+                    }))
+                  }
+                  placeholder="https://www.youtube.com/watch?v=…"
+                  className="rounded-2xl border-2 border-espresso/10 bg-card p-4 text-sm font-semibold outline-none focus:border-flame"
+                />
+                <p className="text-xs font-semibold text-espresso-light">
+                  Links work for public YouTube videos only (youtube.com or
+                  youtu.be).
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 text-xs font-extrabold text-espresso-light uppercase">
+                <span className="h-px flex-1 bg-oat" />
+                or
+                <span className="h-px flex-1 bg-oat" />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-extrabold">
+                  Upload a saved video (TikTok, Instagram, …)
+                </label>
+                <input
+                  type="file"
+                  accept="video/*"
+                  onChange={handleVideoFile}
+                  className="rounded-2xl border-2 border-dashed border-espresso/20 bg-card p-4 text-sm font-semibold file:mr-4 file:rounded-full file:bg-flame file:px-4 file:py-2 file:text-white"
+                />
+                {state.videoDataUrl && (
+                  <video
+                    src={state.videoDataUrl}
+                    controls
+                    className="max-h-64 rounded-2xl"
+                  />
+                )}
+                <p className="text-xs font-semibold text-espresso-light">
+                  TikTok and Instagram links can&apos;t be read directly — save
+                  the video to your device and upload it here (max 20 MB).
+                </p>
+              </div>
             </div>
           )}
 
-          <Button type="submit" disabled={loading} size="lg">
+          <Button
+            type="submit"
+            disabled={
+              loading ||
+              (state.source === "video" &&
+                !state.videoUrl &&
+                !state.videoDataUrl)
+            }
+            size="lg"
+          >
             {loading ? "Reading recipe…" : "Extract recipe"}
           </Button>
 
@@ -343,7 +413,9 @@ function buildRequestBody(state: ImportState): unknown {
     case "photo":
       return { source: "photo", image: state.photoDataUrl };
     case "video":
-      return { source: "video", url: state.videoUrl };
+      return state.videoUrl
+        ? { source: "video", url: state.videoUrl }
+        : { source: "video", video: state.videoDataUrl };
   }
 }
 
