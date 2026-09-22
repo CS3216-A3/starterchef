@@ -27,7 +27,20 @@ export default async function CookPage({
   if (!recipe || recipe.steps.length === 0) notFound();
 
   const recipeTitle = recipe.title;
-  const steps = recipe.steps;
+  // Checkpoint photos taken in this session live on the session snapshot for
+  // catalogue recipes — merge them over the base steps.
+  const sessionSteps =
+    session?.recipe?.slug === recipe.slug ? session.recipe.steps : undefined;
+  const sessionPhotos = new Map(
+    (sessionSteps ?? [])
+      .filter((s) => s.photoUrl)
+      .map((s) => [s.index, s.photoUrl] as const),
+  );
+  const steps = recipe.steps.map((s) =>
+    sessionPhotos.has(s.index)
+      ? { ...s, photoUrl: sessionPhotos.get(s.index) }
+      : s,
+  );
   const stepIndex = Math.min(Math.max(Number(step ?? 1) || 1, 1), steps.length);
   const current = steps[stepIndex - 1];
   // Only log to the session actually cooking this recipe.
@@ -67,6 +80,14 @@ export default async function CookPage({
         <p className="leading-relaxed font-semibold text-espresso-light">
           {current.instruction}
         </p>
+        {current.photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- user-uploaded
+          <img
+            src={current.photoUrl}
+            alt="Your photo of this step"
+            className="h-24 w-36 rounded-2xl object-cover ring-1 ring-oat"
+          />
+        ) : null}
         {current.photoCheckpoint ? (
           <p className="text-xs font-semibold text-espresso-light">
             What it should look like: {current.photoCheckpoint}
@@ -103,6 +124,8 @@ export default async function CookPage({
           stepTitle: current.title,
           instruction: current.instruction,
           photoCheckpoint: current.photoCheckpoint,
+          recipeId: recipe.id,
+          recipeSlug: recipe.slug,
         }}
         sessionId={sessionId}
         stepIndex={stepIndex}

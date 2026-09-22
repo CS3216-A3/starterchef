@@ -12,6 +12,8 @@ export function VoiceAssistantButton({
   stepIndex,
   instruction,
   photoCheckpoint,
+  recipeId,
+  recipeSlug,
   snapFrame,
   onAction,
 }: {
@@ -21,6 +23,8 @@ export function VoiceAssistantButton({
   stepIndex?: number;
   instruction?: string;
   photoCheckpoint?: string;
+  recipeId?: string;
+  recipeSlug?: string;
   snapFrame?: () => string | null;
   onAction?: (action: NonNullable<AssistantReply["action"]>) => void;
 }) {
@@ -35,6 +39,8 @@ export function VoiceAssistantButton({
         stepIndex={stepIndex}
         instruction={instruction}
         photoCheckpoint={photoCheckpoint}
+        recipeId={recipeId}
+        recipeSlug={recipeSlug}
         snapFrame={snapFrame}
         onAction={onAction}
       />

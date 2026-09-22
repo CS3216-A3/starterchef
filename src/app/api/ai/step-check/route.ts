@@ -21,7 +21,70 @@ const requestSchema = z.object({
   // "Show and ask": when the camera is on, a question comes with a snapped
   // frame — the model answers it using what it sees.
   question: z.string().min(1).max(1000).optional(),
+  // Lets the checkpoint photo persist on the step itself.
+  recipeId: z.string().uuid().optional(),
+  recipeSlug: z.string().optional(),
 });
+
+type StepWithPhoto = { index?: number; photoUrl?: string } & Record<
+  string,
+  unknown
+>;
+
+/** Save the checkpoint photo onto the step: owned recipes get it written
+ *  into recipes.steps (shows on the overview forever); the active session
+ *  snapshot gets it too so catalogue cooks see it on revisit. */
+async function saveCheckpointPhoto(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  photoUrl: string,
+  stepIndex: number | undefined,
+  recipeId: string | undefined,
+  recipeSlug: string | undefined,
+  sessionId: string | undefined,
+) {
+  if (!stepIndex) return;
+  const withPhoto = (steps: StepWithPhoto[]) =>
+    steps.map((s) => (s.index === stepIndex ? { ...s, photoUrl } : s));
+
+  if (recipeId) {
+    const { data: recipe } = await supabase
+      .from("recipes")
+      .select("id, steps")
+      .eq("id", recipeId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (recipe) {
+      await supabase
+        .from("recipes")
+        .update({
+          steps: withPhoto((recipe.steps as StepWithPhoto[]) ?? []),
+        })
+        .eq("id", recipeId);
+    }
+  }
+
+  if (sessionId && recipeSlug) {
+    const { data: session } = await supabase
+      .from("cooking_sessions")
+      .select("id, recipe")
+      .eq("id", sessionId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    const snapshot = session?.recipe as {
+      slug?: string;
+      steps?: StepWithPhoto[];
+    } | null;
+    if (snapshot?.slug === recipeSlug && snapshot.steps) {
+      await supabase
+        .from("cooking_sessions")
+        .update({
+          recipe: { ...snapshot, steps: withPhoto(snapshot.steps) },
+        })
+        .eq("id", sessionId);
+    }
+  }
+}
 
 /** Persist the checkpoint photo so the verdict in the timeline keeps its
  *  evidence. Best-effort — a failed upload never blocks the feedback. */
@@ -71,7 +134,15 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    const { image, context, sessionId, stepIndex, question } = parsed.data;
+    const {
+      image,
+      context,
+      sessionId,
+      stepIndex,
+      question,
+      recipeId,
+      recipeSlug,
+    } = parsed.data;
 
     const { object } = (await measuredGenerate("step-check", {
       model: getModel(),
@@ -111,6 +182,17 @@ export async function POST(request: Request) {
         sessionId,
         image,
       );
+      if (photoUrl) {
+        await saveCheckpointPhoto(
+          supabase,
+          user.id,
+          photoUrl,
+          stepIndex,
+          recipeId,
+          recipeSlug,
+          sessionId,
+        );
+      }
       await logSessionEvent(supabase, {
         userId: user.id,
         sessionId,

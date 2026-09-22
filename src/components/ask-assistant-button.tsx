@@ -1,8 +1,8 @@
 "use client";
 
-import { Mic, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
+import { ChefBuddy } from "@/components/chef-buddy";
 import { useEffect, useRef, useState } from "react";
-import { cn } from "@/lib/utils";
 import { createMetrics, logMetrics } from "@/lib/ai/voice-metrics";
 import type { VoiceAssistantMetrics } from "@/lib/ai/voice";
 import type { AssistantReply } from "@/lib/ai/schemas/assistant";
@@ -33,12 +33,15 @@ declare global {
   }
 }
 
-function speak(text: string) {
+function speak(text: string, onBoundary?: () => void) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
 
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "en-SG";
   utterance.rate = 1;
+  // Word boundaries are the closest thing to TTS amplitude the API gives us —
+  // each one pops the buddy's flame.
+  if (onBoundary) utterance.onboundary = onBoundary;
   window.speechSynthesis.speak(utterance);
 }
 
@@ -55,6 +58,8 @@ export function AskAssistantButton({
   stepIndex,
   instruction,
   photoCheckpoint,
+  recipeId,
+  recipeSlug,
   snapFrame,
   onAction,
 }: {
@@ -65,12 +70,15 @@ export function AskAssistantButton({
   /** Extra context passed to step-check when a camera frame is attached. */
   instruction?: string;
   photoCheckpoint?: string;
+  recipeId?: string;
+  recipeSlug?: string;
   /** "Show and ask": returns a camera frame to send with the question. */
   snapFrame?: () => string | null;
   /** Structured intent from the assistant (set-timer, goto-step…). */
   onAction?: (action: NonNullable<AssistantReply["action"]>) => void;
 }) {
   const [state, setState] = useState<AskState>({ status: "idle" });
+  const [blip, setBlip] = useState(0);
   const metricsRef = useRef<VoiceAssistantMetrics>(createMetrics("web-speech"));
 
   useEffect(() => {
@@ -102,6 +110,8 @@ export function AskAssistantButton({
                   },
                   sessionId,
                   stepIndex,
+                  recipeId,
+                  recipeSlug,
                 }
               : {
                   question,
@@ -121,7 +131,7 @@ export function AskAssistantButton({
       const answer = frame ? body.feedback : body.answer;
       if (!frame && body.action) onAction?.(body.action);
       setState({ status: "answered", answer });
-      speak(answer);
+      speak(answer, () => setBlip((b) => b + 1));
     } catch (err) {
       metricsRef.current.error =
         err instanceof Error ? err.message : "Assistant failed";
@@ -166,14 +176,20 @@ export function AskAssistantButton({
         type="button"
         onClick={handleTap}
         aria-label="Ask StarterChef"
-        className={cn(
-          "flex h-16 w-16 items-center justify-center rounded-full transition-colors",
-          state.status === "listening"
-            ? "bg-flame-dark"
-            : "bg-flame hover:bg-flame-dark",
-        )}
+        className="rounded-full transition-transform hover:scale-105"
       >
-        <Mic className="h-7 w-7 text-white" />
+        <ChefBuddy
+          state={
+            state.status === "listening"
+              ? "listening"
+              : state.status === "thinking"
+                ? "thinking"
+                : state.status === "answered"
+                  ? "speaking"
+                  : "idle"
+          }
+          blip={blip}
+        />
       </button>
       <p className="inline-flex items-center gap-1.5 text-sm font-extrabold">
         Ask StarterChef <Sparkles className="h-3.5 w-3.5 text-flame" />

@@ -190,6 +190,14 @@ export default async function RecipeOverviewPage({
                     Tip: {step.tip}
                   </p>
                 )}
+                {step.photoUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element -- user-uploaded
+                  <img
+                    src={step.photoUrl}
+                    alt={`Your photo of step ${step.index}`}
+                    className="mt-1 h-20 w-28 rounded-xl object-cover ring-1 ring-oat"
+                  />
+                )}
               </div>
             </li>
           ))}

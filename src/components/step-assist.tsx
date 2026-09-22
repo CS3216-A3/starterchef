@@ -11,6 +11,9 @@ interface StepContext {
   stepTitle: string;
   instruction: string;
   photoCheckpoint?: string;
+  /** Enables persisting checkpoint photos onto the step. */
+  recipeId?: string;
+  recipeSlug?: string;
 }
 
 interface SessionLink {
@@ -51,7 +54,14 @@ export function StepCheckButton({
       const res = await fetch("/api/ai/step-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: dataUrl, context, sessionId, stepIndex }),
+        body: JSON.stringify({
+          image: dataUrl,
+          context,
+          sessionId,
+          stepIndex,
+          recipeId: context.recipeId,
+          recipeSlug: context.recipeSlug,
+        }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Check failed");
@@ -147,6 +157,8 @@ export function StepAskBox({
                   context,
                   sessionId,
                   stepIndex,
+                  recipeId: context.recipeId,
+                  recipeSlug: context.recipeSlug,
                 }
               : {
                   question: text,

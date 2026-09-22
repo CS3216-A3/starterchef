@@ -1,8 +1,8 @@
 "use client";
 
-import { Mic, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
+import { ChefBuddy } from "@/components/chef-buddy";
 import { useRealtimeAssistant } from "@/hooks/use-realtime-assistant";
-import { cn } from "@/lib/utils";
 
 export function RealtimeAssistantButton({
   recipeTitle,
@@ -24,12 +24,19 @@ export function RealtimeAssistantButton({
         type="button"
         aria-label="Ask StarterChef"
         onClick={isActive ? stop : start}
-        className={cn(
-          "flex h-16 w-16 items-center justify-center rounded-full transition-colors",
-          isActive ? "bg-flame-dark" : "bg-flame hover:bg-flame-dark",
-        )}
+        className="rounded-full transition-transform hover:scale-105"
       >
-        <Mic className="h-7 w-7 text-white" />
+        <ChefBuddy
+          state={
+            state.status === "listening"
+              ? "listening"
+              : state.status === "speaking"
+                ? "speaking"
+                : state.status === "connecting" || state.status === "processing"
+                  ? "thinking"
+                  : "idle"
+          }
+        />
       </button>
 
       <p className="inline-flex items-center gap-1.5 text-sm font-extrabold">

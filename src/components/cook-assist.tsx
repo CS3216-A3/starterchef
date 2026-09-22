@@ -14,6 +14,8 @@ export interface CookContext {
   stepTitle: string;
   instruction: string;
   photoCheckpoint?: string;
+  recipeId?: string;
+  recipeSlug?: string;
 }
 
 /**
@@ -159,6 +161,10 @@ export function CookAssist({
         stepTitle={context.stepTitle}
         sessionId={sessionId}
         stepIndex={stepIndex}
+        instruction={context.instruction}
+        photoCheckpoint={context.photoCheckpoint}
+        recipeId={context.recipeId}
+        recipeSlug={context.recipeSlug}
         snapFrame={cameraOn ? snapFrame : undefined}
         onAction={handleAction}
       />
