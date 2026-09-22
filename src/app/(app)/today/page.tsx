@@ -45,7 +45,8 @@ export default async function TodayPage({
     ]);
 
   // First-run users go through the onboarding wizard before landing here.
-  if (profile && !profile.onboarded_at) redirect("/onboarding");
+  // A missing profile row means they never onboarded, so treat it the same.
+  if (!profile?.onboarded_at) redirect("/onboarding");
 
   const ingredients = kitchenItems.filter((i) => i.kind === "ingredient");
   const equipment = kitchenItems.filter((i) => i.kind === "equipment");

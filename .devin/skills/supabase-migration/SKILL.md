@@ -69,6 +69,20 @@ grant usage, select on all sequences in schema public
   to authenticated, service_role;
 ```
 
+Default privileges are also set (migration 0015) so new tables inherit these
+grants — keep them in place:
+
+```sql
+alter default privileges in schema public
+  grant select, insert, update, delete on tables
+  to authenticated, service_role;
+```
+
+When debugging "feature silently does nothing" bugs (empty lists, missing
+redirects, dead inserts), probe table access first — `403/42501` on the REST
+API with the service key means missing grants, and app code usually swallows
+the error as null/[] rather than surfacing it.
+
 ## Remote schema drift (applied SQL, missing history)
 
 If `db push` fails with "relation already exists" on early migrations, the
