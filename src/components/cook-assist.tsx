@@ -67,6 +67,15 @@ export function CookAssist({
   // or shorten a running timer without restarting it.
   const [timerEpoch, setTimerEpoch] = useState(0);
 
+  // Re-sync when the step's own duration changes (step navigation) — without
+  // this the previous step's timer lingers on steps that don't need one.
+  const [prevDuration, setPrevDuration] = useState(durationSeconds);
+  if (durationSeconds !== prevDuration) {
+    setPrevDuration(durationSeconds);
+    setTimerSeconds(durationSeconds);
+    setTimerEpoch((e) => e + 1);
+  }
+
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
