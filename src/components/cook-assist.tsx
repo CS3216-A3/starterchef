@@ -75,6 +75,14 @@ export function CookAssist({
 
   useEffect(() => stopCamera, [stopCamera]);
 
+  // The <video> element only mounts once cameraOn flips true, so the stream
+  // can't be attached inside toggleCamera — do it here after render.
+  useEffect(() => {
+    if (cameraOn && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [cameraOn]);
+
   async function toggleCamera() {
     setCameraError(null);
     if (cameraOn) {
@@ -86,7 +94,6 @@ export function CookAssist({
         video: { facingMode: "environment" },
       });
       streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
       setCameraOn(true);
     } catch {
       setCameraError("Camera unavailable. Check permission and try again.");
