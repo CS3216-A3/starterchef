@@ -25,15 +25,31 @@ const requestSchema = z.discriminatedUnion("source", [
   }),
   z.object({
     source: z.literal("video"),
-    video: z.string().min(1).max(50_000_000),
+    url: z
+      .string()
+      .url()
+      .refine(isYouTubeUrl, "Only YouTube links are supported"),
   }),
 ]);
 
+function isYouTubeUrl(raw: string): boolean {
+  try {
+    const host = new URL(raw).hostname.replace(/^www\./, "");
+    return (
+      host === "youtube.com" || host === "youtu.be" || host === "m.youtube.com"
+    );
+  } catch {
+    return false;
+  }
+}
+
 /**
  * POST /api/ai/import-recipe
- * Converts a pasted recipe, recipe URL, photo of a recipe card, or cooking
- * video into a structured ImportedRecipe object. The caller is responsible for
- * saving it to the user's recipe library.
+ * Converts a pasted recipe, recipe URL, photo of a recipe card, or a YouTube
+ * cooking video into a structured ImportedRecipe object. The caller is
+ * responsible for saving it to the user's recipe library. Video import is
+ * YouTube-only: the link goes to Gemini as a file URI and it fetches the
+ * video itself.
  */
 export async function POST(request: Request) {
   try {
@@ -141,15 +157,6 @@ async function buildGenerateArgs(
     }
 
     case "video": {
-      const video = parseDataUrl(input.video);
-      if (!video) {
-        return {
-          ok: false,
-          error:
-            "Invalid video upload. Provide a base64 data URL (data:video/mp4;base64,...).",
-          status: 400,
-        };
-      }
       return {
         ok: true,
         args: {
@@ -160,17 +167,18 @@ async function buildGenerateArgs(
               content: [
                 {
                   type: "text" as const,
-                  text: "Extract the recipe from this cooking video. Include timestamps where useful.",
+                  text: "Extract the recipe from this YouTube cooking video. Use the video's spoken and on-screen instructions; include timestamps where useful.",
                 },
                 {
                   type: "file" as const,
-                  data: video.data,
-                  mediaType: video.mimeType,
+                  data: new URL(input.url),
+                  mediaType: "video/mp4",
                 },
               ],
             },
           ],
         },
+        imageUrl: youTubeThumbnail(input.url),
       };
     }
   }
@@ -270,17 +278,17 @@ async function extractSourceText(
   }
 }
 
-function parseDataUrl(
-  dataUrl: string,
-): { data: Buffer; mimeType: string } | null {
-  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-  if (!match) return null;
-  const mimeType = match[1];
+/** Thumbnail URL for a YouTube video — used as the recipe hero image. */
+function youTubeThumbnail(raw: string): string | undefined {
   try {
-    const data = Buffer.from(match[2], "base64");
-    return { data, mimeType };
+    const url = new URL(raw);
+    const id =
+      url.hostname.replace(/^www\./, "") === "youtu.be"
+        ? url.pathname.slice(1)
+        : url.searchParams.get("v");
+    return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : undefined;
   } catch {
-    return null;
+    return undefined;
   }
 }
 

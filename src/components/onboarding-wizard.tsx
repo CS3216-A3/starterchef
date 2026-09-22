@@ -244,7 +244,7 @@ export function OnboardingWizard({ profile }: { profile: ProfileRow | null }) {
             <h1 className="text-2xl font-extrabold">Add your first recipe</h1>
             <p className="mt-1 text-sm font-semibold text-espresso-light">
               Import a recipe you already love — paste text, a link, a photo of
-              a recipe card, or a cooking video.
+              a recipe card, or a YouTube cooking video.
             </p>
           </div>
           <Button

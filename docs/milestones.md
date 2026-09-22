@@ -68,12 +68,12 @@ Fill in the measured numbers from `evals/results/text-model-comparison.json` and
 
 ### Import sources
 
-| Source               | Status      | Where it lives                                                                                                           |
-| -------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Pasted text          | Implemented | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "text"`)                                                      |
-| Recipe URL           | Implemented | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "url"`) using `recipe-scrapers` for JSON-LD/schema extraction |
-| Photo of recipe card | Implemented | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "photo"`) with image input                                    |
-| Cooking video        | Implemented | `/recipes/import` tab accepts a short video upload; backend passes it to Gemini as a file input.                         |
+| Source               | Status      | Where it lives                                                                                                             |
+| -------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Pasted text          | Implemented | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "text"`)                                                        |
+| Recipe URL           | Implemented | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "url"`) using `recipe-scrapers` for JSON-LD/schema extraction   |
+| Photo of recipe card | Implemented | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "photo"`) with image input                                      |
+| YouTube video        | Implemented | `/recipes/import` → `POST /api/ai/import-recipe` (`source: "video"`) — YouTube links only; passed to Gemini as a file URI. |
 
 ### Data model
 

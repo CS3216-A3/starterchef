@@ -16,7 +16,7 @@ interface ImportState {
   url: string;
   htmlFallback: string;
   photoDataUrl: string;
-  videoDataUrl: string;
+  videoUrl: string;
 }
 
 export default function ImportRecipePage() {
@@ -27,7 +27,7 @@ export default function ImportRecipePage() {
     url: "",
     htmlFallback: "",
     photoDataUrl: "",
-    videoDataUrl: "",
+    videoUrl: "",
   });
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState<
@@ -68,7 +68,7 @@ export default function ImportRecipePage() {
     const result = await createUserRecipe({
       ...draft,
       source: sourceLabel(state.source),
-      sourceUrl: state.url || undefined,
+      sourceUrl: state.url || state.videoUrl || undefined,
       imageUrl: draft.imageUrl,
     });
     if (result.error) {
@@ -89,16 +89,6 @@ export default function ImportRecipePage() {
     reader.readAsDataURL(file);
   }
 
-  async function handleVideoFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setState((s) => ({ ...s, videoDataUrl: reader.result as string }));
-    };
-    reader.readAsDataURL(file);
-  }
-
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
       <div>
@@ -106,7 +96,8 @@ export default function ImportRecipePage() {
           Import a recipe
         </h1>
         <p className="mt-1 font-semibold text-espresso-light">
-          Paste text, a link, a photo of a recipe card, or a cooking video.
+          Paste text, a link, a photo of a recipe card, or a YouTube cooking
+          video.
         </p>
       </div>
 
@@ -133,7 +124,7 @@ export default function ImportRecipePage() {
           active={state.source === "video"}
           onClick={() => setState((s) => ({ ...s, source: "video" }))}
           icon={<Video className="h-4 w-4" />}
-          label="Video"
+          label="YouTube"
         />
       </div>
 
@@ -204,21 +195,26 @@ export default function ImportRecipePage() {
           )}
 
           {state.source === "video" && (
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <label className="flex items-center gap-2 text-sm font-extrabold">
+                <Video className="h-4 w-4 text-flame" />
+                YouTube video link
+              </label>
               <input
-                type="file"
-                accept="video/*"
-                onChange={handleVideoFile}
-                className="rounded-2xl border-2 border-dashed border-espresso/20 bg-card p-4 text-sm font-semibold file:mr-4 file:rounded-full file:bg-flame file:px-4 file:py-2 file:text-white"
+                type="url"
+                value={state.videoUrl}
+                onChange={(e) =>
+                  setState((s) => ({ ...s, videoUrl: e.target.value }))
+                }
+                placeholder="https://www.youtube.com/watch?v=…"
+                className="rounded-2xl border-2 border-espresso/10 bg-card p-4 text-sm font-semibold outline-none focus:border-flame"
                 required
               />
-              {state.videoDataUrl && (
-                <video
-                  src={state.videoDataUrl}
-                  controls
-                  className="max-h-64 rounded-2xl"
-                />
-              )}
+              <p className="text-xs font-semibold text-espresso-light">
+                YouTube links only — paste a public YouTube cooking video
+                (youtube.com or youtu.be). Other video sites and file uploads
+                aren&apos;t supported yet.
+              </p>
             </div>
           )}
 
@@ -347,7 +343,7 @@ function buildRequestBody(state: ImportState): unknown {
     case "photo":
       return { source: "photo", image: state.photoDataUrl };
     case "video":
-      return { source: "video", video: state.videoDataUrl };
+      return { source: "video", url: state.videoUrl };
   }
 }
 
@@ -360,6 +356,6 @@ function sourceLabel(source: Source): string {
     case "photo":
       return "photo";
     case "video":
-      return "video";
+      return "youtube";
   }
 }
