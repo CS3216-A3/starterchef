@@ -52,6 +52,7 @@ export async function POST(request: Request) {
     const { object } = await measuredGenerate("suggest-recipes", {
       model: getModel(),
       schema: recipeSuggestionsSchema,
+      temperature: 0.4,
       system: renderPrompt("suggest-recipes", {
         ingredients: input.ingredients.join(", ") || "none listed",
         equipment: input.equipment.join(", ") || "none listed",

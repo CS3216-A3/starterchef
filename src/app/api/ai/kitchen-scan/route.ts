@@ -38,6 +38,7 @@ export async function POST(request: Request) {
     const { object } = await measuredGenerate("kitchen-scan", {
       model: getModel(),
       schema: kitchenScanSchema,
+      temperature: 0.4,
       system: renderPrompt("kitchen-scan", {}),
       messages: [
         {

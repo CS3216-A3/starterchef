@@ -7,13 +7,17 @@ milestone (run the same suite against different providers).
 ## Run
 
 ```bash
-npm run eval                     # all default datasets
+npm run eval                     # default dataset, current provider
 npm run eval -- suggest-recipes  # a single dataset
+npm run eval -- assistant        # assistant-quality dataset
+npm run eval -- --report         # compare all providers, write JSON report
 ```
 
-Requires an AI provider key in `.env.local` (see `.env.example`). To compare
-providers, run the suite twice with different `AI_PROVIDER` values and record
-the pass rate + token usage — that's the comparison data for the writeup.
+Requires an AI provider key in `.env.local` (see `.env.example`). `AI_PROVIDER`
+can be `google`, `openai`, or `google-lite`. The `--report` flag runs the default
+recipe dataset against all three providers and writes
+`evals/results/text-model-comparison.json` with pass rate, latency, tokens,
+and estimated cost per model.
 
 ## Adding cases
 

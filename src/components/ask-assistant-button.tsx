@@ -1,8 +1,10 @@
 "use client";
 
 import { Mic } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { createMetrics, logMetrics } from "@/lib/ai/voice-metrics";
+import type { VoiceAssistantMetrics } from "@/lib/ai/voice";
 
 type AskState =
   | { status: "idle" }
@@ -30,6 +32,21 @@ declare global {
   }
 }
 
+function speak(text: string) {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "en-SG";
+  utterance.rate = 1;
+  window.speechSynthesis.speak(utterance);
+}
+
+function stopSpeaking() {
+  if (typeof window !== "undefined" && window.speechSynthesis) {
+    window.speechSynthesis.cancel();
+  }
+}
+
 export function AskAssistantButton({
   recipeTitle,
   stepTitle,
@@ -38,6 +55,14 @@ export function AskAssistantButton({
   stepTitle: string;
 }) {
   const [state, setState] = useState<AskState>({ status: "idle" });
+  const metricsRef = useRef<VoiceAssistantMetrics>(createMetrics("web-speech"));
+
+  useEffect(() => {
+    return () => {
+      stopSpeaking();
+      logMetrics(metricsRef.current);
+    };
+  }, []);
 
   async function ask(question: string) {
     setState({ status: "thinking" });
@@ -52,8 +77,13 @@ export function AskAssistantButton({
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Assistant failed");
+
+      metricsRef.current.firstResponseAt ??= performance.now();
       setState({ status: "answered", answer: body.answer });
+      speak(body.answer);
     } catch (err) {
+      metricsRef.current.error =
+        err instanceof Error ? err.message : "Assistant failed";
       setState({
         status: "error",
         message: err instanceof Error ? err.message : "Something went wrong",
@@ -62,12 +92,16 @@ export function AskAssistantButton({
   }
 
   function handleTap() {
+    stopSpeaking();
+    metricsRef.current = createMetrics("web-speech");
+
     const Recognition =
       window.SpeechRecognition ?? window.webkitSpeechRecognition;
     if (!Recognition) {
       void ask("What should I watch out for in this step?");
       return;
     }
+
     const recognition = new Recognition();
     recognition.lang = "en-SG";
     recognition.interimResults = false;
@@ -76,8 +110,10 @@ export function AskAssistantButton({
       const transcript = event.results[0][0].transcript;
       void ask(transcript);
     };
-    recognition.onerror = (event) =>
+    recognition.onerror = (event) => {
+      metricsRef.current.error = event.error;
       setState({ status: "error", message: event.error });
+    };
     recognition.onend = () =>
       setState((s) => (s.status === "listening" ? { status: "idle" } : s));
     recognition.start();
@@ -104,7 +140,9 @@ export function AskAssistantButton({
           ? "Listening…"
           : state.status === "thinking"
             ? "Thinking…"
-            : "Tap to speak"}
+            : state.status === "answered"
+              ? "Speaking…"
+              : "Tap to speak"}
       </p>
       {state.status === "answered" && (
         <p className="max-w-xs rounded-2xl bg-oat p-3 text-center text-sm font-semibold">
