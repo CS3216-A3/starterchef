@@ -17,7 +17,6 @@ export function Logo({
         width={32}
         height={32}
         className="h-8 w-auto"
-        unoptimized
       />
       {showWordmark ? (
         <span className="text-lg font-extrabold tracking-tight text-espresso">

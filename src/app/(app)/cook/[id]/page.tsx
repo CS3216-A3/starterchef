@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Button } from "@/components/button";
 import { CookAssist } from "@/components/cook-assist";
+import { CookNextStepLink } from "@/components/cook-next-step-link";
 import { StepTracker } from "@/components/step-tracker";
 import { getActiveCookingSession, getRecipeBySlug } from "@/lib/data";
 
@@ -144,11 +145,11 @@ export default async function CookPage({
           <span />
         )}
         {stepIndex < steps.length ? (
-          <Link href={`/cook/${id}?step=${stepIndex + 1}`}>
-            <Button size="md">
-              Done, next step <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
+          <CookNextStepLink
+            href={`/cook/${id}?step=${stepIndex + 1}`}
+            recipeSlug={id}
+            completedStepIndex={stepIndex}
+          />
         ) : (
           <Link href={`/cook/${id}/finish`}>
             <Button size="md">

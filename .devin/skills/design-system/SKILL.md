@@ -18,8 +18,8 @@ colors (`gray-*`, `slate-*`, `blue-*`) in components.
 | `oat` `#F3E5D2`            | 30%   | Panels, summary cards, selected sections |
 | `oat-dark` `#E9D7BF`       | —     | Oat hover/active                         |
 | `card` `#FFFDFA`           | —     | Raised surfaces                          |
-| `flame` `#F58220`          | 10%   | Logo, primary actions, active indicators |
-| `flame-dark` `#D96E12`     | —     | Primary hover                            |
+| `flame` `#C2540A`          | 10%   | Logo, primary actions, active indicators |
+| `flame-dark` `#A34405`     | —     | Primary hover                            |
 | `flame-soft` `#FDE9D3`     | —     | Accent tint fills                        |
 | `espresso` `#493326`       | —     | Text, icons, nav                         |
 | `espresso-light` `#8A6F5C` | —     | Secondary text, muted labels             |
@@ -35,3 +35,6 @@ colors (`gray-*`, `slate-*`, `blue-*`) in components.
 - Mobile-first: the cook screen is used one-handed with dirty hands — tap
   targets ≥ 40px, key actions reachable at bottom of screen.
 - Voice/camera UI gets `flame` accent; nothing else should compete with it.
+- `flame` and `flame-dark` are tuned to clear 4.5:1 contrast against white —
+  don't lighten them back toward the original `#F58220` logo hue, that shade
+  fails WCAG AA as button/pill background or as text on `cream`.

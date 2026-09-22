@@ -1,10 +1,43 @@
 "use client";
 
-import { Camera, ScanLine, Sparkles, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Camera, CircleAlert, ScanLine, Sparkles, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/button";
 import { saveKitchenItems } from "@/app/(app)/kitchen/actions";
+import { trackEvent } from "@/lib/posthog/events";
 import type { KitchenScanResult } from "@/lib/ai/schemas/kitchen-scan";
+import type { KitchenIconKey } from "@/lib/item-icons";
+
+type ScannedItem = {
+  key: string;
+  kind: "ingredient" | "equipment";
+  name: string;
+  confidence: "high" | "medium" | "low";
+  estimatedQuantity?: string;
+  expiresWithinDays?: number;
+  icon: KitchenIconKey;
+};
+
+function flattenItems(result: KitchenScanResult): ScannedItem[] {
+  return [
+    ...result.ingredients.map((i) => ({
+      key: `ingredient:${i.name}`,
+      kind: "ingredient" as const,
+      name: i.name,
+      confidence: i.confidence,
+      estimatedQuantity: i.estimatedQuantity,
+      expiresWithinDays: i.expiresWithinDays,
+      icon: i.icon,
+    })),
+    ...result.equipment.map((i) => ({
+      key: `equipment:${i.name}`,
+      kind: "equipment" as const,
+      name: i.name,
+      confidence: i.confidence,
+      icon: i.icon,
+    })),
+  ];
+}
 
 type ScanState =
   | { status: "idle" }
@@ -20,6 +53,23 @@ export function ScanKitchenButton() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [state, setState] = useState<ScanState>({ status: "idle" });
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+
+  const items = useMemo(
+    () => (state.status === "done" ? flattenItems(state.result) : []),
+    [state],
+  );
+  const confidentItems = items.filter((i) => i.confidence !== "low");
+  const uncertainItems = items.filter((i) => i.confidence === "low");
+
+  function toggleExcluded(key: string) {
+    setExcluded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   async function startCamera() {
     setState({ status: "preview" });
@@ -74,7 +124,22 @@ export function ScanKitchenButton() {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Scan failed");
-      setState({ status: "done", result: body as KitchenScanResult });
+      const result = body as KitchenScanResult;
+      setExcluded(
+        new Set(
+          flattenItems(result)
+            .filter((i) => i.confidence === "low")
+            .map((i) => i.key),
+        ),
+      );
+      trackEvent("kitchen_scan_completed", {
+        ingredient_count: result.ingredients.length,
+        equipment_count: result.equipment.length,
+        uncertain_count:
+          result.ingredients.filter((i) => i.confidence === "low").length +
+          result.equipment.filter((i) => i.confidence === "low").length,
+      });
+      setState({ status: "done", result });
     } catch (err) {
       setState({
         status: "error",
@@ -86,32 +151,27 @@ export function ScanKitchenButton() {
   async function addToKitchen(result: KitchenScanResult) {
     setState({ status: "saving" });
     const now = new Date();
-    const items = [
-      ...result.ingredients.map((i) => ({
-        kind: "ingredient" as const,
-        name: i.name,
-        quantity: i.estimatedQuantity ?? null,
-        expiresOn: i.expiresWithinDays
-          ? new Date(now.getTime() + i.expiresWithinDays * 86400000)
-              .toISOString()
-              .slice(0, 10)
-          : null,
-        icon: i.icon,
-        source: "scan" as const,
-      })),
-      ...result.equipment.map((i) => ({
-        kind: "equipment" as const,
-        name: i.name,
-        quantity: null as string | null,
-        expiresOn: null as string | null,
-        icon: i.icon,
-        source: "scan" as const,
-      })),
-    ];
+    const confirmed = flattenItems(result).filter((i) => !excluded.has(i.key));
+    const items = confirmed.map((i) => ({
+      kind: i.kind,
+      name: i.name,
+      quantity: i.estimatedQuantity ?? null,
+      expiresOn: i.expiresWithinDays
+        ? new Date(now.getTime() + i.expiresWithinDays * 86400000)
+            .toISOString()
+            .slice(0, 10)
+        : null,
+      icon: i.icon,
+      source: "scan" as const,
+    }));
     const res = await saveKitchenItems(items);
     if (res.error) {
       setState({ status: "error", message: res.error });
     } else {
+      trackEvent("kitchen_scan_confirmed", {
+        items_saved: res.count ?? items.length,
+        items_excluded: excluded.size,
+      });
       setState({ status: "saved", added: res.count ?? items.length });
     }
   }
@@ -160,22 +220,47 @@ export function ScanKitchenButton() {
 
       {state.status === "done" && (
         <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-oat">
-          <p className="mb-2 text-sm font-bold">
-            Found {state.result.ingredients.length} ingredients and{" "}
-            {state.result.equipment.length} tools.
+          <p className="mb-3 text-sm font-bold">
+            Found {confidentItems.length} confident match
+            {confidentItems.length === 1 ? "" : "es"}
+            {uncertainItems.length > 0 && `, ${uncertainItems.length} to check`}
+            .
           </p>
-          <ul className="mb-3 flex flex-wrap gap-1 text-sm font-semibold text-espresso-light">
-            {state.result.ingredients.map((i) => (
-              <li key={i.name} className="rounded-full bg-oat px-2 py-0.5">
-                {i.name}
-              </li>
-            ))}
-            {state.result.equipment.map((i) => (
-              <li key={i.name} className="rounded-full bg-oat px-2 py-0.5">
-                {i.name}
-              </li>
-            ))}
-          </ul>
+
+          {confidentItems.length > 0 && (
+            <ul className="mb-3 flex flex-wrap gap-1 text-sm font-semibold text-espresso-light">
+              {confidentItems.map((i) => (
+                <li key={i.key} className="rounded-full bg-oat px-2 py-0.5">
+                  {i.name}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {uncertainItems.length > 0 && (
+            <div className="mb-3 flex flex-col gap-2">
+              <p className="flex items-center gap-1.5 text-xs font-bold text-espresso-light">
+                <CircleAlert className="h-3.5 w-3.5 text-flame" />
+                Low confidence — check before adding
+              </p>
+              <ul className="flex flex-col gap-1.5">
+                {uncertainItems.map((i) => (
+                  <li key={i.key}>
+                    <label className="flex items-center gap-2 rounded-xl bg-flame-soft px-3 py-2 text-sm font-semibold">
+                      <input
+                        type="checkbox"
+                        checked={!excluded.has(i.key)}
+                        onChange={() => toggleExcluded(i.key)}
+                        className="h-4 w-4 accent-flame"
+                      />
+                      {i.name}
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <p className="mb-3 text-xs font-semibold text-espresso-light">
             Existing items won&apos;t be removed. These will be merged in.
           </p>
@@ -183,8 +268,10 @@ export function ScanKitchenButton() {
             type="button"
             className="w-full"
             onClick={() => addToKitchen(state.result)}
+            disabled={items.length - excluded.size === 0}
           >
-            Add to my kitchen
+            Add {items.length - excluded.size} item
+            {items.length - excluded.size === 1 ? "" : "s"}
           </Button>
         </div>
       )}
