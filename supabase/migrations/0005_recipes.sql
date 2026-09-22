@@ -51,3 +51,10 @@ create policy "saved_recipes: own rows only" on public.saved_recipes
 -- duplicating. Name matching is case-insensitive.
 create unique index kitchen_items_user_kind_name_idx
   on public.kitchen_items (user_id, kind, lower(name));
+
+-- Grant table access for the authenticated app role and service_role (used by
+-- admin/seed scripts). RLS still filters what each user can see.
+grant usage on schema public to authenticated, service_role;
+grant select on table public.recipes to authenticated, service_role;
+grant select, insert, update, delete on table public.saved_recipes to authenticated, service_role;
+grant usage, select on all sequences in schema public to authenticated, service_role;

@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/**/*": ["./prompts/**/*"],
   },
+  allowedDevOrigins: ["127.0.0.1"],
 };
 
 export default nextConfig;

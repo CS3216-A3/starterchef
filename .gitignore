@@ -40,6 +40,9 @@ AGENTS.local.md
 # eval outputs
 /evals/results/
 
+# supabase
+/supabase/.temp
+
 # vercel
 .vercel
 

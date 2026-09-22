@@ -59,3 +59,10 @@ create policy "recipe_feedback: own rows only"
   for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- Ensure the authenticated app role and service_role can read/write recipe
+-- tables. RLS still filters user-visible rows.
+grant select, insert, update, delete on table public.recipes to authenticated, service_role;
+grant select, insert, update, delete on table public.saved_recipes to authenticated, service_role;
+grant select, insert, update, delete on table public.recipe_feedback to authenticated, service_role;
+grant usage, select on all sequences in schema public to authenticated, service_role;
