@@ -1,12 +1,22 @@
 "use client";
 
-import { Pause, Play, RotateCcw, Timer, Video, VideoOff } from "lucide-react";
+import {
+  Camera,
+  Pause,
+  Play,
+  RotateCcw,
+  Sparkles,
+  Timer,
+  Video,
+  VideoOff,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/button";
-import { StepAskBox, StepCheckButton } from "@/components/step-assist";
+import { StepAskBox } from "@/components/step-assist";
 import { VoiceAssistantButton } from "@/components/voice-assistant-button";
 import type { AssistantReply } from "@/lib/ai/schemas/assistant";
+import type { StepCheck } from "@/lib/ai/schemas/cooking";
 import { cn } from "@/lib/utils";
 
 export interface CookContext {
@@ -47,6 +57,8 @@ export function CookAssist({
   const streamRef = useRef<MediaStream | null>(null);
   const [cameraOn, setCameraOn] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [check, setCheck] = useState<StepCheck | null>(null);
   const [timerSeconds, setTimerSeconds] = useState<number | undefined>(
     durationSeconds,
   );
@@ -97,6 +109,38 @@ export function CookAssist({
     return canvas.toDataURL("image/jpeg", 0.8);
   }, []);
 
+  /** Snap a frame and ask the model whether the step looks right. */
+  async function checkFood() {
+    const frame = snapFrame();
+    if (!frame) return;
+    setChecking(true);
+    setCheck(null);
+    setCameraError(null);
+    try {
+      const res = await fetch("/api/ai/step-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          image: frame,
+          context,
+          sessionId,
+          stepIndex,
+          recipeId: context.recipeId,
+          recipeSlug: context.recipeSlug,
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Check failed");
+      setCheck(body as StepCheck);
+    } catch (err) {
+      setCameraError(
+        err instanceof Error ? err.message : "Something went wrong",
+      );
+    } finally {
+      setChecking(false);
+    }
+  }
+
   /** Voice assistant actions — low-risk UI actions applied directly. */
   const handleAction = useCallback(
     (action: NonNullable<AssistantReply["action"]>) => {
@@ -146,9 +190,42 @@ export function CookAssist({
               muted
               className="aspect-video w-full bg-espresso object-cover"
             />
-            <p className="bg-card px-3 py-1.5 text-xs font-semibold text-espresso-light">
-              Camera on. Your next question will include what it sees.
+            <div className="flex flex-col gap-2 bg-card p-3">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={checkFood}
+                disabled={checking}
+                className="self-start"
+              >
+                <Camera className="h-4 w-4" />
+                {checking ? "Checking…" : "Check my food"}
+                {!checking && <Sparkles className="h-3.5 w-3.5" />}
+              </Button>
+              <p className="text-xs font-semibold text-espresso-light">
+                StarterChef can see this view. Tap Check my food for a verdict,
+                or just ask a question below.
+              </p>
+            </div>
+          </div>
+        )}
+        {check && (
+          <div className="rounded-2xl bg-oat p-3">
+            <p className="text-sm font-extrabold">
+              {check.looksRight === true
+                ? "Looks good ✓"
+                : check.looksRight === false
+                  ? "Needs a small fix"
+                  : "Can't quite tell"}
             </p>
+            <p className="text-sm font-semibold text-espresso-light">
+              {check.feedback}
+            </p>
+            {check.tip && (
+              <p className="mt-1 text-xs font-bold text-flame">
+                Try: {check.tip}
+              </p>
+            )}
           </div>
         )}
         {cameraError && (
@@ -175,12 +252,6 @@ export function CookAssist({
         stepIndex={stepIndex}
         snapFrame={cameraOn ? snapFrame : undefined}
         onAction={handleAction}
-      />
-
-      <StepCheckButton
-        context={context}
-        sessionId={sessionId}
-        stepIndex={stepIndex}
       />
     </div>
   );
