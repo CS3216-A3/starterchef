@@ -82,7 +82,9 @@ Fill in the measured numbers from `evals/results/text-model-comparison.json` and
 - `recipes.source_url` — original URL, surfaced on the recipe overview.
 - `recipes.image_url` — hero photo from the import source or a user upload (`recipe-images` storage bucket).
 - `recipes.steps[].photoUrl` — per-step photos taken while cooking.
-- `recipe_feedback` — substitutions, equipment work-arounds, scaled servings, notes and rating captured after cooking.
+- `recipe_feedback` — substitutions, equipment work-arounds, scaled servings, notes and rating captured after cooking. `session_id` links the row to its cooking session; `learned` jsonb receives the AI recap's durable insights.
+- `cooking_sessions.recipe_id` + `cooking_sessions.summary` — recipe link and the AI-generated post-cook recap (`{summary, insights, struggledSteps}`).
+- `session_events` — append-only timeline of everything that happens while cooking: `session_started`, `step_entered`, `qa` (text or voice), `photo_check` (verdict + feedback + photo URL), `photo_upload`, `feedback`. Insert policy requires owning the session.
 
 ### User flows
 
@@ -94,3 +96,6 @@ Fill in the measured numbers from `evals/results/text-model-comparison.json` and
 6. **Filter**: The time/servings/skill pills on `/today` write URL params (`?time=&servings=&skill=`) and filter the ideas list server-side. Servings/skill default to the user's profile (household size, skill level) when no param is set.
 7. **Onboarding**: New users land on `/onboarding` (redirected from `/today` until `profiles.onboarded_at` is set) — profile + household size, dietary needs, an optional first kitchen scan, and an optional first recipe import.
 8. **Images**: URL imports keep the source hero image (`recipes.image_url`, `recipe-images` bucket); missing images render a deterministic illustrated placeholder. The adapt chat shows a "View changes" modal comparing the adapted recipe before the user applies it.
+9. **Session memory**: every AI interaction during cooking is appended to `session_events` server-side (Q&A incl. voice, camera checkpoints with the photo, step navigation, photos, feedback). Finishing a session runs `session-recap` → recap + durable insights stored on the session and folded into `recipe_feedback.learned`.
+10. **Review**: `/recipes/[id]` shows "Your cooking history" (per-session recap + insight chips); `/sessions/[id]` renders the full timeline — questions asked, checkpoint verdicts with photos, step progression, feedback.
+11. **Cross-session memory**: `getCookingMemory()` distills recent photo-check fixes, substitutions, equipment work-arounds and user notes into facts injected into the cooking-assistant prompt, so the agent remembers how the user cooks between sessions.

@@ -13,6 +13,7 @@ const protectedPaths = [
   "/kitchen",
   "/recipes",
   "/cook",
+  "/sessions",
   "/settings",
   "/onboarding",
 ];

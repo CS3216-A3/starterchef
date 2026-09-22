@@ -50,9 +50,13 @@ function stopSpeaking() {
 export function AskAssistantButton({
   recipeTitle,
   stepTitle,
+  sessionId,
+  stepIndex,
 }: {
   recipeTitle: string;
   stepTitle: string;
+  sessionId?: string;
+  stepIndex?: number;
 }) {
   const [state, setState] = useState<AskState>({ status: "idle" });
   const metricsRef = useRef<VoiceAssistantMetrics>(createMetrics("web-speech"));
@@ -73,6 +77,9 @@ export function AskAssistantButton({
         body: JSON.stringify({
           question,
           context: { recipeTitle, stepTitle },
+          sessionId,
+          stepIndex,
+          channel: "voice",
         }),
       });
       const body = await res.json();

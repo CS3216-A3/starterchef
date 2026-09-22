@@ -3,8 +3,9 @@ import { z } from "zod";
 import { measuredGenerate } from "@/lib/ai/instrument";
 import { getModel } from "@/lib/ai/model";
 import { renderPrompt } from "@/lib/ai/prompts";
-import { stepCheckSchema } from "@/lib/ai/schemas/cooking";
+import { stepCheckSchema, type StepCheck } from "@/lib/ai/schemas/cooking";
 import { checkRateLimit, createRateLimitResponse } from "@/lib/rate-limit";
+import { logSessionEvent } from "@/lib/session-events";
 import { createClient } from "@/lib/supabase/server";
 
 const requestSchema = z.object({
@@ -15,7 +16,30 @@ const requestSchema = z.object({
     instruction: z.string(),
     photoCheckpoint: z.string().optional(),
   }),
+  sessionId: z.string().uuid().optional(),
+  stepIndex: z.number().int().min(1).optional(),
 });
+
+/** Persist the checkpoint photo so the verdict in the timeline keeps its
+ *  evidence. Best-effort — a failed upload never blocks the feedback. */
+async function uploadCheckpointPhoto(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  sessionId: string,
+  dataUrl: string,
+): Promise<string | null> {
+  const match = /^data:(image\/[\w+.-]+);base64,(.+)$/.exec(dataUrl);
+  if (!match) return null;
+  const [, mime, base64] = match;
+  const ext = mime.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
+  const path = `${userId}/checkpoints/${sessionId}-${Date.now()}.${ext}`;
+  const { error } = await supabase.storage
+    .from("recipe-images")
+    .upload(path, Buffer.from(base64, "base64"), { contentType: mime });
+  if (error) return null;
+  return supabase.storage.from("recipe-images").getPublicUrl(path).data
+    .publicUrl;
+}
 
 /**
  * POST /api/ai/step-check
@@ -44,9 +68,9 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    const { image, context } = parsed.data;
+    const { image, context, sessionId, stepIndex } = parsed.data;
 
-    const { object } = await measuredGenerate("step-check", {
+    const { object } = (await measuredGenerate("step-check", {
       model: getModel(),
       schema: stepCheckSchema,
       temperature: 0.4,
@@ -73,7 +97,29 @@ export async function POST(request: Request) {
           ],
         },
       ],
-    });
+    })) as { object: StepCheck };
+
+    if (sessionId) {
+      const photoUrl = await uploadCheckpointPhoto(
+        supabase,
+        user.id,
+        sessionId,
+        image,
+      );
+      await logSessionEvent(supabase, {
+        userId: user.id,
+        sessionId,
+        stepIndex,
+        kind: "photo_check",
+        payload: {
+          photoUrl: photoUrl ?? undefined,
+          looksRight: object.looksRight,
+          feedback: object.feedback,
+          tip: object.tip,
+          stepTitle: context.stepTitle,
+        },
+      });
+    }
 
     return NextResponse.json(object);
   } catch (err) {

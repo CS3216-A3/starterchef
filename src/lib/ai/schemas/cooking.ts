@@ -57,5 +57,29 @@ export const stepCheckSchema = z.object({
 
 export type StepCheck = z.infer<typeof stepCheckSchema>;
 
+/**
+ * Post-cook recap generated from the session event timeline. Stored on
+ * `cooking_sessions.summary` and shown on the recipe's cooking history.
+ */
+export const sessionRecapSchema = z.object({
+  summary: z
+    .string()
+    .describe(
+      "2–3 sentence friendly recap of how the cook went, for the user to re-read later",
+    ),
+  insights: z
+    .array(z.string())
+    .describe(
+      "Short durable learnings about how this user cooks (struggles, fixes that worked, preferences) — phrased as facts, e.g. 'tends to undercook onions'",
+    ),
+  struggledSteps: z
+    .array(z.number().int())
+    .describe(
+      "Step indexes where the user asked questions or a photo check needed a fix",
+    ),
+});
+
+export type SessionRecap = z.infer<typeof sessionRecapSchema>;
+
 export type CookingStep = z.infer<typeof cookingStepSchema>;
 export type RecipeSteps = z.infer<typeof recipeStepsSchema>;

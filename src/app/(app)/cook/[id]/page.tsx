@@ -6,6 +6,7 @@ import { Button } from "@/components/button";
 import { FinishCookingButton } from "@/components/cook-buttons";
 import { StepPhotoUpload } from "@/components/step-photo-upload";
 import { StepAskBox, StepCheckButton } from "@/components/step-assist";
+import { StepTracker } from "@/components/step-tracker";
 import { getActiveCookingSession, getRecipeBySlug } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +45,9 @@ export default async function CookPage({
   );
   const stepIndex = Math.min(Math.max(Number(step ?? 1) || 1, 1), steps.length);
   const current = steps[stepIndex - 1];
+  // Only log to the session actually cooking this recipe.
+  const sessionId =
+    session?.recipe?.slug === recipe.slug ? session.id : undefined;
   const progress = Math.round((stepIndex / steps.length) * 100);
 
   function formatDuration(seconds: number) {
@@ -54,6 +58,7 @@ export default async function CookPage({
 
   return (
     <div className="mx-auto flex max-w-lg flex-col gap-6">
+      {sessionId && <StepTracker sessionId={sessionId} stepIndex={stepIndex} />}
       <header className="flex flex-col gap-2">
         <p className="text-xs font-bold tracking-wide text-espresso-light uppercase">
           {recipeTitle}
@@ -137,6 +142,8 @@ export default async function CookPage({
       <VoiceAssistantButton
         recipeTitle={recipeTitle}
         stepTitle={current.title}
+        sessionId={sessionId}
+        stepIndex={stepIndex}
       />
 
       <StepAskBox
@@ -145,6 +152,8 @@ export default async function CookPage({
           stepTitle: current.title,
           instruction: current.instruction,
         }}
+        sessionId={sessionId}
+        stepIndex={stepIndex}
       />
 
       <StepCheckButton
@@ -154,6 +163,8 @@ export default async function CookPage({
           instruction: current.instruction,
           photoCheckpoint: current.photoCheckpoint,
         }}
+        sessionId={sessionId}
+        stepIndex={stepIndex}
       />
 
       <nav className="flex items-center justify-between gap-3">

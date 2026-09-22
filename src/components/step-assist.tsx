@@ -12,11 +12,23 @@ interface StepContext {
   photoCheckpoint?: string;
 }
 
+interface SessionLink {
+  /** When provided, interactions are recorded on the session timeline. */
+  sessionId?: string;
+  stepIndex?: number;
+}
+
 /**
  * Camera checkpoint: photograph the food mid-step and get practical
  * feedback on whether it looks right.
  */
-export function StepCheckButton({ context }: { context: StepContext }) {
+export function StepCheckButton({
+  context,
+  sessionId,
+  stepIndex,
+}: {
+  context: StepContext;
+} & SessionLink) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<StepCheck | null>(null);
@@ -38,7 +50,7 @@ export function StepCheckButton({ context }: { context: StepContext }) {
       const res = await fetch("/api/ai/step-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: dataUrl, context }),
+        body: JSON.stringify({ image: dataUrl, context, sessionId, stepIndex }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Check failed");
@@ -95,7 +107,13 @@ export function StepCheckButton({ context }: { context: StepContext }) {
 }
 
 /** Text Q&A for the current step — same assistant the voice button uses. */
-export function StepAskBox({ context }: { context: StepContext }) {
+export function StepAskBox({
+  context,
+  sessionId,
+  stepIndex,
+}: {
+  context: StepContext;
+} & SessionLink) {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
   const [answer, setAnswer] = useState<string | null>(null);
@@ -116,6 +134,9 @@ export function StepAskBox({ context }: { context: StepContext }) {
             recipeTitle: context.recipeTitle,
             stepTitle: context.stepTitle,
           },
+          sessionId,
+          stepIndex,
+          channel: "text",
         }),
       });
       const body = await res.json();

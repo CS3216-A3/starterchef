@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { getActiveSession, logSessionEvent } from "@/lib/session-events";
 import { createClient } from "@/lib/supabase/server";
 import { slugify } from "@/lib/slug";
 import type { ImportedRecipe } from "@/lib/ai/schemas/import";
@@ -189,11 +190,16 @@ export async function saveRecipeFeedback(
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in" };
 
+  // Attach the active cooking session so the recap can fold insights back
+  // into this row's `learned` jsonb.
+  const session = await getActiveSession(supabase, user.id);
+
   const { error: feedbackError } = await supabase
     .from("recipe_feedback")
     .insert({
       user_id: user.id,
       recipe_id: input.recipeId,
+      session_id: session?.id ?? null,
       rating: input.rating,
       substitutions_made: input.substitutionsMade,
       equipment_adjusted: input.equipmentAdjusted,
@@ -203,6 +209,18 @@ export async function saveRecipeFeedback(
     });
 
   if (feedbackError) return { error: feedbackError.message };
+
+  await logSessionEvent(supabase, {
+    userId: user.id,
+    sessionId: session?.id,
+    kind: "feedback",
+    payload: {
+      rating: input.rating,
+      wouldCookAgain: input.wouldCookAgain,
+      notes: input.notes || undefined,
+      substitutionsMade: input.substitutionsMade,
+    },
+  });
 
   if (options?.createPersonalizedCopy) {
     const personalized = {

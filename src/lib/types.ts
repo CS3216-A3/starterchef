@@ -69,12 +69,14 @@ export interface RecipeFeedbackRow {
   id: string;
   user_id: string;
   recipe_id: string;
+  session_id: string | null;
   rating: number | null;
   substitutions_made: string[];
   equipment_adjusted: string[];
   scaled_servings: number | null;
   would_cook_again: boolean | null;
   notes: string;
+  learned: Record<string, unknown>;
   created_at: string;
 }
 
@@ -85,12 +87,53 @@ export interface SessionRecipeSnapshot {
   steps?: RecipeStep[];
 }
 
+/** AI-generated recap stored on `cooking_sessions.summary` at finish time. */
+export interface SessionSummary {
+  summary: string;
+  insights: string[];
+  struggledSteps: number[];
+}
+
 export interface CookingSessionRow {
   id: string;
   user_id: string;
+  recipe_id: string | null;
   recipe: SessionRecipeSnapshot;
   current_step: number;
   status: "in_progress" | "completed" | "abandoned";
+  summary: SessionSummary | null;
   started_at: string;
   completed_at: string | null;
+}
+
+export type SessionEventKind =
+  | "session_started"
+  | "step_entered"
+  | "qa"
+  | "photo_check"
+  | "photo_upload"
+  | "feedback";
+
+/** Payload shapes per event kind (stored in `session_events.payload`). */
+export interface SessionEventPayload {
+  question?: string;
+  answer?: string;
+  channel?: "text" | "voice";
+  looksRight?: boolean | null;
+  feedback?: string;
+  tip?: string;
+  photoUrl?: string;
+  rating?: number;
+  notes?: string;
+  [key: string]: unknown;
+}
+
+export interface SessionEventRow {
+  id: number;
+  session_id: string;
+  user_id: string;
+  step_index: number | null;
+  kind: SessionEventKind;
+  payload: SessionEventPayload;
+  created_at: string;
 }

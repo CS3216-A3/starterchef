@@ -1,4 +1,11 @@
-import { Clock, ExternalLink, Pencil, Timer, Users } from "lucide-react";
+import {
+  Clock,
+  ExternalLink,
+  History,
+  Pencil,
+  Timer,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Button } from "@/components/button";
@@ -9,6 +16,7 @@ import { RecipeImage } from "@/components/recipe-image";
 import { SaveRecipeButton } from "@/components/save-recipe-button";
 import { getRecipeBySlug, getSavedRecipeIds, getUser } from "@/lib/data";
 import { iconMap } from "@/lib/recipe-view";
+import { getSessionsForRecipe } from "@/lib/session-events";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +46,10 @@ export default async function RecipeOverviewPage({
     getSavedRecipeIds(),
   ]);
   if (!recipe) notFound();
+
+  const sessions = (await getSessionsForRecipe(recipe.id, recipe.slug)).filter(
+    (s) => s.status !== "in_progress",
+  );
 
   const isOwner = Boolean(user && recipe.user_id === user.id);
   const Icon = iconMap[recipe.icon];
@@ -183,6 +195,60 @@ export default async function RecipeOverviewPage({
           ))}
         </ol>
       </section>
+
+      {sessions.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="flex items-center gap-2 text-xs font-extrabold tracking-wide text-espresso-light uppercase">
+            <History className="h-4 w-4" /> Your cooking history
+          </h2>
+          <ul className="flex flex-col gap-3">
+            {sessions.map((s) => (
+              <li key={s.id}>
+                <Link
+                  href={`/sessions/${s.id}`}
+                  className="block rounded-3xl bg-card p-4 ring-1 ring-oat transition-shadow hover:shadow-sm"
+                >
+                  <p className="text-sm font-extrabold">
+                    {new Date(s.started_at).toLocaleDateString(undefined, {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                    {s.status === "abandoned" && (
+                      <span className="ml-2 text-xs font-bold text-espresso-light">
+                        abandoned
+                      </span>
+                    )}
+                  </p>
+                  {s.summary ? (
+                    <>
+                      <p className="mt-1 text-sm font-semibold text-espresso-light">
+                        {s.summary.summary}
+                      </p>
+                      {s.summary.insights.length > 0 && (
+                        <ul className="mt-2 flex flex-wrap gap-2">
+                          {s.summary.insights.map((insight) => (
+                            <li
+                              key={insight}
+                              className="rounded-full bg-flame-soft px-3 py-1 text-xs font-bold"
+                            >
+                              {insight}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
+                  ) : (
+                    <p className="mt-1 text-sm font-semibold text-espresso-light">
+                      Tap to see what happened in this session.
+                    </p>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <RecipeChat recipe={recipe} isOwner={isOwner} />
 
