@@ -11,7 +11,7 @@ type AskState =
   | { status: "idle" }
   | { status: "listening" }
   | { status: "thinking" }
-  | { status: "answered"; answer: string }
+  | { status: "speaking" }
   | { status: "error"; message: string };
 
 interface SpeechRecognitionLike {
@@ -33,8 +33,11 @@ declare global {
   }
 }
 
-function speak(text: string, onBoundary?: () => void) {
-  if (typeof window === "undefined" || !window.speechSynthesis) return;
+function speak(text: string, onBoundary?: () => void, onEnd?: () => void) {
+  if (typeof window === "undefined" || !window.speechSynthesis) {
+    onEnd?.();
+    return;
+  }
 
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "en-SG";
@@ -42,6 +45,10 @@ function speak(text: string, onBoundary?: () => void) {
   // Word boundaries are the closest thing to TTS amplitude the API gives us —
   // each one pops the buddy's flame.
   if (onBoundary) utterance.onboundary = onBoundary;
+  if (onEnd) {
+    utterance.onend = onEnd;
+    utterance.onerror = onEnd;
+  }
   window.speechSynthesis.speak(utterance);
 }
 
@@ -78,6 +85,7 @@ export function AskAssistantButton({
   onAction?: (action: NonNullable<AssistantReply["action"]>) => void;
 }) {
   const [state, setState] = useState<AskState>({ status: "idle" });
+  const [lastAnswer, setLastAnswer] = useState<string | null>(null);
   const [blip, setBlip] = useState(0);
   const metricsRef = useRef<VoiceAssistantMetrics>(createMetrics("web-speech"));
 
@@ -130,8 +138,13 @@ export function AskAssistantButton({
       // step-check returns {feedback}; assistant returns {answer, action?}.
       const answer = frame ? body.feedback : body.answer;
       if (!frame && body.action) onAction?.(body.action);
-      setState({ status: "answered", answer });
-      speak(answer, () => setBlip((b) => b + 1));
+      setLastAnswer(answer);
+      setState({ status: "speaking" });
+      speak(
+        answer,
+        () => setBlip((b) => b + 1),
+        () => setState({ status: "idle" }),
+      );
     } catch (err) {
       metricsRef.current.error =
         err instanceof Error ? err.message : "Assistant failed";
@@ -184,7 +197,7 @@ export function AskAssistantButton({
               ? "listening"
               : state.status === "thinking"
                 ? "thinking"
-                : state.status === "answered"
+                : state.status === "speaking"
                   ? "speaking"
                   : "idle"
           }
@@ -199,13 +212,13 @@ export function AskAssistantButton({
           ? "Listening…"
           : state.status === "thinking"
             ? "Thinking…"
-            : state.status === "answered"
+            : state.status === "speaking"
               ? "Speaking…"
               : "Tap to speak"}
       </p>
-      {state.status === "answered" && (
+      {lastAnswer && (
         <p className="max-w-xs rounded-2xl bg-oat p-3 text-center text-sm font-semibold">
-          {state.answer}
+          {lastAnswer}
         </p>
       )}
       {state.status === "error" && (
