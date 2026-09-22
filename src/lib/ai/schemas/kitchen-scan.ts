@@ -26,3 +26,22 @@ export const kitchenScanSchema = z.object({
 });
 
 export type KitchenScanResult = z.infer<typeof kitchenScanSchema>;
+
+/**
+ * Items parsed from a spoken list ("two tomatoes, an onion and a frying
+ * pan"). The model sorts each into ingredient vs equipment.
+ */
+export const kitchenVoiceSchema = z.object({
+  items: z.array(
+    z.object({
+      kind: z.enum(["ingredient", "equipment"]),
+      name: z.string().describe("Singular, clean name, e.g. 'tomato'"),
+      quantity: z
+        .string()
+        .optional()
+        .describe("Amount if spoken, e.g. '2', '500g', 'a bunch'"),
+    }),
+  ),
+});
+
+export type KitchenVoiceResult = z.infer<typeof kitchenVoiceSchema>;

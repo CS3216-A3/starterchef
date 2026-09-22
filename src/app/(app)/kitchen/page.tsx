@@ -1,17 +1,16 @@
-import { CookingPot, Egg, Wheat } from "lucide-react";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { ScanKitchenButton } from "@/components/scan-kitchen-button";
+import { VoiceAddItems } from "@/components/voice-add-items";
 import { addKitchenItem, removeKitchenItem } from "@/app/(app)/kitchen/actions";
 import { getKitchenItems, getProfile } from "@/lib/data";
+import { equipmentIcon, ingredientIcon } from "@/lib/item-icons";
 
 export const metadata: Metadata = {
   title: "My Kitchen",
 };
 
 export const dynamic = "force-dynamic";
-
-const ingredientIcons = [Egg, Wheat, CookingPot];
 
 export default async function KitchenPage() {
   const [kitchenItems, profile] = await Promise.all([
@@ -35,9 +34,12 @@ export default async function KitchenPage() {
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <div className="flex flex-col gap-6">
           <section className="rounded-3xl bg-card p-5 shadow-sm ring-1 ring-oat">
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-lg font-extrabold">Ingredients</h2>
-              <AddItemForm kind="ingredient" />
+              <div className="flex items-center gap-3">
+                <VoiceAddItems />
+                <AddItemForm kind="ingredient" />
+              </div>
             </div>
             {ingredients.length === 0 ? (
               <p className="text-sm font-semibold text-espresso-light">
@@ -45,8 +47,8 @@ export default async function KitchenPage() {
               </p>
             ) : (
               <ul className="flex flex-wrap gap-2">
-                {ingredients.map((item, i) => {
-                  const Icon = ingredientIcons[i % ingredientIcons.length];
+                {ingredients.map((item) => {
+                  const Icon = ingredientIcon(item.name);
                   return (
                     <li
                       key={item.id}
@@ -78,16 +80,19 @@ export default async function KitchenPage() {
               </p>
             ) : (
               <ul className="flex flex-wrap gap-2">
-                {equipment.map((item) => (
-                  <li
-                    key={item.id}
-                    className="inline-flex items-center gap-2 rounded-full bg-oat px-4 py-2 text-sm font-bold"
-                  >
-                    <CookingPot className="h-4 w-4 text-espresso-light" />
-                    {item.name}
-                    <RemoveItemForm id={item.id} />
-                  </li>
-                ))}
+                {equipment.map((item) => {
+                  const Icon = equipmentIcon(item.name);
+                  return (
+                    <li
+                      key={item.id}
+                      className="inline-flex items-center gap-2 rounded-full bg-oat px-4 py-2 text-sm font-bold"
+                    >
+                      <Icon className="h-4 w-4 text-espresso-light" />
+                      {item.name}
+                      <RemoveItemForm id={item.id} />
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>
@@ -134,10 +139,9 @@ export default async function KitchenPage() {
         </div>
 
         <aside className="flex flex-col gap-4 rounded-3xl bg-oat p-5">
-          <h2 className="text-lg font-extrabold">Update with a photo</h2>
+          <h2 className="text-lg font-extrabold">Scan my kitchen</h2>
           <p className="text-sm font-semibold text-espresso-light">
-            Take a photo of your fridge or pantry. StarterChef will recognise
-            ingredients and tools and suggest updates — you confirm before
+            Point your camera at your fridge or pantry — you confirm before
             anything is saved.
           </p>
           <ScanKitchenButton />

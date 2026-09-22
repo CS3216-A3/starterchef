@@ -1,9 +1,8 @@
-import { CookingPot, Egg, ScanLine, Wheat } from "lucide-react";
+import { ScanLine } from "lucide-react";
 import Link from "next/link";
 import { ScanKitchenButton } from "@/components/scan-kitchen-button";
+import { equipmentIcon, ingredientIcon } from "@/lib/item-icons";
 import type { KitchenItemRow } from "@/lib/types";
-
-const ingredientIcons = [Egg, Wheat, CookingPot];
 
 export function KitchenPanel({
   ingredients,
@@ -22,8 +21,8 @@ export function KitchenPanel({
         </p>
       ) : (
         <ul className="flex flex-col gap-3">
-          {ingredients.map((item, i) => {
-            const Icon = ingredientIcons[i % ingredientIcons.length];
+          {ingredients.map((item) => {
+            const Icon = ingredientIcon(item.name);
             return (
               <li
                 key={item.id}
@@ -54,17 +53,20 @@ export function KitchenPanel({
           </p>
         ) : (
           <ul className="flex flex-col gap-3">
-            {equipment.map((item) => (
-              <li
-                key={item.id}
-                className="flex items-center gap-3 text-sm font-bold"
-              >
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-card">
-                  <CookingPot className="h-4 w-4 text-espresso" />
-                </span>
-                {item.name}
-              </li>
-            ))}
+            {equipment.map((item) => {
+              const Icon = equipmentIcon(item.name);
+              return (
+                <li
+                  key={item.id}
+                  className="flex items-center gap-3 text-sm font-bold"
+                >
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-card">
+                    <Icon className="h-4 w-4 text-espresso" />
+                  </span>
+                  {item.name}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

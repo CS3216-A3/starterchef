@@ -76,10 +76,11 @@ export default async function TodayPage({
       <section className="flex flex-col gap-4">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
-            What can we cook today?
+            What can we cook today
+            {profile?.display_name ? `, ${profile.display_name}` : ""}?
           </h1>
           <p className="mt-1 text-lg font-semibold text-espresso-light">
-            Good food starts with what you have.
+            Your start to great cooking.
           </p>
         </div>
         <Suspense fallback={null}>

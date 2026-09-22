@@ -59,9 +59,10 @@ export function OnboardingWizard({ profile }: { profile: ProfileRow | null }) {
   const [restrictions, setRestrictions] = useState<string[]>(
     profile?.dietary_restrictions ?? [],
   );
-  const [allergiesText, setAllergiesText] = useState(
-    (profile?.allergies ?? []).join(", "),
+  const [allergies, setAllergies] = useState<string[]>(
+    profile?.allergies ?? [],
   );
+  const [allergyDraft, setAllergyDraft] = useState("");
 
   function toggleRestriction(option: string) {
     setRestrictions((prev) =>
@@ -76,7 +77,7 @@ export function OnboardingWizard({ profile }: { profile: ProfileRow | null }) {
       const res = await completeOnboarding({
         displayName,
         dietaryRestrictions: restrictions,
-        allergies: allergiesText.split(","),
+        allergies,
         skillLevel,
         householdSize,
       });
@@ -212,16 +213,49 @@ export function OnboardingWizard({ profile }: { profile: ProfileRow | null }) {
               })}
             </div>
           </fieldset>
-          <label className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2">
             <span className="text-sm font-extrabold">Allergies</span>
+            {allergies.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {allergies.map((allergy) => (
+                  <span
+                    key={allergy}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-flame-soft px-3 py-1.5 text-sm font-bold"
+                  >
+                    {allergy}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAllergies((prev) =>
+                          prev.filter((a) => a !== allergy),
+                        )
+                      }
+                      aria-label={`Remove ${allergy}`}
+                      className="text-espresso-light hover:text-flame"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
             <input
               type="text"
-              value={allergiesText}
-              onChange={(e) => setAllergiesText(e.target.value)}
-              placeholder="e.g. peanuts, shellfish — comma separated"
+              value={allergyDraft}
+              onChange={(e) => setAllergyDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" && e.key !== ",") return;
+                e.preventDefault();
+                const value = allergyDraft.trim().replace(/,$/, "");
+                if (value && !allergies.includes(value)) {
+                  setAllergies((prev) => [...prev, value]);
+                }
+                setAllergyDraft("");
+              }}
+              placeholder="Type an allergy and press Enter — e.g. peanuts"
               className={inputClass}
             />
-          </label>
+          </div>
         </div>
       )}
 
