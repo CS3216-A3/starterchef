@@ -149,7 +149,7 @@ export default async function TodayPage({
                 : "No catalogue recipes"}
             </h2>
             <Link
-              href="/recipes"
+              href="/recipes/browse"
               className="inline-flex items-center gap-1 text-sm font-bold text-espresso-light hover:text-espresso"
             >
               See more recipes <ArrowRight className="h-4 w-4" />
