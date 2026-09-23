@@ -2,7 +2,7 @@ import { z } from "zod";
 import { measuredGenerate } from "@/lib/ai/instrument";
 import { getModel } from "@/lib/ai/model";
 import { renderPrompt } from "@/lib/ai/prompts";
-import { withAiRoute } from "@/lib/ai/route";
+import { AI_OPERATION_COSTS, withAiRoute } from "@/lib/ai/route";
 import { assistantReplySchema } from "@/lib/ai/schemas/assistant";
 import { getCookingMemory, logSessionEvent } from "@/lib/session-events";
 
@@ -28,7 +28,7 @@ const requestSchema = z.object({
  */
 export const POST = withAiRoute({
   schema: requestSchema,
-  cost: 1,
+  cost: AI_OPERATION_COSTS.assistant,
   async loadContext({ supabase, user }) {
     const [memory, { data: profile }] = await Promise.all([
       getCookingMemory(supabase, user.id),

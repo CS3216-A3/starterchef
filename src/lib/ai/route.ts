@@ -6,6 +6,18 @@ import { createClient } from "@/lib/supabase/server";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
+export const AI_OPERATION_COSTS = {
+  "kitchen-voice": 1,
+  assistant: 1,
+  "realtime-session": 1,
+  suggestions: 2,
+  edit: 2,
+  adapt: 2,
+  "step-check": 2,
+  scan: 3,
+  import: 3,
+} as const;
+
 interface RouteContext<TInput, TTrusted> {
   input: TInput;
   trusted: TTrusted;

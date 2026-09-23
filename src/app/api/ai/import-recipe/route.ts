@@ -4,7 +4,7 @@ import { scrapeRecipe } from "recipe-scrapers";
 import { measuredGenerate } from "@/lib/ai/instrument";
 import { getModel } from "@/lib/ai/model";
 import { renderPrompt } from "@/lib/ai/prompts";
-import { withAiRoute } from "@/lib/ai/route";
+import { AI_OPERATION_COSTS, withAiRoute } from "@/lib/ai/route";
 import { importedRecipeSchema } from "@/lib/ai/schemas/import";
 import { apiError } from "@/lib/api-error";
 
@@ -63,7 +63,7 @@ export const maxDuration = 120;
 
 export const POST = withAiRoute({
   schema: requestSchema,
-  cost: 3,
+  cost: AI_OPERATION_COSTS.import,
   async handler({ input }) {
     const generateArgs = await buildGenerateArgs(input);
     if (!generateArgs.ok) {
@@ -84,19 +84,6 @@ export const POST = withAiRoute({
     });
   },
 });
-/* Removed legacy per-route error handling:
-  catch (err) {
-    const raw = friendlyAiError(err, "Recipe import failed");
-    // Model/provider failures on video input are common (private video,
-    // region lock, unsupported format) — translate them into something a
-    // user can act on instead of a raw provider error.
-    const message = isVideo
-      ? "We couldn't read that video. Make sure the YouTube video is public, or try a shorter clip or a different link."
-      : raw;
-    return NextResponse.json({ error: message }, { status: 502 });
-  }
-*/
-
 type GenerateArgsResult =
   | { ok: true; args: Parameters<typeof generateObject>[0]; imageUrl?: string }
   | { ok: false; error: string; status: number };

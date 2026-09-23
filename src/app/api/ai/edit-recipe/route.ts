@@ -2,7 +2,7 @@ import { generateText, stepCountIs } from "ai";
 import { z } from "zod";
 import { getModel } from "@/lib/ai/model";
 import { renderPrompt } from "@/lib/ai/prompts";
-import { withAiRoute } from "@/lib/ai/route";
+import { AI_OPERATION_COSTS, withAiRoute } from "@/lib/ai/route";
 import {
   createRecipeEditTools,
   type EditableRecipe,
@@ -44,7 +44,7 @@ const requestSchema = z.object({
  */
 export const POST = withAiRoute({
   schema: requestSchema,
-  cost: 2,
+  cost: AI_OPERATION_COSTS.edit,
   async loadContext({ supabase, user }) {
     const { data, error } = await supabase
       .from("profiles")

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { measuredGenerate } from "@/lib/ai/instrument";
 import { getModel } from "@/lib/ai/model";
 import { renderPrompt } from "@/lib/ai/prompts";
-import { withAiRoute } from "@/lib/ai/route";
+import { AI_OPERATION_COSTS, withAiRoute } from "@/lib/ai/route";
 import { stepCheckSchema, type StepCheck } from "@/lib/ai/schemas/cooking";
 import { logSessionEvent } from "@/lib/session-events";
 import { createClient } from "@/lib/supabase/server";
@@ -117,7 +117,7 @@ async function uploadCheckpointPhoto(
  */
 export const POST = withAiRoute({
   schema: requestSchema,
-  cost: 2,
+  cost: AI_OPERATION_COSTS["step-check"],
   async loadContext({ input, supabase }) {
     if (!input.sessionId) return [];
     const { data, error } = await supabase

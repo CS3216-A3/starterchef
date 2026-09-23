@@ -2,7 +2,7 @@ import { z } from "zod";
 import { measuredGenerate } from "@/lib/ai/instrument";
 import { getModel } from "@/lib/ai/model";
 import { renderPrompt } from "@/lib/ai/prompts";
-import { withAiRoute } from "@/lib/ai/route";
+import { AI_OPERATION_COSTS, withAiRoute } from "@/lib/ai/route";
 import { kitchenVoiceSchema } from "@/lib/ai/schemas/kitchen-scan";
 
 const requestSchema = z.object({
@@ -17,7 +17,7 @@ const requestSchema = z.object({
  */
 export const POST = withAiRoute({
   schema: requestSchema,
-  cost: 1,
+  cost: AI_OPERATION_COSTS["kitchen-voice"],
   async handler({ input }) {
     const { object } = await measuredGenerate("kitchen-voice", {
       model: getModel("kitchen-voice"),

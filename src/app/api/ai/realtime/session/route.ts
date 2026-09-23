@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { withAiRoute } from "@/lib/ai/route";
+import { AI_OPERATION_COSTS, withAiRoute } from "@/lib/ai/route";
 
 const requestSchema = z.object({
   capability: z.literal("cooking-assistant"),
@@ -37,7 +37,7 @@ function getRealtimeConfig() {
 
 export const POST = withAiRoute({
   schema: requestSchema,
-  cost: 1,
+  cost: AI_OPERATION_COSTS["realtime-session"],
   async handler() {
     const { provider, model } = getRealtimeConfig();
     if (provider === "openai") {

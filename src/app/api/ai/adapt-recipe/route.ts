@@ -2,7 +2,7 @@ import { z } from "zod";
 import { measuredGenerate } from "@/lib/ai/instrument";
 import { getModel } from "@/lib/ai/model";
 import { renderPrompt } from "@/lib/ai/prompts";
-import { withAiRoute } from "@/lib/ai/route";
+import { AI_OPERATION_COSTS, withAiRoute } from "@/lib/ai/route";
 import { adaptedRecipeSchema } from "@/lib/ai/schemas/recipe";
 
 const requestSchema = z.object({
@@ -37,7 +37,7 @@ const requestSchema = z.object({
  */
 export const POST = withAiRoute({
   schema: requestSchema,
-  cost: 2,
+  cost: AI_OPERATION_COSTS.adapt,
   async handler({ input: { recipe, request: userRequest } }) {
     const recipeJson = JSON.stringify(recipe, null, 1);
 

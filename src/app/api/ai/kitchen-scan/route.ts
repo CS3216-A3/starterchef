@@ -2,7 +2,7 @@ import { z } from "zod";
 import { measuredGenerate } from "@/lib/ai/instrument";
 import { getModel } from "@/lib/ai/model";
 import { renderPrompt } from "@/lib/ai/prompts";
-import { withAiRoute } from "@/lib/ai/route";
+import { AI_OPERATION_COSTS, withAiRoute } from "@/lib/ai/route";
 import { kitchenScanSchema } from "@/lib/ai/schemas/kitchen-scan";
 
 const requestSchema = z.object({ image: z.string().min(1).max(12_000_000) });
@@ -15,7 +15,7 @@ const requestSchema = z.object({ image: z.string().min(1).max(12_000_000) });
  */
 export const POST = withAiRoute({
   schema: requestSchema,
-  cost: 3,
+  cost: AI_OPERATION_COSTS.scan,
   async handler({ input: { image } }) {
     const { object } = await measuredGenerate("kitchen-scan", {
       model: getModel("kitchen-scan"),
