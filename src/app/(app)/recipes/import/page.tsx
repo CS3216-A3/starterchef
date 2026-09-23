@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { FileImage, Link2, Sparkles, Type, Video } from "lucide-react";
@@ -39,6 +39,24 @@ export default function ImportRecipePage() {
   >(null);
   const [error, setError] = useState<string | null>(null);
   const [reviewDraftId, setReviewDraftId] = useState<string | null>(null);
+
+  // A durable draft can outlive a browser refresh. Keep the opaque ID in the
+  // URL so "check back later" is an actual usable path, while the API still
+  // performs the ownership check before revealing any review state.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const draftId = new URLSearchParams(window.location.search).get("draft");
+      if (draftId) setReviewDraftId(draftId);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!reviewDraftId) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("draft", reviewDraftId);
+    window.history.replaceState(null, "", url);
+  }, [reviewDraftId]);
 
   async function handleExtract(e: React.FormEvent) {
     e.preventDefault();

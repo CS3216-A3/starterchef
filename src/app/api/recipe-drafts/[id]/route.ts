@@ -14,7 +14,7 @@ export const GET = withProtectedRoute(
     const { data, error } = await supabase
       .from("recipe_drafts")
       .select(
-        "id,status,failure_code,verification,accepted_recipe_id,expires_at,restart_count",
+        "id,status,failure_code,verification,accepted_recipe_id,expires_at,restart_count,updated_at",
       )
       .eq("id", id)
       .maybeSingle();
@@ -40,6 +40,7 @@ export const GET = withProtectedRoute(
       acceptedRecipeId: data.accepted_recipe_id,
       restartCount: data.restart_count,
       expiresAt: data.expires_at,
+      updatedAt: data.updated_at,
     });
   },
 );

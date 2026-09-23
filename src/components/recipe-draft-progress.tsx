@@ -25,6 +25,7 @@ type DraftResponse = {
   failureCode: string | null;
   restartCount?: number;
   acceptedRecipeId: string | null;
+  updatedAt: string;
   review: {
     summary?: string;
     verdict?: string;
@@ -74,6 +75,8 @@ export function RecipeDraftProgress({ draftId }: { draftId: string }) {
   const [draft, setDraft] = useState<DraftResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     let cancelled = false;
@@ -107,7 +110,12 @@ export function RecipeDraftProgress({ draftId }: { draftId: string }) {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [draftId]);
+  }, [draftId, refreshNonce]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   async function decide(action: "accept" | "reject") {
     setActing(true);
@@ -173,6 +181,14 @@ export function RecipeDraftProgress({ draftId }: { draftId: string }) {
     ["blocked", "failed_permanent", "failed_retryable", "rejected"].includes(
       draft.status,
     );
+  const secondsSinceUpdate = draft
+    ? Math.max(
+        0,
+        Math.floor((now - new Date(draft.updatedAt).getTime()) / 1000),
+      )
+    : 0;
+  const takingLonger =
+    draft && !isTerminal(draft.status) && secondsSinceUpdate >= 90;
 
   return (
     <section
@@ -197,6 +213,12 @@ export function RecipeDraftProgress({ draftId }: { draftId: string }) {
               ? STAGES[Math.max(stage, 0)]?.detail
               : "Connecting to your recipe review…"}
         </p>
+        {draft && !failure && (
+          <p className="mt-2 text-xs font-bold text-espresso-light">
+            Live status: last workflow update{" "}
+            {formatElapsed(secondsSinceUpdate)} ago.
+          </p>
+        )}
       </div>
 
       <ol className="flex flex-col gap-3">
@@ -237,6 +259,31 @@ export function RecipeDraftProgress({ draftId }: { draftId: string }) {
           ))}
         </ul>
       ) : null}
+
+      {takingLonger && (
+        <div className="rounded-2xl bg-oat p-3 text-sm font-semibold text-espresso-light">
+          <p className="font-extrabold text-espresso">
+            Still working on this step
+          </p>
+          <p className="mt-1">
+            The AI provider may be retrying because it is busy. This review is
+            saved securely: you can leave this page and return to this same URL
+            later. If the retries are exhausted, this page will offer a safe
+            retry without another upload.
+          </p>
+        </div>
+      )}
+
+      {!failure && (
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={() => setRefreshNonce((value) => value + 1)}
+          disabled={acting}
+        >
+          Refresh status
+        </Button>
+      )}
 
       {draft?.status === "awaiting_user_acceptance" && (
         <div className="flex gap-3">
@@ -303,4 +350,11 @@ function failureMessage(status: DraftStatus, code: string | null) {
   if (status === "blocked")
     return "We found a safety or dietary issue, so this recipe cannot be saved.";
   return "This review is no longer available.";
+}
+
+function formatElapsed(seconds: number) {
+  if (seconds < 10) return "just now";
+  if (seconds < 60) return `${seconds} seconds`;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes} minute${minutes === 1 ? "" : "s"}`;
 }

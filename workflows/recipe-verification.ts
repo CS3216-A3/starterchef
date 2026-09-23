@@ -41,6 +41,9 @@ export async function recipeVerificationWorkflow(draftId: string) {
 
 async function claimDraft(draftId: string) {
   "use step";
+  logWorkflowEvent("recipe_workflow_step_started", draftId, {
+    stage: "acquiring_source",
+  });
   const admin = createAdminClient();
   const { data } = await admin
     .from("recipe_drafts")
@@ -91,6 +94,9 @@ async function claimDraft(draftId: string) {
 
 async function acquireOrGenerateRecipe(draftId: string) {
   "use step";
+  logWorkflowEvent("recipe_workflow_step_started", draftId, {
+    stage: "extracting_or_generating",
+  });
   const admin = createAdminClient();
   const draft = await loadDraft(admin, draftId);
   if (draft.canonical_recipe) return;
@@ -180,6 +186,9 @@ async function acquireOrGenerateRecipe(draftId: string) {
 
 async function deterministicGuard(draftId: string, phase: string) {
   "use step";
+  logWorkflowEvent("recipe_workflow_step_started", draftId, {
+    stage: `deterministic_guard_${phase}`,
+  });
   const admin = createAdminClient();
   const draft = await loadDraft(admin, draftId);
   const recipe = importedRecipeSchema.safeParse(draft.canonical_recipe);
@@ -220,6 +229,9 @@ async function deterministicGuard(draftId: string, phase: string) {
 
 async function geminiVerify(draftId: string, stage: "initial" | "final") {
   "use step";
+  logWorkflowEvent("recipe_workflow_step_started", draftId, {
+    stage: `gemini_${stage}_verification`,
+  });
   const admin = createAdminClient();
   const draft = await loadDraft(admin, draftId);
   const result = await measuredGenerate(`recipe-gemini-${stage}-verification`, {
@@ -256,6 +268,9 @@ async function geminiVerify(draftId: string, stage: "initial" | "final") {
 
 async function adjudicate(draftId: string) {
   "use step";
+  logWorkflowEvent("recipe_workflow_step_started", draftId, {
+    stage: "openai_adjudication",
+  });
   const admin = createAdminClient();
   const draft = await loadDraft(admin, draftId);
   const decision = await measuredGenerate("recipe-openai-adjudication", {
@@ -332,6 +347,9 @@ async function adjudicate(draftId: string) {
 
 async function finalizeDraft(draftId: string) {
   "use step";
+  logWorkflowEvent("recipe_workflow_step_started", draftId, {
+    stage: "finalizing",
+  });
   const admin = createAdminClient();
   const draft = await loadDraft(admin, draftId);
   const final = draft.verification?.gemini_final as
@@ -410,6 +428,9 @@ async function recordWorkflowFailure(draftId: string, message: string) {
   const temporary = /high demand|rate limit|temporar|unavailable|retry/i.test(
     message,
   );
+  logWorkflowEvent("recipe_workflow_failed", draftId, {
+    failureCategory: workflowFailureCategory(message),
+  });
   await admin
     .from("recipe_drafts")
     .update({
@@ -426,4 +447,25 @@ async function recordWorkflowFailure(draftId: string, message: string) {
       updated_at: new Date().toISOString(),
     })
     .eq("id", draftId);
+}
+
+/** Logs opaque IDs and safe failure categories only: never prompts, source
+ * media, provider responses, or credentials. These events are searchable in
+ * Vercel logs alongside the Workflow step logs. */
+function logWorkflowEvent(
+  event: string,
+  draftId: string,
+  details: Record<string, string> = {},
+) {
+  console.info(JSON.stringify({ event, draftId, ...details }));
+}
+
+function workflowFailureCategory(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  if (/high demand|rate limit|temporar|unavailable|retry/i.test(message))
+    return "provider_temporarily_unavailable";
+  if (/api key|not configured|authentication|unauthorized/i.test(message))
+    return "provider_configuration";
+  if (/allowlist|model/i.test(message)) return "model_configuration";
+  return "workflow_failed";
 }
