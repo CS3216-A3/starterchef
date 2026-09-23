@@ -39,20 +39,40 @@ const features = [
 
 const tiers = [
   {
-    name: "Home cook",
+    name: "Free Starter",
     price: "Free",
-    blurb: "Everything you need to start cooking with what's in your kitchen.",
-    points: ["Kitchen scanning", "Recipe suggestions", "Step-by-step cooking"],
+    blurb: "1,000 welcome credits — a real chance to try the AI features.",
+    points: [
+      "Kitchen profile & recipe book",
+      "Timers & manual recipe entry",
+      "Basic step navigation",
+    ],
   },
   {
-    name: "Sous-chef",
-    price: "$8/mo",
-    blurb: "For cooks who want a sharper assistant and deeper personalisation.",
+    name: "Plus",
+    price: "S$4.90/mo",
+    priceNote: "or S$39.90/year",
+    blurb: "2,500 credits every month, plus everything in Free Starter.",
     points: [
-      "Voice assistant during cooking",
-      "Photo checkpoints and watch-me-cook tips",
-      "Adaptive skill progression",
+      "Personal recipe versions",
+      "Progress history",
+      "Priority AI processing",
     ],
+  },
+];
+
+const topUps = [
+  {
+    name: "Small",
+    price: "S$2.90",
+    credits: "1,000 credits",
+    blurb: "Occasional extra AI help.",
+  },
+  {
+    name: "Large",
+    price: "S$7.90",
+    credits: "3,000 credits",
+    blurb: "Better value for frequent visual/video use.",
   },
 ];
 
@@ -116,9 +136,13 @@ export default function LandingPage() {
         id="pricing"
         className="mx-auto w-full max-w-5xl scroll-mt-20 px-4 pb-24 sm:px-6"
       >
-        <h2 className="mb-8 text-center text-2xl font-extrabold sm:text-3xl">
+        <h2 className="mb-2 text-center text-2xl font-extrabold sm:text-3xl">
           Simple pricing
         </h2>
+        <p className="mx-auto mb-8 max-w-md text-center text-sm font-semibold text-espresso-light">
+          AI features (scanning, suggestions, voice, adaptations) run on
+          credits. Everything else is free, always.
+        </p>
         <div className="grid gap-4 sm:grid-cols-2">
           {tiers.map((tier) => (
             <div
@@ -128,6 +152,11 @@ export default function LandingPage() {
               <h3 className="text-lg font-extrabold">{tier.name}</h3>
               <p className="mt-1 text-3xl font-extrabold text-flame">
                 {tier.price}
+                {tier.priceNote && (
+                  <span className="ml-1.5 text-sm font-bold text-espresso-light">
+                    {tier.priceNote}
+                  </span>
+                )}
               </p>
               <p className="mt-2 text-sm font-semibold text-espresso-light">
                 {tier.blurb}
@@ -140,6 +169,30 @@ export default function LandingPage() {
                   </li>
                 ))}
               </ul>
+            </div>
+          ))}
+        </div>
+
+        <h3 className="mt-8 mb-4 text-center text-sm font-extrabold tracking-wide text-espresso-light uppercase">
+          Need more credits? Top up any time
+        </h3>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {topUps.map((topUp) => (
+            <div
+              key={topUp.name}
+              className="flex items-center justify-between gap-4 rounded-2xl bg-oat p-4"
+            >
+              <div>
+                <p className="text-sm font-extrabold">
+                  {topUp.name} · {topUp.credits}
+                </p>
+                <p className="text-xs font-semibold text-espresso-light">
+                  {topUp.blurb}
+                </p>
+              </div>
+              <p className="shrink-0 text-lg font-extrabold text-flame">
+                {topUp.price}
+              </p>
             </div>
           ))}
         </div>
