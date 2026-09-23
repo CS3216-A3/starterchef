@@ -1,5 +1,13 @@
 # StarterChef end-to-end phase execution plan
 
+> Phase 3/4 implementation note (September 2026): migrations `0028` and
+> `0029` and the runbook in [phase-3-4-rollout.md](phase-3-4-rollout.md)
+> supersede the historical Phase 3/4 policy below. Recipe text/vision uses
+> `AI_PROVIDER` with `RECIPE_VERIFICATION_ROUTING=single` by default; public
+> HTTP(S) recipe URLs remain permitted with network destination checks. Live
+> voice is OpenAI-primary with one pre-connection Gemini fallback. Cross-
+> provider recipe verification and strict source allowlisting are deferred.
+
 ## Purpose and source of truth
 
 This is the implementation order for the remote baseline at `origin/main`
