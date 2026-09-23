@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { KitchenItemKind } from "@/lib/types";
 import { pantryItemsSchema } from "@/lib/validation/pantry";
+import { uuidSchema } from "@/lib/validation/actions";
+import { safeActionFailure } from "@/lib/action-result";
 
 export interface KitchenItemInput {
   kind: KitchenItemKind;
@@ -32,7 +34,7 @@ export async function saveKitchenItems(items: KitchenItemInput[]) {
   const { data, error } = await supabase.rpc("merge_kitchen_items", {
     p_items: parsed.data,
   });
-  if (error) return { error: "Could not save pantry items" };
+  if (error) return safeActionFailure("save pantry items", error);
 
   revalidateKitchen();
   return {
@@ -54,8 +56,8 @@ export async function addKitchenItem(formData: FormData) {
 }
 
 export async function removeKitchenItem(formData: FormData) {
-  const id = String(formData.get("id") ?? "");
-  if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(id)) return;
+  const parsedId = uuidSchema.safeParse(formData.get("id"));
+  if (!parsedId.success) return;
 
   const supabase = await createClient();
   const {
@@ -66,8 +68,11 @@ export async function removeKitchenItem(formData: FormData) {
   const { error } = await supabase
     .from("kitchen_items")
     .delete()
-    .eq("id", id)
+    .eq("id", parsedId.data)
     .eq("user_id", user.id);
-  if (error) return;
+  if (error) {
+    safeActionFailure("remove pantry item", error);
+    return;
+  }
   revalidateKitchen();
 }
