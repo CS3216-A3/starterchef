@@ -39,6 +39,7 @@ export default function ImportRecipePage() {
   >(null);
   const [error, setError] = useState<string | null>(null);
   const [reviewDraftId, setReviewDraftId] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   // A durable draft can outlive a browser refresh. Keep the opaque ID in the
   // URL so "check back later" is an actual usable path, while the API still
@@ -138,23 +139,32 @@ export default function ImportRecipePage() {
     const file = e.target.files?.[0];
     if (!file) return;
     setError(null);
+    setState((current) => ({
+      ...current,
+      photoInputId: "",
+      photoDataUrl: "",
+    }));
     const form = new FormData();
     form.set("image", file);
-    const res = await fetch("/api/recipe-inputs", {
-      method: "POST",
-      body: form,
-    });
-    if (!res.ok) {
-      setError(await getApiErrorMessage(res, "Could not upload recipe image"));
-      return;
+    setUploadProgress(0);
+    try {
+      const body = await uploadRecipeInput(form, setUploadProgress);
+      const inputId = body.inputId;
+      if (!inputId) throw new Error("Could not upload recipe image");
+      setState((current) => ({
+        ...current,
+        photoInputId: inputId,
+        photoDataUrl: "",
+      }));
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not upload recipe image",
+      );
+    } finally {
+      setUploadProgress(null);
     }
-    const body = (await res.json()) as { inputId?: string };
-    const inputId = body.inputId;
-    if (!inputId) {
-      setError("Could not upload recipe image");
-      return;
-    }
-    setState((s) => ({ ...s, photoInputId: inputId, photoDataUrl: "" }));
   }
 
   function handleVideoFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -242,9 +252,40 @@ export default function ImportRecipePage() {
                 type="file"
                 accept="image/*"
                 onChange={handlePhotoFile}
+                disabled={uploadProgress !== null}
                 className="rounded-2xl border-2 border-dashed border-espresso/20 bg-card p-4 text-sm font-semibold file:mr-4 file:rounded-full file:bg-flame file:px-4 file:py-2 file:text-white"
                 required
               />
+              {uploadProgress !== null && (
+                <div className="flex flex-col gap-2" aria-live="polite">
+                  <div className="flex items-center justify-between text-xs font-extrabold text-espresso-light">
+                    <span>
+                      {uploadProgress === 100
+                        ? "Finishing secure upload…"
+                        : "Uploading recipe image…"}
+                    </span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <div
+                    className="h-2 overflow-hidden rounded-full bg-oat"
+                    role="progressbar"
+                    aria-label="Recipe image upload progress"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={uploadProgress}
+                  >
+                    <div
+                      className="h-full rounded-full bg-flame transition-[width] duration-150"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+              {state.photoInputId && uploadProgress === null && (
+                <p className="text-sm font-bold text-espresso-light">
+                  Recipe image uploaded. You can now extract it.
+                </p>
+              )}
               {state.photoDataUrl && (
                 <Image
                   src={state.photoDataUrl}
@@ -319,6 +360,8 @@ export default function ImportRecipePage() {
             type="submit"
             disabled={
               loading ||
+              uploadProgress !== null ||
+              (state.source === "photo" && !state.photoInputId) ||
               (state.source === "video" &&
                 !state.videoUrl &&
                 !state.videoDataUrl)
@@ -408,6 +451,36 @@ export default function ImportRecipePage() {
       )}
     </div>
   );
+}
+
+function uploadRecipeInput(
+  form: FormData,
+  onProgress: (progress: number) => void,
+): Promise<{ inputId?: string }> {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", "/api/recipe-inputs");
+    request.responseType = "json";
+    request.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+    };
+    request.onerror = () => reject(new Error("Could not upload recipe image"));
+    request.onload = () => {
+      const body = request.response as {
+        inputId?: string;
+        error?: { message?: string };
+      } | null;
+      if (request.status >= 200 && request.status < 300) {
+        resolve(body ?? {});
+        return;
+      }
+      reject(
+        new Error(body?.error?.message ?? "Could not upload recipe image"),
+      );
+    };
+    request.send(form);
+  });
 }
 
 function SourceButton({

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { importedRecipeSchema } from "@/lib/ai/schemas/import";
 import { protectedError, withProtectedRoute } from "@/lib/protected-route";
 
 export const GET = withProtectedRoute(
@@ -14,7 +15,7 @@ export const GET = withProtectedRoute(
     const { data, error } = await supabase
       .from("recipe_drafts")
       .select(
-        "id,status,failure_code,verification,accepted_recipe_id,expires_at,restart_count,updated_at",
+        "id,status,failure_code,canonical_recipe,verification,accepted_recipe_id,expires_at,restart_count,updated_at",
       )
       .eq("id", id)
       .maybeSingle();
@@ -32,15 +33,55 @@ export const GET = withProtectedRoute(
         "NOT_FOUND",
         "Recipe draft not found",
       );
+    // A draft recipe is deliberately not exposed while it is still being
+    // generated or checked. Once it reaches review, however, it is the exact
+    // server-owned recipe that the user is deciding whether to accept.
+    const parsedRecipe = importedRecipeSchema.safeParse(
+      normalizeLegacyCanonicalRecipe(data.canonical_recipe),
+    );
+    const recipe =
+      (data.status === "awaiting_user_acceptance" ||
+        data.status === "accepted") &&
+      parsedRecipe.success
+        ? parsedRecipe.data
+        : null;
     return Response.json({
       draftId: data.id,
       status: data.status,
       failureCode: data.failure_code,
       review: data.verification,
       acceptedRecipeId: data.accepted_recipe_id,
+      recipe,
       restartCount: data.restart_count,
       expiresAt: data.expires_at,
       updatedAt: data.updated_at,
     });
   },
 );
+
+/** Recipes produced before strict OpenAI schemas used omitted optional fields.
+ * Preserve those completed reviews by converting only those historical
+ * omissions to the explicit nulls used by the current canonical schema. */
+function normalizeLegacyCanonicalRecipe(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const recipe = value as Record<string, unknown>;
+  return {
+    ...recipe,
+    description: recipe.description ?? null,
+    tags: recipe.tags ?? null,
+    whyGood: recipe.whyGood ?? null,
+    steps: Array.isArray(recipe.steps)
+      ? recipe.steps.map((step) => {
+          if (!step || typeof step !== "object" || Array.isArray(step))
+            return step;
+          const current = step as Record<string, unknown>;
+          return {
+            ...current,
+            durationSeconds: current.durationSeconds ?? null,
+            tip: current.tip ?? null,
+            photoCheckpoint: current.photoCheckpoint ?? null,
+          };
+        })
+      : recipe.steps,
+  };
+}

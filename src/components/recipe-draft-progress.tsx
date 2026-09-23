@@ -6,6 +6,27 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/button";
 import { getApiErrorMessage } from "@/lib/client-api-error";
 
+type DraftRecipe = {
+  title: string;
+  description?: string;
+  minutes: number;
+  difficulty: "easy" | "medium" | "hard";
+  servings: number;
+  ingredients: string[];
+  equipment: string[];
+  steps: {
+    index: number;
+    title: string;
+    instruction: string;
+    durationSeconds?: number;
+    ingredientsUsed: string[];
+    tip?: string;
+    photoCheckpoint?: string;
+  }[];
+  tags: string[];
+  whyGood?: string;
+};
+
 type DraftStatus =
   | "queued"
   | "acquiring_source"
@@ -25,6 +46,7 @@ type DraftResponse = {
   failureCode: string | null;
   restartCount?: number;
   acceptedRecipeId: string | null;
+  recipe: DraftRecipe | null;
   updatedAt: string;
   review: {
     summary?: string;
@@ -267,6 +289,10 @@ export function RecipeDraftProgress({ draftId }: { draftId: string }) {
         </ul>
       ) : null}
 
+      {draft?.status === "awaiting_user_acceptance" && draft.recipe && (
+        <DraftRecipePreview recipe={draft.recipe} />
+      )}
+
       {takingLonger && (
         <div className="rounded-2xl bg-oat p-3 text-sm font-semibold text-espresso-light">
           <p className="font-extrabold text-espresso">
@@ -338,6 +364,74 @@ export function RecipeDraftProgress({ draftId }: { draftId: string }) {
   );
 }
 
+function DraftRecipePreview({ recipe }: { recipe: DraftRecipe }) {
+  return (
+    <article className="flex flex-col gap-5 rounded-2xl bg-oat p-4">
+      <div>
+        <p className="text-xs font-extrabold tracking-wide text-flame uppercase">
+          Recipe to save
+        </p>
+        <h3 className="mt-1 text-lg font-extrabold">{recipe.title}</h3>
+        {recipe.description && (
+          <p className="mt-1 text-sm font-semibold text-espresso-light">
+            {recipe.description}
+          </p>
+        )}
+        <p className="mt-2 text-sm font-bold text-espresso-light">
+          {recipe.minutes} min · {recipe.difficulty} · Serves {recipe.servings}
+        </p>
+      </div>
+
+      <section>
+        <h4 className="text-xs font-extrabold tracking-wide text-espresso-light uppercase">
+          Ingredients
+        </h4>
+        <ul className="mt-2 grid gap-1 text-sm font-semibold sm:grid-cols-2">
+          {recipe.ingredients.map((ingredient) => (
+            <li key={ingredient}>{ingredient}</li>
+          ))}
+        </ul>
+      </section>
+
+      {recipe.equipment.length > 0 && (
+        <section>
+          <h4 className="text-xs font-extrabold tracking-wide text-espresso-light uppercase">
+            Equipment
+          </h4>
+          <p className="mt-2 text-sm font-semibold text-espresso-light">
+            {recipe.equipment.join(" · ")}
+          </p>
+        </section>
+      )}
+
+      <section>
+        <h4 className="text-xs font-extrabold tracking-wide text-espresso-light uppercase">
+          Steps
+        </h4>
+        <ol className="mt-2 flex flex-col gap-3">
+          {recipe.steps.map((step) => (
+            <li key={step.index} className="text-sm font-semibold">
+              <p className="font-extrabold">
+                <span className="text-flame">{step.index}. </span>
+                {step.title}
+                {step.durationSeconds
+                  ? ` (${formatStepDuration(step.durationSeconds)})`
+                  : ""}
+              </p>
+              <p className="mt-1 text-espresso-light">{step.instruction}</p>
+              {step.tip && (
+                <p className="mt-1 text-xs font-bold text-espresso-light">
+                  Tip: {step.tip}
+                </p>
+              )}
+            </li>
+          ))}
+        </ol>
+      </section>
+    </article>
+  );
+}
+
 function isTerminal(status: DraftStatus) {
   return [
     "awaiting_user_acceptance",
@@ -364,4 +458,10 @@ function formatElapsed(seconds: number) {
   if (seconds < 60) return `${seconds} seconds`;
   const minutes = Math.floor(seconds / 60);
   return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+}
+
+function formatStepDuration(seconds: number) {
+  if (seconds < 60) return `${seconds} sec`;
+  const minutes = Math.round(seconds / 60);
+  return `${minutes} min`;
 }
