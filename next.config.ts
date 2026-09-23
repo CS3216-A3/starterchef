@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withWorkflow } from "workflow/next";
 
 const nextConfig: NextConfig = {
   // Route handlers read prompt files via fs — include /prompts in the
@@ -13,4 +14,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withWorkflow(nextConfig);

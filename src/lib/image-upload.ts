@@ -1,4 +1,5 @@
-export const KITCHEN_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+/** Keep multipart requests below Vercel Functions' 4.5 MiB body limit. */
+export const KITCHEN_IMAGE_MAX_BYTES = 4 * 1024 * 1024;
 export const KITCHEN_IMAGE_MAX_DIMENSION = 4096;
 export const KITCHEN_IMAGE_MAX_PIXELS = 12_000_000;
 

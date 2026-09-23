@@ -19,6 +19,7 @@ export function ScanKitchenButton() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const idempotencyKeyRef = useRef<string | null>(null);
   const [state, setState] = useState<ScanState>({ status: "idle" });
 
   async function startCamera() {
@@ -79,7 +80,17 @@ export function ScanKitchenButton() {
     try {
       const form = new FormData();
       form.set("image", image);
-      form.set("idempotencyKey", crypto.randomUUID());
+      const stored = window.sessionStorage.getItem(
+        "starterchef:kitchen-scan-key",
+      );
+      const idempotencyKey =
+        idempotencyKeyRef.current ?? stored ?? crypto.randomUUID();
+      idempotencyKeyRef.current = idempotencyKey;
+      window.sessionStorage.setItem(
+        "starterchef:kitchen-scan-key",
+        idempotencyKey,
+      );
+      form.set("idempotencyKey", idempotencyKey);
       const res = await fetch("/api/kitchen-scans", {
         method: "POST",
         body: form,
@@ -89,6 +100,7 @@ export function ScanKitchenButton() {
       const body = (await res.json()) as {
         id?: string;
         candidates?: KitchenScanCandidate[];
+        status?: string;
       };
       if (!body.id || !Array.isArray(body.candidates))
         throw new Error("Scan failed");
@@ -97,6 +109,10 @@ export function ScanKitchenButton() {
         scanId: body.id,
         candidates: body.candidates,
       });
+      if (body.status && body.status !== "processing") {
+        window.sessionStorage.removeItem("starterchef:kitchen-scan-key");
+        idempotencyKeyRef.current = null;
+      }
     } catch (err) {
       setState({
         status: "error",
@@ -138,6 +154,8 @@ export function ScanKitchenButton() {
         status: "saved",
         added: body.items?.length ?? accepted.length,
       });
+      window.sessionStorage.removeItem("starterchef:kitchen-scan-key");
+      idempotencyKeyRef.current = null;
       window.location.reload();
     } catch (error) {
       setState({

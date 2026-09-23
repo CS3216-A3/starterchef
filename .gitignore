@@ -51,3 +51,4 @@ AGENTS.local.md
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+/.swc

@@ -68,6 +68,17 @@ export const POST = withAiRoute({
   schema: requestSchema,
   cost: AI_OPERATION_COSTS.import,
   async handler({ input, requestId }) {
+    // Durable imports are created through /api/recipe-drafts. Keeping this
+    // legacy endpoint from accepting a data URL prevents private photos from
+    // being embedded in JSON requests or logs.
+    if (input.source === "photo") {
+      return protectedError(
+        { requestId },
+        410,
+        "INVALID_REQUEST",
+        "Upload the image to a recipe draft instead",
+      );
+    }
     if (
       (input.source === "url" && !isAllowedRecipeUrl(input.url)) ||
       input.source === "video"

@@ -16,6 +16,7 @@ interface ImportState {
   text: string;
   url: string;
   photoDataUrl: string;
+  photoInputId: string;
   videoUrl: string;
   videoDataUrl: string;
 }
@@ -27,6 +28,7 @@ export default function ImportRecipePage() {
     text: "",
     url: "",
     photoDataUrl: "",
+    photoInputId: "",
     videoUrl: "",
     videoDataUrl: "",
   });
@@ -43,6 +45,30 @@ export default function ImportRecipePage() {
     setDraft(null);
 
     try {
+      if (state.source === "photo") {
+        if (!state.photoInputId) {
+          setError("Choose a recipe image first.");
+          return;
+        }
+        const queued = await fetch("/api/recipe-drafts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kind: "photo",
+            inputId: state.photoInputId,
+            idempotencyKey: crypto.randomUUID(),
+          }),
+        });
+        if (!queued.ok)
+          setError(
+            await getApiErrorMessage(queued, "Could not queue recipe review"),
+          );
+        else
+          setError(
+            "Recipe review is queued. Check back shortly for the verified draft.",
+          );
+        return;
+      }
       const body = buildRequestBody(state);
       const res = await fetch("/api/ai/import-recipe", {
         method: "POST",
@@ -89,31 +115,30 @@ export default function ImportRecipePage() {
   async function handlePhotoFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setState((s) => ({ ...s, photoDataUrl: reader.result as string }));
-    };
-    reader.readAsDataURL(file);
+    setError(null);
+    const form = new FormData();
+    form.set("image", file);
+    const res = await fetch("/api/recipe-inputs", {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) {
+      setError(await getApiErrorMessage(res, "Could not upload recipe image"));
+      return;
+    }
+    const body = (await res.json()) as { inputId?: string };
+    const inputId = body.inputId;
+    if (!inputId) {
+      setError("Could not upload recipe image");
+      return;
+    }
+    setState((s) => ({ ...s, photoInputId: inputId, photoDataUrl: "" }));
   }
 
   function handleVideoFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 20 * 1024 * 1024) {
-      setError(
-        "That video is over 20 MB. Trim it or paste a YouTube link instead.",
-      );
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setState((s) => ({
-        ...s,
-        videoDataUrl: reader.result as string,
-        videoUrl: "",
-      }));
-    };
-    reader.readAsDataURL(file);
+    setError("Video imports are not available until a source is approved.");
   }
 
   return (

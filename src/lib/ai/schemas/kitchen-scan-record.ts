@@ -11,6 +11,23 @@ export const scanCandidateSchema = z.object({
   confidence: z.enum(["high", "medium", "low"]),
 });
 
+export const scanCandidatesSchema = z
+  .array(scanCandidateSchema)
+  .max(40)
+  .superRefine((candidates, ctx) => {
+    const seen = new Set<string>();
+    candidates.forEach((candidate, index) => {
+      if (seen.has(candidate.id)) {
+        ctx.addIssue({
+          code: "custom",
+          path: [index, "id"],
+          message: "Candidate IDs must be unique",
+        });
+      }
+      seen.add(candidate.id);
+    });
+  });
+
 export const scanAcceptanceSchema = z
   .array(
     z.object({
@@ -21,4 +38,17 @@ export const scanAcceptanceSchema = z
     }),
   )
   .min(1)
-  .max(100);
+  .max(40)
+  .superRefine((items, ctx) => {
+    const seen = new Set<string>();
+    items.forEach((item, index) => {
+      if (seen.has(item.id)) {
+        ctx.addIssue({
+          code: "custom",
+          path: [index, "id"],
+          message: "Candidates can only be accepted once",
+        });
+      }
+      seen.add(item.id);
+    });
+  });

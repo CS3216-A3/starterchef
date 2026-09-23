@@ -46,7 +46,7 @@ describe("kitchen image validation", () => {
     expect(
       inspectKitchenImage("image/gif", Uint8Array.from([0x47, 0x49, 0x46])),
     ).toBeNull();
-    expect(KITCHEN_IMAGE_MAX_BYTES).toBe(8 * 1024 * 1024);
+    expect(KITCHEN_IMAGE_MAX_BYTES).toBe(4 * 1024 * 1024);
   });
 });
 
