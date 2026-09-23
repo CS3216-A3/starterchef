@@ -1,10 +1,30 @@
 import { z } from "zod";
-import { VOICE_PROVIDERS } from "@/lib/ai/voice";
 import { withAiRoute } from "@/lib/ai/route";
 
 const requestSchema = z.object({
-  provider: z.enum(VOICE_PROVIDERS).refine((value) => value !== "web-speech"),
+  capability: z.literal("cooking-assistant"),
 });
+
+const REALTIME_MODELS = {
+  openai: ["gpt-realtime-2.1-mini", "gpt-realtime-2.1"],
+  gemini: ["gemini-3.8-live"],
+} as const;
+
+function getRealtimeConfig() {
+  const provider = process.env.AI_REALTIME_PROVIDER ?? "openai";
+  if (provider !== "openai" && provider !== "gemini") {
+    throw new Error("Realtime provider is not approved");
+  }
+  const fallback = REALTIME_MODELS[provider][0];
+  const model =
+    provider === "openai"
+      ? (process.env.OPENAI_REALTIME_MODEL ?? fallback)
+      : (process.env.GOOGLE_LIVE_MODEL ?? fallback);
+  if (!(REALTIME_MODELS[provider] as readonly string[]).includes(model)) {
+    throw new Error("Realtime model is not approved");
+  }
+  return { provider, model };
+}
 
 /**
  * POST /api/ai/realtime/session
@@ -18,13 +38,12 @@ const requestSchema = z.object({
 export const POST = withAiRoute({
   schema: requestSchema,
   cost: 1,
-  async handler({ input: { provider } }) {
+  async handler() {
+    const { provider, model } = getRealtimeConfig();
     if (provider === "openai") {
       const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) throw new Error("Realtime provider is unavailable");
 
-      const model =
-        process.env.OPENAI_REALTIME_MODEL ?? "gpt-realtime-2.1-mini";
       const voice = process.env.OPENAI_REALTIME_VOICE ?? "alloy";
 
       const response = await fetch(
@@ -60,7 +79,6 @@ export const POST = withAiRoute({
     if (provider === "gemini") {
       const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
       if (!apiKey) throw new Error("Realtime provider is unavailable");
-      const model = process.env.GOOGLE_LIVE_MODEL ?? "gemini-3.8-live";
       const expiresAt = new Date(Date.now() + 20 * 60 * 1000).toISOString();
       const tokenResponse = await fetch(
         `https://generativelanguage.googleapis.com/v1alpha/authTokens?key=${encodeURIComponent(apiKey)}`,
