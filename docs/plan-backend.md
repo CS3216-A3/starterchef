@@ -63,9 +63,10 @@ Migration history is immutable. The next new migrations are exactly:
 
 1. `0018_security_and_pantry.sql`
 2. `0019_private_user_media.sql`
-3. `0020_recipe_drafts_and_verification.sql`
-4. `0021_session_integrity_and_retention.sql`
-5. `0022_ai_telemetry_and_capability_routing.sql`
+3. `0020_kitchen_scans_and_recommendations.sql`
+4. `0021_recipe_drafts_and_verification.sql`
+5. `0022_session_integrity_and_retention.sql`
+6. `0023_ai_telemetry_and_capability_routing.sql`
 
 If either former local migration named `0006` or `0007` has already been
 applied to a development project, do not rename, delete, replay, or reset it.
@@ -352,7 +353,17 @@ update its database path, and delete the public original. Only after the audit
 reports zero user-prefixed public objects may the public-read policy be limited
 to catalogue paths.
 
-### 5.3 `0020_recipe_drafts_and_verification.sql`
+### 5.3 `0020_kitchen_scans_and_recommendations.sql`
+
+Create owned `kitchen_scans` for the private-media flow in section 7.3. It has
+an owner, idempotency key, `processing`/`awaiting_confirmation`/terminal status,
+private object path, validated detections, stable failure code, timestamps, and
+24-hour expiry. Owners may select; protected scan route and confirmation action
+perform every mutation. Index owner recency, `(user_id, idempotency_key)`, and
+expiry. Recommendations remain computed from server-owned stored data; they do
+not need a persistence table in v1.
+
+### 5.4 `0021_recipe_drafts_and_verification.sql`
 
 Extend `recipes`:
 
@@ -444,7 +455,7 @@ fixed search path. It must, in one transaction:
 6. Set the draft to `accepted` and link `accepted_recipe_id`.
 7. Return the recipe ID.
 
-### 5.4 `0021_session_integrity_and_retention.sql`
+### 5.5 `0022_session_integrity_and_retention.sql`
 
 Extend `cooking_sessions`:
 
@@ -474,7 +485,7 @@ notes, and arrays. The client cannot supply the `learned` field. The server
 derives structured learning tags after explicit feedback and uses them only as
 recommendation signals; it does not mutate the explicit profile.
 
-### 5.5 `0022_ai_telemetry_and_capability_routing.sql`
+### 5.6 `0023_ai_telemetry_and_capability_routing.sql`
 
 Extend `ai_calls` with nullable `job_id`, `session_id`, `route`, `stage`,
 `prompt_version`, `provider`, `model`, `capability`, `modality`,
