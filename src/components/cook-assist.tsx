@@ -11,22 +11,15 @@ import {
   VideoOff,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/button";
 import { StepAskBox } from "@/components/step-assist";
 import { VoiceAssistantButton } from "@/components/voice-assistant-button";
 import type { AssistantReply } from "@/lib/ai/schemas/assistant";
 import type { StepCheck } from "@/lib/ai/schemas/cooking";
+import type { CookingSessionRow } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-export interface CookContext {
-  recipeTitle: string;
-  stepTitle: string;
-  instruction: string;
-  photoCheckpoint?: string;
-  recipeId?: string;
-  recipeSlug?: string;
-}
 
 /**
  * All the interactive assists on the cook screen, sharing one camera stream
@@ -37,20 +30,19 @@ export interface CookContext {
  *   assistant can also set timers and jump steps via voice actions.
  */
 export function CookAssist({
-  context,
   sessionId,
   stepIndex,
-  cookUrl,
   totalSteps,
   durationSeconds,
+  version,
+  timerState,
 }: {
-  context: CookContext;
-  sessionId?: string;
+  sessionId: string;
   stepIndex: number;
-  /** e.g. /cook/tomato-egg-stir-fry — used for voice "go to step N". */
-  cookUrl: string;
   totalSteps: number;
   durationSeconds?: number;
+  version: number;
+  timerState: CookingSessionRow["timer_state"];
 }) {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -58,32 +50,25 @@ export function CookAssist({
   const [cameraOn, setCameraOn] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
-  const [check, setCheck] = useState<StepCheck | null>(null);
+  const [check, setCheck] = useState<
+    (StepCheck & { previewUrl?: string | null }) | null
+  >(null);
   // The last frame sent to the model — shown to the user so what the AI saw
   // is never a mystery.
-  const [sentFrame, setSentFrame] = useState<string | null>(null);
-  const [timerSeconds, setTimerSeconds] = useState<number | undefined>(
-    durationSeconds,
-  );
-  // Bumped when a new duration should reset the timer (assistant set one, or
-  // the step's own duration changed). ±1m taps don't touch it — they extend
-  // or shorten a running timer without restarting it.
-  const [timerEpoch, setTimerEpoch] = useState(0);
-
-  // Re-sync when the step's own duration changes (step navigation) — without
-  // this the previous step's timer lingers on steps that don't need one.
-  const [prevDuration, setPrevDuration] = useState(durationSeconds);
-  if (durationSeconds !== prevDuration) {
-    setPrevDuration(durationSeconds);
-    setTimerSeconds(durationSeconds);
-    setTimerEpoch((e) => e + 1);
-  }
+  const [proposal, setProposal] = useState<NonNullable<
+    AssistantReply["action"]
+  > | null>(null);
+  const [checkpointProposal, setCheckpointProposal] = useState<{
+    stepIndex: number;
+    title: string;
+    detail: string;
+  } | null>(null);
+  const [changeError, setChangeError] = useState<string | null>(null);
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     setCameraOn(false);
-    setSentFrame(null);
     setCheck(null);
   }, []);
 
@@ -114,52 +99,41 @@ export function CookAssist({
     }
   }
 
-  /** Grab a JPEG frame from the live camera, or null when it's off. */
-  const snapFrame = useCallback((): string | null => {
+  /** Snap a frame and ask the model whether the step looks right. */
+  async function checkFood() {
     const video = videoRef.current;
-    if (!video || !streamRef.current || video.videoWidth === 0) return null;
+    if (!video || video.videoWidth === 0 || !sessionId) return;
     const canvas = document.createElement("canvas");
-    // Downscale — the model doesn't need full resolution and it keeps the
-    // request small.
-    const scale = Math.min(1, 768 / video.videoWidth);
+    const scale = Math.min(1, 1024 / video.videoWidth);
     canvas.width = Math.round(video.videoWidth * scale);
     canvas.height = Math.round(video.videoHeight * scale);
     canvas
       .getContext("2d")
       ?.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.8);
-  }, []);
-
-  /** Snap a frame and surface it in the UI as "sent to StarterChef". */
-  const snapAndShow = useCallback((): string | null => {
-    const frame = snapFrame();
-    if (frame) setSentFrame(frame);
-    return frame;
-  }, [snapFrame]);
-
-  /** Snap a frame and ask the model whether the step looks right. */
-  async function checkFood() {
-    const frame = snapAndShow();
-    if (!frame) return;
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.8),
+    );
+    if (!blob) return;
     setChecking(true);
     setCheck(null);
     setCameraError(null);
     try {
-      const res = await fetch("/api/ai/step-check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          image: frame,
-          context,
-          sessionId,
-          stepIndex,
-          recipeId: context.recipeId,
-          recipeSlug: context.recipeSlug,
-        }),
-      });
+      const form = new FormData();
+      form.set(
+        "image",
+        new File([blob], "checkpoint.jpg", { type: "image/jpeg" }),
+      );
+      const res = await fetch(
+        `/api/cooking-sessions/${sessionId}/checkpoints`,
+        {
+          method: "POST",
+          body: form,
+        },
+      );
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Check failed");
-      setCheck(body as StepCheck);
+      setCheck(body as StepCheck & { previewUrl?: string | null });
+      setCheckpointProposal(body.proposal ?? null);
     } catch (err) {
       setCameraError(
         err instanceof Error ? err.message : "Something went wrong",
@@ -169,30 +143,152 @@ export function CookAssist({
     }
   }
 
-  /** Voice assistant actions — low-risk UI actions applied directly. */
+  /** AI actions remain proposals until a visible user confirmation. */
   const handleAction = useCallback(
     (action: NonNullable<AssistantReply["action"]>) => {
-      if (action.type === "set-timer" && action.timerSeconds) {
-        setTimerSeconds(action.timerSeconds);
-        setTimerEpoch((e) => e + 1);
-      }
-      if (action.type === "goto-step" && action.stepIndex) {
-        const target = Math.min(Math.max(action.stepIndex, 1), totalSteps);
-        router.push(`${cookUrl}?step=${target}`);
-      }
+      if (
+        ((action.type === "substitute-ingredient" ||
+          action.type === "adjust-step") &&
+          action.detail?.trim()) ||
+        (action.type === "set-timer" &&
+          action.timerSeconds &&
+          action.timerSeconds <= 86400) ||
+        (action.type === "goto-step" &&
+          action.stepIndex &&
+          action.stepIndex >= 1 &&
+          action.stepIndex <= totalSteps)
+      )
+        setProposal(action);
     },
-    [router, cookUrl, totalSteps],
+    [totalSteps],
   );
+
+  async function acceptProposal() {
+    if (!proposal) return;
+    setChangeError(null);
+    const target =
+      proposal.type === "goto-step" && proposal.stepIndex
+        ? proposal.stepIndex
+        : stepIndex;
+    const route =
+      proposal.type === "goto-step"
+        ? "progress"
+        : proposal.type === "set-timer"
+          ? "timer"
+          : "adjustments";
+    const now = new Date();
+    const duration = proposal.timerSeconds ?? 0;
+    const body =
+      route === "progress"
+        ? { currentStep: target, expectedVersion: version }
+        : route === "timer"
+          ? {
+              timer: {
+                status: "running",
+                stepIndex,
+                durationSeconds: duration,
+                startedAt: now.toISOString(),
+                endsAt: new Date(now.getTime() + duration * 1000).toISOString(),
+              },
+              expectedVersion: version,
+            }
+          : {
+              proposal: {
+                stepIndex,
+                title:
+                  proposal.type === "substitute-ingredient"
+                    ? "Ingredient substitution"
+                    : "Step adjustment",
+                detail: proposal.detail ?? "",
+              },
+              expectedVersion: version,
+            };
+    const response = await fetch(
+      `/api/cooking-sessions/${sessionId}/${route}`,
+      {
+        method:
+          route === "progress" ? "PATCH" : route === "timer" ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+    if (!response.ok) {
+      setChangeError(
+        response.status === 409
+          ? "This session changed in another tab. Refreshing the latest state."
+          : "Could not apply that suggestion",
+      );
+      router.refresh();
+      return;
+    }
+    setProposal(null);
+    router.refresh();
+  }
+
+  async function acceptCheckpointProposal() {
+    if (!checkpointProposal) return;
+    const response = await fetch(
+      `/api/cooking-sessions/${sessionId}/adjustments`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          proposal: checkpointProposal,
+          expectedVersion: version,
+        }),
+      },
+    );
+    if (!response.ok) {
+      setChangeError(
+        response.status === 409
+          ? "This session changed in another tab. Refreshing the latest state."
+          : "Could not apply checkpoint suggestion",
+      );
+      router.refresh();
+      return;
+    }
+    setCheckpointProposal(null);
+    router.refresh();
+  }
 
   return (
     <div className="flex flex-col gap-6">
-      {timerSeconds !== undefined && (
-        // key remounts the timer only on external sets — the step's duration
-        // or an assistant "set a timer" action.
+      {(durationSeconds !== undefined || timerState.status !== "idle") && (
         <StepTimer
-          key={`${durationSeconds ?? 0}-${timerEpoch}`}
-          seconds={timerSeconds}
+          sessionId={sessionId}
+          stepIndex={stepIndex}
+          version={version}
+          seconds={durationSeconds ?? 60}
+          persisted={timerState}
         />
+      )}
+      {proposal && (
+        <div className="rounded-2xl bg-flame-soft p-4 text-sm font-semibold">
+          <p className="font-extrabold">
+            Suggested action for step {stepIndex}
+          </p>
+          <p>
+            {proposal.detail ??
+              (proposal.type === "set-timer"
+                ? `Set a ${proposal.timerSeconds ?? 0} second timer`
+                : `Go to step ${proposal.stepIndex ?? stepIndex}`)}
+          </p>
+          <div className="mt-3 flex gap-2">
+            <Button size="sm" onClick={() => void acceptProposal()}>
+              Confirm change
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setProposal(null)}
+            >
+              Dismiss
+            </Button>
+          </div>
+        </div>
+      )}
+      {changeError && (
+        <p className="text-xs font-bold text-flame">{changeError}</p>
       )}
 
       <div className="flex flex-col gap-2">
@@ -236,26 +332,22 @@ export function CookAssist({
               </span>
             </button>
             <p className="bg-card px-3 py-1.5 text-xs font-semibold text-espresso-light">
-              StarterChef sees what you capture. Tap the video for a verdict, or
-              ask a question below and this frame goes along.
-            </p>
-          </div>
-        )}
-        {sentFrame && (
-          <div className="flex items-center gap-3 rounded-2xl bg-card p-2 ring-1 ring-oat">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={sentFrame}
-              alt="Frame sent to StarterChef"
-              className="h-14 w-20 rounded-xl object-cover"
-            />
-            <p className="text-xs font-semibold text-espresso-light">
-              {checking ? "Checking this frame…" : "Sent to StarterChef"}
+              StarterChef sees only the frame you tap to check.
             </p>
           </div>
         )}
         {check && (
           <div className="rounded-2xl bg-oat p-3">
+            {check.previewUrl && (
+              <Image
+                src={check.previewUrl}
+                alt="Your checkpoint"
+                width={144}
+                height={96}
+                unoptimized
+                className="mb-2 h-24 w-36 rounded-xl object-cover"
+              />
+            )}
             <p className="text-sm font-extrabold">
               {check.looksRight === true
                 ? "Looks good ✓"
@@ -273,32 +365,37 @@ export function CookAssist({
             )}
           </div>
         )}
+        {checkpointProposal && (
+          <div className="rounded-2xl bg-flame-soft p-3 text-sm font-semibold">
+            <p>
+              Step {checkpointProposal.stepIndex}: {checkpointProposal.detail}
+            </p>
+            <div className="mt-2 flex gap-2">
+              <Button size="sm" onClick={() => void acceptCheckpointProposal()}>
+                Accept adjustment
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setCheckpointProposal(null)}
+              >
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        )}
         {cameraError && (
-          <p className="text-xs font-bold text-red-700">{cameraError}</p>
+          <p className="text-xs font-bold text-flame">{cameraError}</p>
         )}
       </div>
 
       <VoiceAssistantButton
-        recipeTitle={context.recipeTitle}
-        stepTitle={context.stepTitle}
         sessionId={sessionId}
-        stepIndex={stepIndex}
-        instruction={context.instruction}
-        photoCheckpoint={context.photoCheckpoint}
-        recipeId={context.recipeId}
-        recipeSlug={context.recipeSlug}
-        snapFrame={cameraOn ? snapAndShow : undefined}
         busy={checking}
         onAction={handleAction}
       />
 
-      <StepAskBox
-        context={context}
-        sessionId={sessionId}
-        stepIndex={stepIndex}
-        snapFrame={cameraOn ? snapAndShow : undefined}
-        onAction={handleAction}
-      />
+      <StepAskBox sessionId={sessionId} onAction={handleAction} />
     </div>
   );
 }
@@ -309,37 +406,90 @@ function formatDuration(seconds: number) {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-/** Editable countdown: adjust before starting or extend/shorten while
- *  running. Assistant "set a timer" actions land here too. */
-function StepTimer({ seconds }: { seconds: number }) {
-  const [remaining, setRemaining] = useState(seconds);
-  const [running, setRunning] = useState(false);
-  const [done, setDone] = useState(false);
-
+/** The persisted end timestamp is authoritative across refreshes. */
+function StepTimer({
+  sessionId,
+  stepIndex,
+  version,
+  seconds,
+  persisted,
+}: {
+  sessionId: string;
+  stepIndex: number;
+  version: number;
+  seconds: number;
+  persisted: CookingSessionRow["timer_state"];
+}) {
+  const router = useRouter();
+  const [now, setNow] = useState(() => Date.now());
+  const [selectedSeconds, setSelectedSeconds] = useState(seconds);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
-    if (!running) return;
-    const tick = setInterval(() => {
-      setRemaining((r) => {
-        if (r <= 1) {
-          setRunning(false);
-          setDone(true);
-          return 0;
-        }
-        return r - 1;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const sameStep = persisted.stepIndex === stepIndex;
+  const running = sameStep && persisted.status === "running";
+  const paused = sameStep && persisted.status === "paused";
+  const remaining =
+    running && persisted.endsAt
+      ? Math.max(
+          0,
+          Math.ceil((new Date(persisted.endsAt).getTime() - now) / 1000),
+        )
+      : paused
+        ? (persisted.pausedRemainingSeconds ?? selectedSeconds)
+        : selectedSeconds;
+  async function save(
+    status: "running" | "paused" | "idle",
+    duration = selectedSeconds,
+  ) {
+    setBusy(true);
+    setError(null);
+    const start = new Date();
+    const timer =
+      status === "idle"
+        ? { status }
+        : status === "paused"
+          ? {
+              status,
+              stepIndex,
+              durationSeconds: selectedSeconds,
+              pausedRemainingSeconds: remaining,
+            }
+          : {
+              status,
+              stepIndex,
+              durationSeconds: duration,
+              startedAt: start.toISOString(),
+              endsAt: new Date(start.getTime() + duration * 1000).toISOString(),
+            };
+    try {
+      const response = await fetch(`/api/cooking-sessions/${sessionId}/timer`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ timer, expectedVersion: version }),
       });
-    }, 1000);
-    return () => clearInterval(tick);
-  }, [running]);
-
-  function adjust(delta: number) {
-    setRemaining((r) => Math.max(30, r + delta));
+      if (!response.ok)
+        throw new Error(
+          response.status === 409
+            ? "Timer changed in another tab. Reloading."
+            : "Could not save timer",
+        );
+      router.refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not save timer");
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
   }
-
   return (
     <div
       className={cn(
         "flex flex-wrap items-center justify-between gap-3 rounded-3xl bg-card p-4 shadow-sm ring-1",
-        done ? "ring-flame" : "ring-oat",
+        remaining === 0 ? "ring-flame" : "ring-oat",
       )}
     >
       <div className="flex items-center gap-3">
@@ -350,53 +500,61 @@ function StepTimer({ seconds }: { seconds: number }) {
         <div className="flex gap-1">
           <button
             type="button"
-            onClick={() => adjust(-60)}
+            disabled={busy || running}
+            onClick={() =>
+              setSelectedSeconds((value) => Math.max(30, value - 60))
+            }
             aria-label="One minute less"
-            className="rounded-full bg-oat px-2.5 py-1 text-xs font-extrabold text-espresso hover:bg-oat-dark"
+            className="rounded-full bg-oat px-2.5 py-1 text-xs font-extrabold text-espresso"
           >
             −1m
           </button>
           <button
             type="button"
-            onClick={() => adjust(60)}
+            disabled={busy || running}
+            onClick={() =>
+              setSelectedSeconds((value) => Math.min(86400, value + 60))
+            }
             aria-label="One minute more"
-            className="rounded-full bg-oat px-2.5 py-1 text-xs font-extrabold text-espresso hover:bg-oat-dark"
+            className="rounded-full bg-oat px-2.5 py-1 text-xs font-extrabold text-espresso"
           >
             +1m
           </button>
         </div>
       </div>
-      <div className="flex items-center gap-2">
-        {done && (
-          <span className="text-sm font-extrabold text-flame">Time!</span>
+      <div className="flex gap-2">
+        {(running || paused) && (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            onClick={() => void save("idle")}
+          >
+            <RotateCcw className="h-4 w-4" /> Reset
+          </Button>
         )}
         <Button
           variant="secondary"
           size="sm"
-          onClick={() => {
-            if (done) {
-              setRemaining(seconds);
-              setDone(false);
-              return;
-            }
-            setRunning((r) => !r);
-          }}
+          disabled={busy}
+          onClick={() =>
+            void (running
+              ? save("paused")
+              : save("running", paused ? remaining : selectedSeconds))
+          }
         >
           {running ? (
             <>
               <Pause className="h-4 w-4" /> Pause
             </>
-          ) : done ? (
-            <>
-              <RotateCcw className="h-4 w-4" /> Restart
-            </>
           ) : (
             <>
-              <Play className="h-4 w-4" /> Start
+              <Play className="h-4 w-4" /> {paused ? "Resume" : "Start"}
             </>
           )}
         </Button>
       </div>
+      {error && <p className="w-full text-xs font-bold text-flame">{error}</p>}
     </div>
   );
 }

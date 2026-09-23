@@ -1,5 +1,21 @@
 import { z } from "zod";
 
+export const voiceActionSchema = z
+  .object({
+    type: z.enum(["adjust-step", "set-timer", "goto-step"]),
+    detail: z.string().trim().min(1).max(1000).optional(),
+    timerSeconds: z.number().int().min(1).max(86400).optional(),
+    stepIndex: z.number().int().min(1).max(100).optional(),
+  })
+  .strict()
+  .refine((action) =>
+    action.type === "adjust-step"
+      ? Boolean(action.detail)
+      : action.type === "set-timer"
+        ? Boolean(action.timerSeconds)
+        : Boolean(action.stepIndex),
+  );
+
 /**
  * Response from the in-cooking voice assistant. `answer` is spoken back to the
  * user; `action` describes a structured intent the UI can offer to apply

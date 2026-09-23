@@ -59,29 +59,11 @@ function stopSpeaking() {
 }
 
 export function AskAssistantButton({
-  recipeTitle,
-  stepTitle,
   sessionId,
-  stepIndex,
-  instruction,
-  photoCheckpoint,
-  recipeId,
-  recipeSlug,
-  snapFrame,
   busy,
   onAction,
 }: {
-  recipeTitle: string;
-  stepTitle: string;
-  sessionId?: string;
-  stepIndex?: number;
-  /** Extra context passed to step-check when a camera frame is attached. */
-  instruction?: string;
-  photoCheckpoint?: string;
-  recipeId?: string;
-  recipeSlug?: string;
-  /** "Show and ask": returns a camera frame to send with the question. */
-  snapFrame?: () => string | null;
+  sessionId: string;
   /** A camera check is processing — show thinking and block a second ask. */
   busy?: boolean;
   /** Structured intent from the assistant (set-timer, goto-step…). */
@@ -102,45 +84,18 @@ export function AskAssistantButton({
   async function ask(question: string) {
     setState({ status: "thinking" });
     try {
-      const frame = snapFrame?.() ?? null;
-      const res = await fetch(
-        frame ? "/api/ai/step-check" : "/api/ai/assistant",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            frame
-              ? {
-                  image: frame,
-                  question,
-                  context: {
-                    recipeTitle,
-                    stepTitle,
-                    instruction: instruction ?? stepTitle,
-                    photoCheckpoint,
-                  },
-                  sessionId,
-                  stepIndex,
-                  recipeId,
-                  recipeSlug,
-                }
-              : {
-                  question,
-                  context: { recipeTitle, stepTitle },
-                  sessionId,
-                  stepIndex,
-                  channel: "voice",
-                },
-          ),
-        },
-      );
+      const res = await fetch("/api/ai/assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, sessionId, channel: "voice" }),
+      });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Assistant failed");
 
       metricsRef.current.firstResponseAt ??= performance.now();
       // step-check returns {feedback}; assistant returns {answer, action?}.
-      const answer = frame ? body.feedback : body.answer;
-      if (!frame && body.action) onAction?.(body.action);
+      const answer = body.answer;
+      if (body.action) onAction?.(body.action);
       setLastAnswer(answer);
       setState({ status: "speaking" });
       speak(

@@ -8,7 +8,6 @@ import {
   inspectKitchenImage,
   KITCHEN_IMAGE_MAX_BYTES,
 } from "@/lib/image-upload";
-import { privateMediaReference } from "@/lib/private-media";
 import { protectedError, withProtectedRoute } from "@/lib/protected-route";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -124,39 +123,33 @@ export const POST = withProtectedRoute(async (context) => {
       "INTERNAL_ERROR",
       "Could not store checkpoint image",
     );
-  const metadata = {
-    stepIndex: known.data.current_step,
-    objectPath: path,
-    createdAt: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-  };
-  await context.supabase
-    .from("cooking_sessions")
-    .update({
-      checkpoint_metadata: [
-        ...((known.data.checkpoint_metadata as unknown[]) ?? []),
-        metadata,
-      ],
-    })
-    .eq("id", id)
-    .eq("user_id", context.user.id);
-  await context.supabase
-    .from("session_events")
-    .insert({
-      session_id: id,
-      user_id: context.user.id,
-      step_index: known.data.current_step,
-      kind: "photo_check",
-      payload: {
-        photoUrl: privateMediaReference(path),
+  const { data: checkpointId, error: checkpointError } =
+    await context.supabase.rpc("record_cooking_checkpoint", {
+      p_session_id: id,
+      p_step_index: known.data.current_step,
+      p_object_path: path,
+      p_verdict: {
         looksRight: object.looksRight,
         feedback: object.feedback,
         tip: object.tip,
       },
-      expires_at: metadata.expiresAt,
     });
+  if (checkpointError || !checkpointId) {
+    await admin.storage.from("recipe-inputs").remove([path]);
+    return protectedError(
+      context,
+      500,
+      "INTERNAL_ERROR",
+      "Could not record checkpoint",
+    );
+  }
+  const preview = await admin.storage
+    .from("recipe-inputs")
+    .createSignedUrl(path, 5 * 60);
   return Response.json({
     ...object,
+    checkpointId,
+    previewUrl: preview.data?.signedUrl ?? null,
     proposal: object.tip
       ? {
           stepIndex: known.data.current_step,
