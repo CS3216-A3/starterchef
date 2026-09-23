@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { measuredGenerate } from "@/lib/ai/instrument";
+import { measuredGenerate, safeAiFailureCode } from "@/lib/ai/instrument";
 import { getModel } from "@/lib/ai/model";
 import { renderPrompt } from "@/lib/ai/prompts";
 import { kitchenScanSchema } from "@/lib/ai/schemas/kitchen-scan";
@@ -24,6 +24,16 @@ function publicScan(row: Record<string, unknown>) {
     failureCode: row.failure_code ?? null,
     expiresAt: row.expires_at,
   };
+}
+
+function logScanFailure(requestId: string, code: string) {
+  console.error(
+    JSON.stringify({
+      route: "/api/kitchen-scans",
+      requestId,
+      code,
+    }),
+  );
 }
 
 export const POST = withProtectedRoute(
@@ -111,6 +121,7 @@ export const POST = withProtectedRoute(
         "Could not create kitchen scan",
       );
 
+    let failureCode = "VISION_GENERATION_FAILED";
     try {
       const { object: generated } = await measuredGenerate("kitchen-scan", {
         model: getModel("kitchen-scan"),
@@ -125,7 +136,11 @@ export const POST = withProtectedRoute(
                 type: "text",
                 text: "Identify ingredients and cooking equipment in this photo.",
               },
-              { type: "image", image: bytes },
+              {
+                type: "file",
+                data: bytes,
+                mediaType: image.contentType,
+              },
             ],
           },
         ],
@@ -156,6 +171,7 @@ export const POST = withProtectedRoute(
           confidence: item.confidence,
         })),
       ].filter((item) => item.name.length > 0 && item.name.length <= 120);
+      failureCode = "SCAN_RESULT_PERSIST_FAILED";
       const { data: saved, error } = await admin
         .from("kitchen_scans")
         .update({
@@ -168,12 +184,14 @@ export const POST = withProtectedRoute(
         .single();
       if (error || !saved) throw new Error("scan persistence failed");
       return Response.json(publicScan(saved), { status: 201 });
-    } catch {
+    } catch (error) {
+      failureCode = `VISION_${safeAiFailureCode(error)}`;
+      logScanFailure(requestId, failureCode);
       await admin
         .from("kitchen_scans")
         .update({
           status: "failed",
-          failure_code: "VISION_UNAVAILABLE",
+          failure_code: failureCode,
           updated_at: new Date().toISOString(),
         })
         .eq("id", scan.id);

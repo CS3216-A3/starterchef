@@ -12,6 +12,7 @@ describe("kitchenScanSchema", () => {
           name: "Eggs",
           confidence: "high",
           estimatedQuantity: "6",
+          expiresWithinDays: null,
           icon: "egg",
         },
       ],

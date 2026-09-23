@@ -90,3 +90,11 @@ export function getModelName(provider: AiProvider = getProvider()): string {
   }
   return configured;
 }
+
+/** Safe configuration probe for diagnostics; credentials never leave process.env. */
+export function isSelectedProviderConfigured(): boolean {
+  const provider = getProvider();
+  return provider === "openai"
+    ? Boolean(process.env.OPENAI_API_KEY)
+    : Boolean(process.env.GOOGLE_GENERATIVE_AI_API_KEY);
+}

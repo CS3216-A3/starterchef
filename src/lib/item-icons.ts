@@ -20,6 +20,7 @@ import {
   Wine,
   type LucideIcon,
 } from "lucide-react";
+import { KITCHEN_ICON_KEYS, type KitchenIconKey } from "@/lib/item-icon-keys";
 import type { KitchenItemKind } from "@/lib/types";
 
 /**
@@ -28,29 +29,7 @@ import type { KitchenItemKind } from "@/lib/types";
  * Stored keys are resolved by kitchenIcon(); rows without a key fall back to
  * the keyword rules below.
  */
-export const KITCHEN_ICON_KEYS = [
-  "apple",
-  "beef",
-  "carrot",
-  "chef-hat",
-  "citrus",
-  "coffee",
-  "cooking-pot",
-  "droplets",
-  "drumstick",
-  "egg",
-  "fish",
-  "milk",
-  "microwave",
-  "package",
-  "salad",
-  "soup",
-  "utensils",
-  "wheat",
-  "wine",
-] as const;
-
-export type KitchenIconKey = (typeof KITCHEN_ICON_KEYS)[number];
+export { KITCHEN_ICON_KEYS, type KitchenIconKey } from "@/lib/item-icon-keys";
 
 export const KITCHEN_ICONS: Record<KitchenIconKey, LucideIcon> = {
   apple: Apple,

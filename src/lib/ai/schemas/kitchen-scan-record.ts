@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { KITCHEN_ICON_KEYS } from "@/lib/item-icons";
+import { KITCHEN_ICON_KEYS } from "@/lib/item-icon-keys";
 
 export const scanCandidateSchema = z.object({
   id: z.uuid(),

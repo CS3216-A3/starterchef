@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { KITCHEN_ICON_KEYS } from "@/lib/item-icons";
+import { KITCHEN_ICON_KEYS } from "@/lib/item-icon-keys";
 
 const iconKey = z
   .enum(KITCHEN_ICON_KEYS)
@@ -15,8 +15,10 @@ export const kitchenScanSchema = z.object({
     z.object({
       name: z.string(),
       confidence: z.enum(["high", "medium", "low"]),
-      estimatedQuantity: z.string().optional(),
-      expiresWithinDays: z.number().int().positive().optional(),
+      // OpenAI strict JSON Schema requires every property to be required.
+      // Use null when the photo does not establish a value.
+      estimatedQuantity: z.string().nullable(),
+      expiresWithinDays: z.number().int().positive().nullable(),
       icon: iconKey,
     }),
   ),
