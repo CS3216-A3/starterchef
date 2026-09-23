@@ -23,7 +23,7 @@ where btrim(name) = ''
    or (kind = 'equipment' and expires_on is not null)
    or kind not in ('ingredient', 'equipment')
 union all
-select min(id), user_id, kind, min(name), min(quantity), min(expires_on)
+select min(id::text)::uuid, user_id, kind, min(name), min(quantity), min(expires_on)
 from public.kitchen_items
 group by user_id, kind, lower(btrim(name))
 having count(*) > 1;
