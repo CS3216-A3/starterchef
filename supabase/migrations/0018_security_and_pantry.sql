@@ -101,7 +101,7 @@ declare
   v_expires_on date;
   v_icon text;
   v_source text;
-  v_row public.kitchen_items%rowtype;
+  v_item_json jsonb;
   v_created boolean;
   v_result jsonb := '[]'::jsonb;
 begin
@@ -144,10 +144,11 @@ begin
           expires_on = excluded.expires_on,
           icon = coalesce(excluded.icon, kitchen_items.icon),
           source = excluded.source
-    returning kitchen_items.*, (xmax = 0) into v_row, v_created;
+    returning to_jsonb(kitchen_items), (xmax = 0)
+    into v_item_json, v_created;
 
     v_result := v_result || jsonb_build_array(
-      to_jsonb(v_row) || jsonb_build_object('created', v_created)
+      v_item_json || jsonb_build_object('created', v_created)
     );
   end loop;
   return v_result;
