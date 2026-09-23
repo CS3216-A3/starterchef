@@ -16,7 +16,7 @@ export const AI_PROVIDERS = ["google", "openai", "google-lite"] as const;
 export type AiProvider = (typeof AI_PROVIDERS)[number];
 
 const APPROVED_MODELS: Record<AiProvider, readonly string[]> = {
-  google: ["gemini-5.8-flash"],
+  google: ["gemini-3.8-flash"],
   "google-lite": ["gemini-3.5-flash-lite"],
   openai: ["gpt-5.6-luna"],
 };
@@ -76,7 +76,7 @@ export function getModelName(provider: AiProvider = getProvider()): string {
   let configured: string;
   switch (provider) {
     case "google":
-      configured = process.env.GOOGLE_MODEL ?? "gemini-5.8-flash";
+      configured = process.env.GOOGLE_MODEL ?? "gemini-3.8-flash";
       break;
     case "google-lite":
       configured = process.env.GOOGLE_LITE_MODEL ?? "gemini-3.5-flash-lite";

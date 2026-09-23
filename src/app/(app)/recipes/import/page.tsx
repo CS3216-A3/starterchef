@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { FileImage, Link2, Sparkles, Type, Video } from "lucide-react";
 import { getApiErrorMessage } from "@/lib/client-api-error";
 import { Button } from "@/components/button";
+import { RecipeDraftProgress } from "@/components/recipe-draft-progress";
 import { createUserRecipe } from "@/app/(app)/recipes/actions";
 import type { ImportedRecipe } from "@/lib/ai/schemas/import";
 
@@ -37,6 +38,7 @@ export default function ImportRecipePage() {
     (ImportedRecipe & { imageUrl?: string }) | null
   >(null);
   const [error, setError] = useState<string | null>(null);
+  const [reviewDraftId, setReviewDraftId] = useState<string | null>(null);
 
   async function handleExtract(e: React.FormEvent) {
     e.preventDefault();
@@ -63,10 +65,12 @@ export default function ImportRecipePage() {
           setError(
             await getApiErrorMessage(queued, "Could not queue recipe review"),
           );
-        else
-          setError(
-            "Recipe review is queued. Check back shortly for the verified draft.",
-          );
+        else {
+          const body = (await queued.json()) as { draftId?: string };
+          if (!body.draftId)
+            setError("Recipe review was queued but could not be opened.");
+          else setReviewDraftId(body.draftId);
+        }
         return;
       }
       const body = buildRequestBody(state);
@@ -182,7 +186,9 @@ export default function ImportRecipePage() {
         />
       </div>
 
-      {!draft ? (
+      {reviewDraftId ? (
+        <RecipeDraftProgress draftId={reviewDraftId} />
+      ) : !draft ? (
         <form onSubmit={handleExtract} className="flex flex-col gap-4">
           {state.source === "text" && (
             <textarea

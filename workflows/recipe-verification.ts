@@ -47,6 +47,31 @@ async function claimDraft(draftId: string) {
     )
   )
     throw new FatalError("Draft is terminal");
+  // This workflow intentionally uses two providers: OpenAI generates and
+  // adjudicates, while Gemini independently verifies. Never silently reduce
+  // that gate to one provider.
+  const missing = [
+    !process.env.OPENAI_API_KEY ? "OPENAI_API_KEY" : null,
+    !process.env.GOOGLE_GENERATIVE_AI_API_KEY
+      ? "GOOGLE_GENERATIVE_AI_API_KEY"
+      : null,
+  ].filter((value): value is string => value !== null);
+  if (missing.length) {
+    await admin
+      .from("recipe_drafts")
+      .update({
+        status: "failed_retryable",
+        failure_code: missing.includes("GOOGLE_GENERATIVE_AI_API_KEY")
+          ? "GEMINI_PROVIDER_NOT_CONFIGURED"
+          : "OPENAI_PROVIDER_NOT_CONFIGURED",
+        verification: {
+          summary: `Recipe verification needs ${missing.join(" and ")} configured on the server.`,
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", draftId);
+    throw new FatalError("Recipe verification provider is not configured");
+  }
   await admin
     .from("recipe_drafts")
     .update({
