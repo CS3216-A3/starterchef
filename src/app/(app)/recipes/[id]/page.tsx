@@ -121,7 +121,7 @@ export default async function RecipeOverviewPage({
         )}
       </div>
 
-      <StartCookingButton slug={recipe.slug} primary label="Start cooking" />
+      <StartCookingButton recipeId={recipe.id} primary label="Start cooking" />
 
       {/* Ingredients */}
       <section className="flex flex-col gap-2">
@@ -258,7 +258,7 @@ export default async function RecipeOverviewPage({
         </section>
       )}
 
-      <RecipeChat recipe={recipe} isOwner={isOwner} />
+      <RecipeChat recipeId={recipe.id} />
 
       {isOwner && (
         <DeleteRecipeButton recipeId={recipe.id} recipeTitle={recipe.title} />
