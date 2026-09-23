@@ -16,13 +16,21 @@ export const cookingStepSchema = z.object({
     .number()
     .int()
     .positive()
-    .optional()
+    // OpenAI Structured Outputs requires every object property to be present.
+    // Keep the application shape optional after parsing, while requiring the
+    // model to explicitly return null when a step has no natural timer.
+    .nullable()
+    .transform((value) => value ?? undefined)
     .describe("Set when the step has a natural timer"),
   ingredientsUsed: z.array(z.string()),
-  tip: z.string().optional(),
+  tip: z
+    .string()
+    .nullable()
+    .transform((value) => value ?? undefined),
   photoCheckpoint: z
     .string()
-    .optional()
+    .nullable()
+    .transform((value) => value ?? undefined)
     .describe(
       "What a correct result looks like, for the optional photo-checkpoint feature",
     ),
@@ -51,7 +59,8 @@ export const stepCheckSchema = z.object({
     ),
   tip: z
     .string()
-    .optional()
+    .nullable()
+    .transform((value) => value ?? undefined)
     .describe("One concrete fix or next action, if anything needs adjusting"),
 });
 

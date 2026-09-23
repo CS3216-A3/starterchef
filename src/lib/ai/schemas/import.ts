@@ -8,7 +8,11 @@ import { cookingStepSchema } from "./cooking";
  */
 export const importedRecipeSchema = z.object({
   title: z.string().min(1),
-  description: z.string().max(500).optional(),
+  description: z
+    .string()
+    .max(500)
+    .nullable()
+    .transform((value) => value ?? undefined),
   minutes: z
     .number()
     .int()
@@ -24,12 +28,16 @@ export const importedRecipeSchema = z.object({
     .array(z.string())
     .describe("Cooking equipment needed, e.g. 'frying pan'"),
   steps: z.array(cookingStepSchema).min(1),
-  tags: z.array(z.string()).default([]),
+  tags: z
+    .array(z.string())
+    .nullable()
+    .transform((value) => value ?? []),
   whyGood: z
     .string()
     .max(200)
     .describe("One warm sentence for the recipe card")
-    .optional(),
+    .nullable()
+    .transform((value) => value ?? undefined),
 });
 
 export type ImportedRecipe = z.infer<typeof importedRecipeSchema>;

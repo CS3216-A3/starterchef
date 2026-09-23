@@ -160,6 +160,7 @@ function buildPersonalizedRecipe(
       durationSeconds: step.durationSeconds,
       ingredientsUsed: step.ingredients,
       tip: step.tip,
+      photoCheckpoint: step.photoCheckpoint,
     })),
     tags: [...recipe.tags, "personalised"],
     whyGood: recipe.why_good,

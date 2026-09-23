@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { importedRecipeSchema } from "./import";
 
 export const verificationFindingSchema = z.object({
   severity: z.enum(["info", "warning", "critical"]),
@@ -21,5 +22,8 @@ export const independentVerificationSchema = z.object({
 });
 
 export const adjudicationSchema = independentVerificationSchema.extend({
-  revisedRecipe: z.unknown().nullable(),
+  // A revision is a complete canonical recipe, not free-form JSON. Keeping it
+  // structured makes OpenAI's strict response schema valid all the way down
+  // to optional-looking step fields.
+  revisedRecipe: importedRecipeSchema.nullable(),
 });

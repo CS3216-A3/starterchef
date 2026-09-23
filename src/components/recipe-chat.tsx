@@ -117,6 +117,7 @@ export function RecipeChat({
             })
           : await createUserRecipe({
               ...adapted,
+              description: adapted.description,
               whyGood: adapted.whyGood ?? recipe.why_good,
               source: "personalized",
               parentRecipeId: recipe.id,

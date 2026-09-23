@@ -65,7 +65,16 @@ export async function recipeVerificationWorkflow(draftId: string) {
     await verifyRecipe(draftId, "initial");
     await adjudicate(draftId);
     await deterministicGuard(draftId, "after_adjudication");
-    await verifyRecipe(draftId, "final");
+    const finalVerdict = await verifyRecipe(draftId, "final");
+    if (finalVerdict === "revise") {
+      await adjudicate(draftId);
+      await deterministicGuard(draftId, "after_final_revision");
+      const revisedFinalVerdict = await verifyRecipe(draftId, "final");
+      if (revisedFinalVerdict !== "pass") {
+        await failUnresolvedFinalRevision(draftId);
+        throw new FatalError("Final recipe revision did not pass verification");
+      }
+    }
     await finalizeDraft(draftId);
   } catch (error) {
     await recordWorkflowFailure(
@@ -192,7 +201,7 @@ async function acquireOrGenerateRecipe(draftId: string) {
             content: [
               {
                 type: "text",
-                text: `${context}\nExtract the recipe from this private image.`,
+                text: `${context}\nExtract the recipe from this private image. Treat a dishHint in the trusted request context as the dish name when present.`,
               },
               { type: "file", data: bytes, mediaType: input.mime_type },
             ],
@@ -211,12 +220,12 @@ async function acquireOrGenerateRecipe(draftId: string) {
       })
     ).object;
   }
-  const parsed = importedRecipeSchema.safeParse(recipe);
-  if (!parsed.success) throw new FatalError("Recipe schema validation failed");
+  const canonicalRecipe = canonicalRecipeForStorage(recipe);
+  if (!canonicalRecipe) throw new FatalError("Recipe schema validation failed");
   await admin
     .from("recipe_drafts")
     .update({
-      canonical_recipe: parsed.data,
+      canonical_recipe: canonicalRecipe,
       status: "verifying",
       updated_at: new Date().toISOString(),
     })
@@ -266,7 +275,10 @@ async function deterministicGuard(draftId: string, phase: string) {
   }
 }
 
-async function verifyRecipe(draftId: string, stage: "initial" | "final") {
+async function verifyRecipe(
+  draftId: string,
+  stage: "initial" | "final",
+): Promise<"pass" | "revise" | "block"> {
   "use step";
   const verificationProvider = providerForStage("verification");
   logWorkflowEvent("recipe_workflow_step_started", draftId, {
@@ -293,8 +305,9 @@ async function verifyRecipe(draftId: string, stage: "initial" | "final") {
       updated_at: new Date().toISOString(),
     })
     .eq("id", draftId);
-  const verdict = (result.object as { verdict: string }).verdict;
-  if (stage === "final" && verdict !== "pass") {
+  const verdict = (result.object as { verdict: "pass" | "revise" | "block" })
+    .verdict;
+  if (stage === "final" && verdict === "block") {
     await block(
       admin,
       draftId,
@@ -304,6 +317,7 @@ async function verifyRecipe(draftId: string, stage: "initial" | "final") {
     );
     throw new FatalError("Final independent verification failed");
   }
+  return verdict;
 }
 
 async function adjudicate(draftId: string) {
@@ -353,8 +367,8 @@ async function adjudicate(draftId: string) {
       );
       throw new FatalError("Revision limit reached");
     }
-    const revised = importedRecipeSchema.safeParse(adjudication.revisedRecipe);
-    if (!revised.success) {
+    const revisedRecipe = canonicalRecipeForStorage(adjudication.revisedRecipe);
+    if (!revisedRecipe) {
       await block(
         admin,
         draftId,
@@ -367,7 +381,7 @@ async function adjudicate(draftId: string) {
     await admin
       .from("recipe_drafts")
       .update({
-        canonical_recipe: revised.data,
+        canonical_recipe: revisedRecipe,
         verification,
         retry_count: draft.retry_count + 1,
         status: "verifying",
@@ -410,6 +424,19 @@ async function finalizeDraft(draftId: string) {
     .eq("id", draftId);
 }
 
+async function failUnresolvedFinalRevision(draftId: string) {
+  "use step";
+  const admin = createAdminClient();
+  const draft = await loadDraft(admin, draftId);
+  await block(
+    admin,
+    draftId,
+    "FINAL_REVISION_UNRESOLVED",
+    "final_revision",
+    draft.verification,
+  );
+}
+
 async function loadDraft(
   admin: ReturnType<typeof createAdminClient>,
   draftId: string,
@@ -424,6 +451,22 @@ async function loadDraft(
   if (!data) throw new FatalError("Draft not found");
   return data as Draft;
 }
+
+/**
+ * The UI uses undefined for optional-looking recipe fields, while OpenAI
+ * Structured Outputs requires every property to be present. Persist null for
+ * those values so JSONB retains the complete strict-schema shape and every
+ * later guard can validate the same canonical recipe.
+ */
+function canonicalRecipeForStorage(recipe: unknown) {
+  const normalized = JSON.parse(
+    JSON.stringify(recipe, (_key, value) =>
+      value === undefined ? null : value,
+    ),
+  ) as unknown;
+  return importedRecipeSchema.safeParse(normalized).success ? normalized : null;
+}
+
 async function block(
   admin: ReturnType<typeof createAdminClient>,
   id: string,
