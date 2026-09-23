@@ -15,6 +15,7 @@ import {
 } from "@/lib/ai/schemas/recipe-verification";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadRecipeWebSource } from "@/lib/recipe-web-source";
+import { recipeSafetyFailure } from "@/lib/validation/recipe-safety";
 
 type Draft = {
   id: string;
@@ -25,6 +26,7 @@ type Draft = {
   canonical_recipe: unknown;
   verification: Record<string, unknown>;
   retry_count: number;
+  workflow_attempt_id: string;
 };
 
 type RecipeVerificationRouting = "single" | "cross-provider";
@@ -63,35 +65,50 @@ function hasCredential(provider: AiProvider) {
     : Boolean(process.env.GOOGLE_GENERATIVE_AI_API_KEY);
 }
 
-export async function recipeVerificationWorkflow(draftId: string) {
+export async function recipeVerificationWorkflow(
+  draftId: string,
+  attemptId: string,
+) {
   "use workflow";
+  let claimed = false;
   try {
-    await claimDraft(draftId);
-    await acquireOrGenerateRecipe(draftId);
-    await deterministicGuard(draftId, "before_verification");
-    await verifyRecipe(draftId, "initial");
-    await adjudicate(draftId);
-    await deterministicGuard(draftId, "after_adjudication");
-    const finalVerdict = await verifyRecipe(draftId, "final");
+    await claimDraft(draftId, attemptId);
+    claimed = true;
+    await acquireOrGenerateRecipe(draftId, attemptId);
+    await deterministicGuard(draftId, "before_verification", attemptId);
+    await verifyRecipe(draftId, "initial", attemptId);
+    await adjudicate(draftId, attemptId);
+    await deterministicGuard(draftId, "after_adjudication", attemptId);
+    const finalVerdict = await verifyRecipe(draftId, "final", attemptId);
     if (finalVerdict === "revise") {
-      await adjudicate(draftId);
-      await deterministicGuard(draftId, "after_final_revision");
-      const revisedFinalVerdict = await verifyRecipe(draftId, "final");
+      await adjudicate(draftId, attemptId);
+      await deterministicGuard(draftId, "after_final_revision", attemptId);
+      const revisedFinalVerdict = await verifyRecipe(
+        draftId,
+        "final",
+        attemptId,
+      );
       if (revisedFinalVerdict !== "pass") {
-        await failUnresolvedFinalRevision(draftId);
+        await failUnresolvedFinalRevision(draftId, attemptId);
         throw new FatalError("Final recipe revision did not pass verification");
       }
     }
-    await finalizeDraft(draftId);
+    await finalizeDraft(draftId, attemptId);
   } catch (error) {
-    await recordWorkflowFailure(
-      draftId,
-      error instanceof Error ? error.message : "Workflow failed",
-    );
+    if (claimed) {
+      await recordWorkflowFailure(
+        draftId,
+        error instanceof Error ? error.message : "Workflow failed",
+        attemptId,
+      );
+    }
+    // State has been persisted safely, but a failed Workflow must remain
+    // visible to Vercel observability instead of being reported as success.
+    throw error;
   }
 }
 
-async function claimDraft(draftId: string) {
+async function claimDraft(draftId: string, attemptId: string) {
   "use step";
   logWorkflowEvent("recipe_workflow_step_started", draftId, {
     stage: "acquiring_source",
@@ -99,10 +116,16 @@ async function claimDraft(draftId: string) {
   const admin = createAdminClient();
   const { data } = await admin
     .from("recipe_drafts")
-    .select("id,status,kind")
+    .select("id,status,kind,workflow_attempt_id")
     .eq("id", draftId)
     .maybeSingle();
   if (!data) throw new FatalError("Draft not found");
+  // `queued` is the worker lease. A duplicate Vercel delivery must stop here
+  // before it can make a model call or overwrite the active attempt.
+  if (data.status !== "queued" || data.workflow_attempt_id !== attemptId)
+    throw new FatalError(
+      "Draft has already been claimed by a workflow attempt",
+    );
   if (
     ["accepted", "rejected", "blocked", "failed_permanent"].includes(
       data.status,
@@ -149,26 +172,35 @@ async function claimDraft(draftId: string) {
         },
         updated_at: new Date().toISOString(),
       })
-      .eq("id", draftId);
+      .eq("id", draftId)
+      .eq("workflow_attempt_id", attemptId);
     throw new FatalError("Recipe verification provider is not configured");
   }
-  await admin
+  const { data: claimed } = await admin
     .from("recipe_drafts")
     .update({
       status: "acquiring_source",
       failure_code: null,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", draftId);
+    .eq("id", draftId)
+    .eq("status", "queued")
+    .eq("workflow_attempt_id", attemptId)
+    .select("id")
+    .maybeSingle();
+  if (!claimed)
+    throw new FatalError(
+      "Draft has already been claimed by a workflow attempt",
+    );
 }
 
-async function acquireOrGenerateRecipe(draftId: string) {
+async function acquireOrGenerateRecipe(draftId: string, attemptId: string) {
   "use step";
   logWorkflowEvent("recipe_workflow_step_started", draftId, {
     stage: "extracting_or_generating",
   });
   const admin = createAdminClient();
-  const draft = await loadDraft(admin, draftId);
+  const draft = await loadDraft(admin, draftId, attemptId);
   if (draft.canonical_recipe) return;
   await admin
     .from("recipe_drafts")
@@ -176,7 +208,8 @@ async function acquireOrGenerateRecipe(draftId: string) {
       status: "extracting_or_generating",
       updated_at: new Date().toISOString(),
     })
-    .eq("id", draftId);
+    .eq("id", draftId)
+    .eq("workflow_attempt_id", attemptId);
   const [{ data: profile }, { data: pantry }] = await Promise.all([
     admin
       .from("profiles")
@@ -188,11 +221,12 @@ async function acquireOrGenerateRecipe(draftId: string) {
       .select("kind,name,quantity")
       .eq("user_id", draft.user_id),
   ]);
-  const context = JSON.stringify({
+  const trustedContext = {
     request: draft.request,
     profile,
     pantry: pantry ?? [],
-  });
+  };
+  const context = JSON.stringify(trustedContext);
   const args = {
     schema: importedRecipeSchema,
     temperature: 0.3,
@@ -270,6 +304,23 @@ async function acquireOrGenerateRecipe(draftId: string) {
       )
     ).object;
   } else {
+    let adaptedSource: unknown = null;
+    if (draft.kind === "adapted") {
+      const recipeId = requiredRequestString(draft.request, "recipeId");
+      const { data: parent } = await admin
+        .from("recipes")
+        .select(
+          "title,description,minutes,difficulty,servings,ingredients,equipment,steps,tags,why_good",
+        )
+        .eq("id", recipeId)
+        .or(`user_id.is.null,user_id.eq.${draft.user_id}`)
+        .maybeSingle();
+      if (!parent) throw new FatalError("Adaptation source recipe not found");
+      adaptedSource = {
+        recipe: parent,
+        intent: requiredRequestString(draft.request, "intent"),
+      };
+    }
     const source =
       draft.kind === "text"
         ? requiredRequestString(draft.request, "content")
@@ -277,7 +328,9 @@ async function acquireOrGenerateRecipe(draftId: string) {
           ? await loadRecipeWebSource(
               requiredRequestString(draft.request, "url"),
             )
-          : context;
+          : draft.kind === "adapted"
+            ? JSON.stringify({ ...trustedContext, adaptation: adaptedSource })
+            : context;
     recipe = (
       await measuredGenerate("recipe-generation", {
         ...args,
@@ -304,7 +357,8 @@ async function acquireOrGenerateRecipe(draftId: string) {
       status: "verifying",
       updated_at: new Date().toISOString(),
     })
-    .eq("id", draftId);
+    .eq("id", draftId)
+    .eq("workflow_attempt_id", attemptId);
 }
 
 function requiredRequestString(request: Record<string, unknown>, key: string) {
@@ -314,13 +368,17 @@ function requiredRequestString(request: Record<string, unknown>, key: string) {
   return value;
 }
 
-async function deterministicGuard(draftId: string, phase: string) {
+async function deterministicGuard(
+  draftId: string,
+  phase: string,
+  attemptId: string,
+) {
   "use step";
   logWorkflowEvent("recipe_workflow_step_started", draftId, {
     stage: `deterministic_guard_${phase}`,
   });
   const admin = createAdminClient();
-  const draft = await loadDraft(admin, draftId);
+  const draft = await loadDraft(admin, draftId, attemptId);
   const recipe = importedRecipeSchema.safeParse(draft.canonical_recipe);
   if (
     !recipe.success ||
@@ -328,7 +386,14 @@ async function deterministicGuard(draftId: string, phase: string) {
     recipe.data.servings > 24 ||
     recipe.data.steps.length > 30
   ) {
-    await block(admin, draftId, "DETERMINISTIC_RECIPE_INVALID", phase);
+    await block(
+      admin,
+      draftId,
+      "DETERMINISTIC_RECIPE_INVALID",
+      phase,
+      undefined,
+      attemptId,
+    );
     throw new FatalError("Invalid recipe");
   }
   const { data: profile } = await admin
@@ -336,30 +401,17 @@ async function deterministicGuard(draftId: string, phase: string) {
     .select("dietary_restrictions,allergies")
     .eq("id", draft.user_id)
     .maybeSingle();
-  const words = [
-    ...(profile?.dietary_restrictions ?? []),
-    ...(profile?.allergies ?? []),
-  ]
-    .map((value) => value.toLowerCase())
-    .filter(Boolean);
-  const text = recipe.data.ingredients.join(" ").toLowerCase();
-  if (words.some((word) => text.includes(word))) {
-    await block(admin, draftId, "DIET_OR_ALLERGEN_CONFLICT", phase);
-    throw new FatalError("Diet or allergen conflict");
-  }
-  const unsafe =
-    /(eat raw chicken|undercook poultry|leave.*room temperature.*overnight)/i.test(
-      recipe.data.steps.map((step) => step.instruction).join(" "),
-    );
-  if (unsafe) {
-    await block(admin, draftId, "UNSAFE_INSTRUCTION", phase);
-    throw new FatalError("Unsafe instruction");
+  const safetyFailure = recipeSafetyFailure(recipe.data, profile);
+  if (safetyFailure) {
+    await block(admin, draftId, safetyFailure, phase, undefined, attemptId);
+    throw new FatalError("Recipe failed deterministic safety validation");
   }
 }
 
 async function verifyRecipe(
   draftId: string,
   stage: "initial" | "final",
+  attemptId: string,
 ): Promise<"pass" | "revise" | "block"> {
   "use step";
   const verificationProvider = providerForStage("verification");
@@ -367,7 +419,7 @@ async function verifyRecipe(
     stage: `${verificationProvider}_${stage}_verification`,
   });
   const admin = createAdminClient();
-  const draft = await loadDraft(admin, draftId);
+  const draft = await loadDraft(admin, draftId, attemptId);
   const result = await measuredGenerate(`recipe-${stage}-verification`, {
     model: getModel(verificationProvider),
     schema: independentVerificationSchema,
@@ -386,30 +438,34 @@ async function verifyRecipe(
       status: "adjudicating",
       updated_at: new Date().toISOString(),
     })
-    .eq("id", draftId);
+    .eq("id", draftId)
+    .eq("workflow_attempt_id", attemptId);
   const verdict = (result.object as { verdict: "pass" | "revise" | "block" })
     .verdict;
-  if (stage === "final" && verdict === "block") {
+  if (verdict === "block") {
     await block(
       admin,
       draftId,
-      "FINAL_INDEPENDENT_VERIFIER_FAILED",
+      stage === "initial"
+        ? "INITIAL_INDEPENDENT_VERIFIER_BLOCKED"
+        : "FINAL_INDEPENDENT_VERIFIER_FAILED",
       stage,
       verification,
+      attemptId,
     );
-    throw new FatalError("Final independent verification failed");
+    throw new FatalError(`${stage} independent verification failed`);
   }
   return verdict;
 }
 
-async function adjudicate(draftId: string) {
+async function adjudicate(draftId: string, attemptId: string) {
   "use step";
   const adjudicationProvider = providerForStage("adjudication");
   logWorkflowEvent("recipe_workflow_step_started", draftId, {
     stage: `${adjudicationProvider}_adjudication`,
   });
   const admin = createAdminClient();
-  const draft = await loadDraft(admin, draftId);
+  const draft = await loadDraft(admin, draftId, attemptId);
   const decision = await measuredGenerate("recipe-adjudication", {
     model: getModel(adjudicationProvider),
     schema: adjudicationSchema,
@@ -435,6 +491,7 @@ async function adjudicate(draftId: string) {
       "ADJUDICATION_BLOCKED",
       "adjudication",
       verification,
+      attemptId,
     );
     throw new FatalError("Recipe blocked");
   }
@@ -446,6 +503,7 @@ async function adjudicate(draftId: string) {
         "REVISION_LIMIT_REACHED",
         "adjudication",
         verification,
+        attemptId,
       );
       throw new FatalError("Revision limit reached");
     }
@@ -457,6 +515,7 @@ async function adjudicate(draftId: string) {
         "INVALID_REVISION",
         "adjudication",
         verification,
+        attemptId,
       );
       throw new FatalError("Invalid revision");
     }
@@ -469,7 +528,8 @@ async function adjudicate(draftId: string) {
         status: "verifying",
         updated_at: new Date().toISOString(),
       })
-      .eq("id", draftId);
+      .eq("id", draftId)
+      .eq("workflow_attempt_id", attemptId);
     return;
   }
   await admin
@@ -479,20 +539,28 @@ async function adjudicate(draftId: string) {
       status: "verifying",
       updated_at: new Date().toISOString(),
     })
-    .eq("id", draftId);
+    .eq("id", draftId)
+    .eq("workflow_attempt_id", attemptId);
 }
 
-async function finalizeDraft(draftId: string) {
+async function finalizeDraft(draftId: string, attemptId: string) {
   "use step";
   logWorkflowEvent("recipe_workflow_step_started", draftId, {
     stage: "finalizing",
   });
   const admin = createAdminClient();
-  const draft = await loadDraft(admin, draftId);
+  const draft = await loadDraft(admin, draftId, attemptId);
   const final = (draft.verification?.verification_final ??
     draft.verification?.gemini_final) as { verdict?: string } | undefined;
   if (final?.verdict !== "pass") {
-    await block(admin, draftId, "FINAL_INDEPENDENT_VERIFIER_FAILED", "final");
+    await block(
+      admin,
+      draftId,
+      "FINAL_INDEPENDENT_VERIFIER_FAILED",
+      "final",
+      undefined,
+      attemptId,
+    );
     throw new FatalError("Missing passing final verifier");
   }
   await admin
@@ -503,34 +571,44 @@ async function finalizeDraft(draftId: string) {
       verification: { ...draft.verification, verdict: "pass" },
       updated_at: new Date().toISOString(),
     })
-    .eq("id", draftId);
+    .eq("id", draftId)
+    .eq("workflow_attempt_id", attemptId);
 }
 
-async function failUnresolvedFinalRevision(draftId: string) {
+async function failUnresolvedFinalRevision(draftId: string, attemptId: string) {
   "use step";
   const admin = createAdminClient();
-  const draft = await loadDraft(admin, draftId);
+  const draft = await loadDraft(admin, draftId, attemptId);
   await block(
     admin,
     draftId,
     "FINAL_REVISION_UNRESOLVED",
     "final_revision",
     draft.verification,
+    attemptId,
   );
 }
 
 async function loadDraft(
   admin: ReturnType<typeof createAdminClient>,
   draftId: string,
+  attemptId: string,
 ): Promise<Draft> {
   const { data } = await admin
     .from("recipe_drafts")
     .select(
-      "id,user_id,kind,request,input_id,canonical_recipe,verification,retry_count",
+      "id,user_id,kind,request,input_id,canonical_recipe,verification,retry_count,workflow_attempt_id,status",
     )
     .eq("id", draftId)
     .maybeSingle();
   if (!data) throw new FatalError("Draft not found");
+  if (
+    data.workflow_attempt_id !== attemptId ||
+    ["accepted", "rejected", "blocked", "failed_permanent"].includes(
+      data.status,
+    )
+  )
+    throw new FatalError("Workflow attempt is no longer current");
   return data as Draft;
 }
 
@@ -555,6 +633,7 @@ async function block(
   code: string,
   stage: string,
   verification?: Record<string, unknown>,
+  attemptId?: string,
 ) {
   await admin
     .from("recipe_drafts")
@@ -564,23 +643,36 @@ async function block(
       verification: verification ?? { stage },
       updated_at: new Date().toISOString(),
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq(
+      "workflow_attempt_id",
+      attemptId ?? "00000000-0000-0000-0000-000000000000",
+    );
 }
 
-async function recordWorkflowFailure(draftId: string, message: string) {
+async function recordWorkflowFailure(
+  draftId: string,
+  message: string,
+  attemptId: string,
+) {
   "use step";
   const admin = createAdminClient();
   const { data: draft } = await admin
     .from("recipe_drafts")
-    .select("status,failure_code,verification")
+    .select("status,failure_code,verification,workflow_attempt_id")
     .eq("id", draftId)
     .maybeSingle();
   // Deterministic guards already wrote a terminal safety verdict.
   if (
     !draft ||
-    ["accepted", "rejected", "blocked", "failed_permanent"].includes(
-      draft.status,
-    )
+    draft.workflow_attempt_id !== attemptId ||
+    [
+      "accepted",
+      "rejected",
+      "blocked",
+      "failed_permanent",
+      "awaiting_user_acceptance",
+    ].includes(draft.status)
   )
     return;
   if (
@@ -614,7 +706,8 @@ async function recordWorkflowFailure(draftId: string, message: string) {
       },
       updated_at: new Date().toISOString(),
     })
-    .eq("id", draftId);
+    .eq("id", draftId)
+    .eq("workflow_attempt_id", attemptId);
 }
 
 /** Logs opaque IDs and safe failure categories only: never prompts, source

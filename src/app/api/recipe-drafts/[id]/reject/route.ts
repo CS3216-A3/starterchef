@@ -11,17 +11,9 @@ export const POST = withProtectedRoute(
         "INVALID_REQUEST",
         "Invalid draft ID",
       );
-    const { data, error } = await supabase
-      .from("recipe_drafts")
-      .update({
-        status: "rejected",
-        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id)
-      .eq("status", "awaiting_user_acceptance")
-      .select("id")
-      .maybeSingle();
+    const { data, error } = await supabase.rpc("reject_recipe_draft", {
+      p_draft_id: id,
+    });
     if (error)
       return protectedError(
         { requestId },
