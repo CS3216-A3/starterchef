@@ -1,14 +1,12 @@
-import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { scrapeRecipe } from "recipe-scrapers";
 import { measuredGenerate } from "@/lib/ai/instrument";
 import { getModel } from "@/lib/ai/model";
 import { renderPrompt } from "@/lib/ai/prompts";
+import { AI_OPERATION_COSTS, withAiRoute } from "@/lib/ai/route";
 import { importedRecipeSchema } from "@/lib/ai/schemas/import";
-import { checkRateLimit, createRateLimitResponse } from "@/lib/rate-limit";
-import { createClient } from "@/lib/supabase/server";
-import { friendlyAiError } from "@/lib/ai/errors";
+import { apiError } from "@/lib/api-error";
 
 const requestSchema = z.discriminatedUnion("source", [
   z.object({
@@ -63,39 +61,16 @@ function isYouTubeUrl(raw: string): boolean {
  *  this to their own limit). */
 export const maxDuration = 120;
 
-export async function POST(request: Request) {
-  let isVideo = false;
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const rateLimit = await checkRateLimit(user.id);
-    if (!rateLimit.allowed) {
-      return createRateLimitResponse(rateLimit);
-    }
-
-    const body = (await request.json()) as unknown;
-    const parsed = requestSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Invalid request", issues: parsed.error.issues },
-        { status: 400 },
-      );
-    }
-
-    const input = parsed.data;
-    isVideo = input.source === "video";
-
+export const POST = withAiRoute({
+  schema: requestSchema,
+  cost: AI_OPERATION_COSTS.import,
+  async handler({ input }) {
     const generateArgs = await buildGenerateArgs(input);
     if (!generateArgs.ok) {
-      return NextResponse.json(
-        { error: generateArgs.error },
-        { status: generateArgs.status },
+      return apiError(
+        generateArgs.status,
+        "INVALID_REQUEST",
+        generateArgs.error,
       );
     }
 
@@ -103,22 +78,12 @@ export async function POST(request: Request) {
 
     // Attach the scraped source image (URL imports only) so the client can
     // store it as the recipe's hero photo.
-    return NextResponse.json({
+    return Response.json({
       ...(result.object as Record<string, unknown>),
       imageUrl: generateArgs.imageUrl,
     });
-  } catch (err) {
-    const raw = friendlyAiError(err, "Recipe import failed");
-    // Model/provider failures on video input are common (private video,
-    // region lock, unsupported format) — translate them into something a
-    // user can act on instead of a raw provider error.
-    const message = isVideo
-      ? "We couldn't read that video. Make sure the YouTube video is public, or try a shorter clip or a different link."
-      : raw;
-    return NextResponse.json({ error: message }, { status: 502 });
-  }
-}
-
+  },
+});
 type GenerateArgsResult =
   | { ok: true; args: Parameters<typeof generateObject>[0]; imageUrl?: string }
   | { ok: false; error: string; status: number };
@@ -131,7 +96,7 @@ async function buildGenerateArgs(
   input: z.infer<typeof requestSchema>,
 ): Promise<GenerateArgsResult> {
   const baseArgs = {
-    model: getModel(),
+    model: getModel("import"),
     schema: importedRecipeSchema,
     temperature: 0.4,
     system: renderPrompt("import-recipe", {}),

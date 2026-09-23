@@ -1,8 +1,30 @@
-import { NextResponse } from "next/server";
-import { VOICE_PROVIDERS, type VoiceProvider } from "@/lib/ai/voice";
-import { checkRateLimit, createRateLimitResponse } from "@/lib/rate-limit";
-import { createClient } from "@/lib/supabase/server";
-import { friendlyAiError } from "@/lib/ai/errors";
+import { z } from "zod";
+import { AI_OPERATION_COSTS, withAiRoute } from "@/lib/ai/route";
+
+const requestSchema = z.object({
+  capability: z.literal("cooking-assistant"),
+});
+
+const REALTIME_MODELS = {
+  openai: ["gpt-realtime-2.1-mini", "gpt-realtime-2.1"],
+  gemini: ["gemini-3.8-live"],
+} as const;
+
+function getRealtimeConfig() {
+  const provider = process.env.AI_REALTIME_PROVIDER ?? "openai";
+  if (provider !== "openai" && provider !== "gemini") {
+    throw new Error("Realtime provider is not approved");
+  }
+  const fallback = REALTIME_MODELS[provider][0];
+  const model =
+    provider === "openai"
+      ? (process.env.OPENAI_REALTIME_MODEL ?? fallback)
+      : (process.env.GOOGLE_LIVE_MODEL ?? fallback);
+  if (!(REALTIME_MODELS[provider] as readonly string[]).includes(model)) {
+    throw new Error("Realtime model is not approved");
+  }
+  return { provider, model };
+}
 
 /**
  * POST /api/ai/realtime/session
@@ -10,111 +32,86 @@ import { friendlyAiError } from "@/lib/ai/errors";
  *
  * - OpenAI: creates an ephemeral session token server-side via direct HTTP call
  *   (avoids SDK type/version lock-in for new model names).
- * - Gemini: returns model + instructions. The client connects directly with
- *   NEXT_PUBLIC_GOOGLE_GENERATIVE_AI_API_KEY. This is acceptable for a
- *   prototype; production should proxy through a server-side WebSocket.
+ * - Gemini: creates a constrained, single-use ephemeral token server-side.
  */
 
-export async function POST(request: Request) {
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const rateLimit = await checkRateLimit(user.id);
-    if (!rateLimit.allowed) {
-      return createRateLimitResponse(rateLimit);
-    }
-
-    const body = (await request.json().catch(() => null)) as {
-      provider?: VoiceProvider;
-    } | null;
-    const provider = body?.provider;
-    if (
-      !provider ||
-      !(VOICE_PROVIDERS as readonly string[]).includes(provider)
-    ) {
-      return NextResponse.json(
-        { error: "Invalid voice provider" },
-        { status: 400 },
-      );
-    }
-
+export const POST = withAiRoute({
+  schema: requestSchema,
+  cost: AI_OPERATION_COSTS["realtime-session"],
+  async handler() {
+    const { provider, model } = getRealtimeConfig();
     if (provider === "openai") {
       const apiKey = process.env.OPENAI_API_KEY;
-      if (!apiKey) {
-        return NextResponse.json(
-          { error: "OPENAI_API_KEY is not configured" },
-          { status: 503 },
-        );
-      }
+      if (!apiKey) throw new Error("Realtime provider is unavailable");
 
-      const model =
-        process.env.OPENAI_REALTIME_MODEL ?? "gpt-realtime-2.1-mini";
       const voice = process.env.OPENAI_REALTIME_VOICE ?? "alloy";
 
-      try {
-        const response = await fetch(
-          "https://api.openai.com/v1/realtime/sessions",
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${apiKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              model,
-              instructions: buildSystemInstructions(),
-              voice,
-            }),
+      const response = await fetch(
+        "https://api.openai.com/v1/realtime/sessions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
           },
-        );
+          body: JSON.stringify({
+            model,
+            instructions: buildSystemInstructions(),
+            voice,
+          }),
+        },
+      );
 
-        if (!response.ok) {
-          const text = await response.text();
-          return NextResponse.json(
-            { error: `OpenAI session failed: ${text}` },
-            { status: response.status },
-          );
-        }
+      if (!response.ok) throw new Error("Realtime provider rejected session");
 
-        const data = (await response.json()) as {
-          client_secret: { value: string; expires_at: number };
-        };
+      const data = (await response.json()) as {
+        client_secret: { value: string; expires_at: number };
+      };
 
-        return NextResponse.json({
-          provider: "openai",
-          model,
-          token: data.client_secret.value,
-          expiresAt: data.client_secret.expires_at,
-        });
-      } catch (err) {
-        const message = friendlyAiError(err, "OpenAI session failed");
-        return NextResponse.json({ error: message }, { status: 502 });
-      }
+      return Response.json({
+        provider: "openai",
+        model,
+        token: data.client_secret.value,
+        expiresAt: data.client_secret.expires_at,
+      });
     }
 
     if (provider === "gemini") {
-      return NextResponse.json({
+      const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+      if (!apiKey) throw new Error("Realtime provider is unavailable");
+      const expiresAt = new Date(Date.now() + 20 * 60 * 1000).toISOString();
+      const tokenResponse = await fetch(
+        `https://generativelanguage.googleapis.com/v1alpha/authTokens?key=${encodeURIComponent(apiKey)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            uses: 1,
+            expireTime: expiresAt,
+            newSessionExpireTime: new Date(
+              Date.now() + 60 * 1000,
+            ).toISOString(),
+            bidiGenerateContentSetup: { model: `models/${model}` },
+          }),
+        },
+      );
+      if (!tokenResponse.ok)
+        throw new Error("Realtime provider rejected session");
+      const tokenData = (await tokenResponse.json()) as { name?: string };
+      if (!tokenData.name)
+        throw new Error("Realtime provider returned no token");
+      return Response.json({
         provider: "gemini",
-        model: process.env.GOOGLE_LIVE_MODEL ?? "gemini-3.8-live",
+        model,
+        token: tokenData.name,
+        expiresAt,
         instructions: buildSystemInstructions(),
       });
     }
 
-    return NextResponse.json(
-      { error: "Provider not supported by realtime session route" },
-      { status: 400 },
-    );
-  } catch (err) {
-    const message = friendlyAiError(err, "Realtime session failed");
-    return NextResponse.json({ error: message }, { status: 502 });
-  }
-}
+    throw new Error("Realtime provider is unavailable");
+  },
+});
 
 function buildSystemInstructions(): string {
   return [

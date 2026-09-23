@@ -1,13 +1,29 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { getActiveSession, logSessionEvent } from "@/lib/session-events";
 import { createClient } from "@/lib/supabase/server";
 import { slugify } from "@/lib/slug";
 import type { ImportedRecipe } from "@/lib/ai/schemas/import";
+import { safeActionFailure } from "@/lib/action-result";
+import {
+  createRecipeSchema,
+  feedbackSchema,
+  updateRecipeSchema,
+  uuidSchema,
+} from "@/lib/validation/actions";
+import {
+  inspectKitchenImage,
+  KITCHEN_IMAGE_MAX_BYTES,
+} from "@/lib/image-upload";
+import { privateMediaReference } from "@/lib/private-media";
 
 /** Save or unsave a catalogue recipe for the current user. */
 export async function toggleSavedRecipe(recipeId: string, save: boolean) {
+  const parsedId = uuidSchema.safeParse(recipeId);
+  if (!parsedId.success || typeof save !== "boolean")
+    return { error: "Invalid recipe" };
   const supabase = await createClient();
   const {
     data: { user },
@@ -17,15 +33,15 @@ export async function toggleSavedRecipe(recipeId: string, save: boolean) {
   if (save) {
     const { error } = await supabase
       .from("saved_recipes")
-      .upsert({ user_id: user.id, recipe_id: recipeId });
-    if (error) return { error: error.message };
+      .upsert({ user_id: user.id, recipe_id: parsedId.data });
+    if (error) return safeActionFailure("save this recipe", error);
   } else {
     const { error } = await supabase
       .from("saved_recipes")
       .delete()
       .eq("user_id", user.id)
-      .eq("recipe_id", recipeId);
-    if (error) return { error: error.message };
+      .eq("recipe_id", parsedId.data);
+    if (error) return safeActionFailure("remove this saved recipe", error);
   }
 
   revalidatePath("/recipes");
@@ -41,6 +57,10 @@ export interface CreateRecipeInput extends ImportedRecipe {
 
 /** Persist an imported or personalised recipe for the current user. */
 export async function createUserRecipe(input: CreateRecipeInput) {
+  const parsed = createRecipeSchema.safeParse(input);
+  if (!parsed.success)
+    return { error: "Check the recipe values and try again" };
+  input = parsed.data;
   const supabase = await createClient();
   const {
     data: { user },
@@ -51,11 +71,13 @@ export async function createUserRecipe(input: CreateRecipeInput) {
   let slug = baseSlug;
   let suffix = 2;
   for (let attempt = 0; attempt < 10; attempt++) {
-    const { data: existing } = await supabase
+    const { data: existing, error: lookupError } = await supabase
       .from("recipes")
       .select("slug")
       .eq("slug", slug)
       .maybeSingle();
+    if (lookupError)
+      return safeActionFailure("check the recipe name", lookupError);
     if (!existing) break;
     slug = `${baseSlug}-${suffix}`;
     suffix++;
@@ -97,7 +119,7 @@ export async function createUserRecipe(input: CreateRecipeInput) {
     .select("id, slug")
     .single();
 
-  if (error) return { error: error.message };
+  if (error) return safeActionFailure("create this recipe", error);
 
   revalidatePath("/recipes");
   revalidatePath("/today");
@@ -128,6 +150,10 @@ export interface UpdateRecipeInput {
 
 /** Update a user-owned recipe. */
 export async function updateUserRecipe(input: UpdateRecipeInput) {
+  const parsed = updateRecipeSchema.safeParse(input);
+  if (!parsed.success)
+    return { error: "Check the recipe values and try again" };
+  input = parsed.data;
   const supabase = await createClient();
   const {
     data: { user },
@@ -161,7 +187,7 @@ export async function updateUserRecipe(input: UpdateRecipeInput) {
     .eq("id", input.id)
     .eq("user_id", user.id);
 
-  if (error) return { error: error.message };
+  if (error) return safeActionFailure("update this recipe", error);
 
   revalidatePath("/recipes");
   revalidatePath("/today");
@@ -184,6 +210,9 @@ export async function saveRecipeFeedback(
   input: RecipeFeedbackInput,
   options?: { createPersonalizedCopy?: ImportedRecipe },
 ) {
+  const parsed = feedbackSchema.safeParse(input);
+  if (!parsed.success) return { error: "Check your feedback and try again" };
+  input = parsed.data;
   const supabase = await createClient();
   const {
     data: { user },
@@ -208,7 +237,8 @@ export async function saveRecipeFeedback(
       notes: input.notes,
     });
 
-  if (feedbackError) return { error: feedbackError.message };
+  if (feedbackError)
+    return safeActionFailure("save your feedback", feedbackError);
 
   await logSessionEvent(supabase, {
     userId: user.id,
@@ -231,7 +261,7 @@ export async function saveRecipeFeedback(
       ...personalized,
       parentRecipeId: input.recipeId,
     });
-    if (result.error) return result;
+    if ("error" in result) return result;
     return {
       ok: true,
       personalizedRecipeId: result.id,
@@ -244,8 +274,8 @@ export async function saveRecipeFeedback(
 }
 
 /**
- * Upload a cover/step image to the `recipe-images` bucket under the user's
- * own folder and return its public URL.
+ * Upload a cover/step image privately and return an opaque reference plus a
+ * short-lived preview URL. Only the opaque reference may be persisted.
  */
 export async function uploadRecipeImage(formData: FormData) {
   const supabase = await createClient();
@@ -255,32 +285,34 @@ export async function uploadRecipeImage(formData: FormData) {
   if (!user) return { error: "Not signed in" };
 
   const file = formData.get("file");
-  const recipeId = String(formData.get("recipeId") ?? "misc");
-  const name = String(formData.get("name") ?? "image");
+  const recipeId = uuidSchema.safeParse(formData.get("recipeId"));
   if (!(file instanceof File) || file.size === 0) {
     return { error: "No file provided" };
   }
-  if (!file.type.startsWith("image/")) {
-    return { error: "File must be an image" };
-  }
-  if (file.size > 5 * 1024 * 1024) {
-    return { error: "Image must be under 5 MB" };
-  }
-
-  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-  const path = `${user.id}/${recipeId}/${name}-${Date.now()}.${ext}`;
+  if (!recipeId.success) return { error: "Invalid recipe" };
+  if (file.size > KITCHEN_IMAGE_MAX_BYTES)
+    return { error: "Image must be under 8 MiB" };
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const inspected = inspectKitchenImage(file.type, bytes);
+  if (!inspected) return { error: "Choose a valid JPEG, PNG, or WebP image" };
+  const path = `${user.id}/recipes/${recipeId.data}/${randomUUID()}.${inspected.extension}`;
 
   const { error } = await supabase.storage
-    .from("recipe-images")
-    .upload(path, file, { contentType: file.type });
-  if (error) return { error: error.message };
+    .from("recipe-inputs")
+    .upload(path, bytes, { contentType: inspected.contentType, upsert: false });
+  if (error) return safeActionFailure("upload this image", error);
 
-  const { data } = supabase.storage.from("recipe-images").getPublicUrl(path);
-  return { ok: true, url: data.publicUrl };
+  const { data, error: signError } = await supabase.storage
+    .from("recipe-inputs")
+    .createSignedUrl(path, 10 * 60);
+  if (signError) return safeActionFailure("preview this image", signError);
+  return { ok: true, path: privateMediaReference(path), url: data.signedUrl };
 }
 
 /** Delete a user-owned recipe. */
 export async function deleteUserRecipe(recipeId: string) {
+  const parsedId = uuidSchema.safeParse(recipeId);
+  if (!parsedId.success) return { error: "Invalid recipe" };
   const supabase = await createClient();
   const {
     data: { user },
@@ -290,10 +322,10 @@ export async function deleteUserRecipe(recipeId: string) {
   const { error } = await supabase
     .from("recipes")
     .delete()
-    .eq("id", recipeId)
+    .eq("id", parsedId.data)
     .eq("user_id", user.id);
 
-  if (error) return { error: error.message };
+  if (error) return safeActionFailure("delete this recipe", error);
 
   revalidatePath("/recipes");
   revalidatePath("/today");

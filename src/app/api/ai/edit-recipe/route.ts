@@ -1,15 +1,12 @@
-import { NextResponse } from "next/server";
 import { generateText, stepCountIs } from "ai";
 import { z } from "zod";
 import { getModel } from "@/lib/ai/model";
 import { renderPrompt } from "@/lib/ai/prompts";
+import { AI_OPERATION_COSTS, withAiRoute } from "@/lib/ai/route";
 import {
   createRecipeEditTools,
   type EditableRecipe,
 } from "@/lib/ai/recipe-edit-tools";
-import { checkRateLimit, createRateLimitResponse } from "@/lib/rate-limit";
-import { createClient } from "@/lib/supabase/server";
-import { friendlyAiError } from "@/lib/ai/errors";
 
 const requestSchema = z.object({
   request: z.string().min(1).max(1000),
@@ -45,47 +42,29 @@ const requestSchema = z.object({
  * Returns the full edited recipe + a changeSummary. Nothing is persisted;
  * the client applies or dismisses the suggestion.
  */
-export async function POST(request: Request) {
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const rateLimit = await checkRateLimit(user.id);
-    if (!rateLimit.allowed) {
-      return createRateLimitResponse(rateLimit);
-    }
-
-    const parsed = requestSchema.safeParse(await request.json());
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Invalid request", issues: parsed.error.issues },
-        { status: 400 },
-      );
-    }
-
-    const working: EditableRecipe = JSON.parse(
-      JSON.stringify(parsed.data.recipe),
-    );
-    const { tools, changes } = createRecipeEditTools(working);
-
-    // Personalise edits: restrictions/allergies are hard constraints the
-    // model must respect — and proactively fix — without being asked.
-    const { data: profile } = await supabase
+export const POST = withAiRoute({
+  schema: requestSchema,
+  cost: AI_OPERATION_COSTS.edit,
+  async loadContext({ supabase, user }) {
+    const { data, error } = await supabase
       .from("profiles")
       .select("dietary_restrictions, allergies, skill_level, household_size")
       .eq("id", user.id)
       .maybeSingle();
+    if (error) throw new Error("Could not load profile");
+    return data;
+  },
+  async handler({ input, trusted: profile }) {
+    const working: EditableRecipe = JSON.parse(JSON.stringify(input.recipe));
+    const { tools, changes } = createRecipeEditTools(working);
 
+    // Personalise edits: restrictions/allergies are hard constraints the
+    // model must respect — and proactively fix — without being asked.
     const list = (v: string[] | null | undefined) =>
       v && v.length > 0 ? v.join(", ") : "none";
 
     const result = await generateText({
-      model: getModel(),
+      model: getModel("edit"),
       tools,
       stopWhen: stepCountIs(12),
       temperature: 0.3,
@@ -95,11 +74,11 @@ export async function POST(request: Request) {
         skillLevel: profile?.skill_level ?? "beginner",
         householdSize: String(profile?.household_size ?? 2),
       }),
-      prompt: `Current recipe:\n${JSON.stringify(parsed.data.recipe, null, 1)}\n\nRequest: ${parsed.data.request}`,
+      prompt: `Current recipe:\n${JSON.stringify(input.recipe, null, 1)}\n\nRequest: ${input.request}`,
       telemetry: { functionId: "edit-recipe" },
     });
 
-    return NextResponse.json({
+    return Response.json({
       changeSummary:
         result.text?.trim() ||
         (changes.length ? changes.join(". ") : "No changes made."),
@@ -122,8 +101,5 @@ export async function POST(request: Request) {
       tags: working.tags,
       whyGood: working.why_good,
     });
-  } catch (err) {
-    const message = friendlyAiError(err, "Recipe edit failed");
-    return NextResponse.json({ error: message }, { status: 502 });
-  }
-}
+  },
+});

@@ -1,5 +1,6 @@
 "use server";
 
+import { z } from "zod";
 import { measuredGenerate } from "@/lib/ai/instrument";
 import { getModel } from "@/lib/ai/model";
 import { renderPrompt } from "@/lib/ai/prompts";
@@ -10,6 +11,13 @@ import {
 import { logSessionEvent } from "@/lib/session-events";
 import { createClient } from "@/lib/supabase/server";
 import type { SessionEventRow } from "@/lib/types";
+import { safeActionFailure } from "@/lib/action-result";
+
+const slugSchema = z.string().trim().min(1).max(200);
+const stepEventSchema = z.object({
+  sessionId: z.uuid(),
+  stepIndex: z.number().int().min(1).max(500),
+});
 
 /**
  * Ensure there's an in-progress cooking_sessions row for this recipe.
@@ -18,20 +26,23 @@ import type { SessionEventRow } from "@/lib/types";
  * the card on /today just points at whichever is newest.
  */
 export async function startCookingSession(recipeSlug: string) {
+  const parsedSlug = slugSchema.safeParse(recipeSlug);
+  if (!parsedSlug.success) return { error: "Invalid recipe" };
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in" };
 
-  const { data: recipe } = await supabase
+  const { data: recipe, error: recipeError } = await supabase
     .from("recipes")
     .select("id, slug, title, steps")
-    .eq("slug", recipeSlug)
+    .eq("slug", parsedSlug.data)
     .maybeSingle();
+  if (recipeError) return safeActionFailure("load this recipe", recipeError);
   if (!recipe) return { error: "Recipe not found" };
 
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("cooking_sessions")
     .select("id, recipe")
     .eq("user_id", user.id)
@@ -39,9 +50,11 @@ export async function startCookingSession(recipeSlug: string) {
     .order("started_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (existingError)
+    return safeActionFailure("check active cooking sessions", existingError);
 
   const existingSlug = (existing?.recipe as { slug?: string } | null)?.slug;
-  if (existing && existingSlug === recipeSlug) {
+  if (existing && existingSlug === parsedSlug.data) {
     return { ok: true, sessionId: existing.id };
   }
 
@@ -61,7 +74,7 @@ export async function startCookingSession(recipeSlug: string) {
     .select("id")
     .single();
 
-  if (error) return { error: error.message };
+  if (error) return safeActionFailure("start cooking", error);
 
   await logSessionEvent(supabase, {
     userId: user.id,
@@ -77,13 +90,17 @@ export async function startCookingSession(recipeSlug: string) {
  *  cook screen). Consecutive duplicates are skipped so re-mounts don't spam
  *  the timeline. */
 export async function recordStepEvent(sessionId: string, stepIndex: number) {
+  const parsed = stepEventSchema.safeParse({ sessionId, stepIndex });
+  if (!parsed.success) return;
+  sessionId = parsed.data.sessionId;
+  stepIndex = parsed.data.stepIndex;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return;
 
-  const { data: last } = await supabase
+  const { data: last, error: lastError } = await supabase
     .from("session_events")
     .select("kind, step_index")
     .eq("session_id", sessionId)
@@ -91,14 +108,16 @@ export async function recordStepEvent(sessionId: string, stepIndex: number) {
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (lastError) return;
 
   if (last?.kind === "step_entered" && last.step_index === stepIndex) return;
 
-  await supabase
+  const { error: updateError } = await supabase
     .from("cooking_sessions")
     .update({ current_step: stepIndex })
     .eq("id", sessionId)
     .eq("user_id", user.id);
+  if (updateError) return;
 
   await logSessionEvent(supabase, {
     userId: user.id,
@@ -120,7 +139,7 @@ export async function completeCookingSession() {
   } = await supabase.auth.getUser();
   if (!user) return;
 
-  const { data: session } = await supabase
+  const { data: session, error: sessionError } = await supabase
     .from("cooking_sessions")
     .select("id, recipe")
     .eq("user_id", user.id)
@@ -128,14 +147,19 @@ export async function completeCookingSession() {
     .order("started_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (sessionError)
+    return safeActionFailure("load your cooking session", sessionError);
 
-  await supabase
+  const { error: completeError } = await supabase
     .from("cooking_sessions")
     .update({ status: "completed", completed_at: new Date().toISOString() })
     .eq("user_id", user.id)
     .eq("status", "in_progress");
+  if (completeError)
+    return safeActionFailure("complete your cooking session", completeError);
 
   if (session) await generateSessionRecap(supabase, user.id, session.id);
+  return { ok: true };
 }
 
 /** Build the recap from the session timeline — best-effort, never throws. */

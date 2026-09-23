@@ -1,13 +1,13 @@
-import { NextResponse } from "next/server";
 import { z } from "zod";
 import { measuredGenerate } from "@/lib/ai/instrument";
 import { getModel } from "@/lib/ai/model";
 import { renderPrompt } from "@/lib/ai/prompts";
+import { AI_OPERATION_COSTS, withAiRoute } from "@/lib/ai/route";
 import { stepCheckSchema, type StepCheck } from "@/lib/ai/schemas/cooking";
-import { checkRateLimit, createRateLimitResponse } from "@/lib/rate-limit";
 import { logSessionEvent } from "@/lib/session-events";
 import { createClient } from "@/lib/supabase/server";
-import { friendlyAiError } from "@/lib/ai/errors";
+import { privateMediaReference } from "@/lib/private-media";
+import { inspectKitchenImage } from "@/lib/image-upload";
 
 const requestSchema = z.object({
   image: z.string().min(1).max(5_000_000),
@@ -98,14 +98,16 @@ async function uploadCheckpointPhoto(
   const match = /^data:(image\/[\w+.-]+);base64,(.+)$/.exec(dataUrl);
   if (!match) return null;
   const [, mime, base64] = match;
-  const ext = mime.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
-  const path = `${userId}/checkpoints/${sessionId}-${Date.now()}.${ext}`;
+  const bytes = Buffer.from(base64, "base64");
+  const inspected = inspectKitchenImage(mime, bytes);
+  if (!inspected) return null;
+  const ext = inspected.extension;
+  const path = `${userId}/checkpoints/${sessionId}-${crypto.randomUUID()}.${ext}`;
   const { error } = await supabase.storage
-    .from("recipe-images")
-    .upload(path, Buffer.from(base64, "base64"), { contentType: mime });
+    .from("recipe-inputs")
+    .upload(path, bytes, { contentType: inspected.contentType });
   if (error) return null;
-  return supabase.storage.from("recipe-images").getPublicUrl(path).data
-    .publicUrl;
+  return privateMediaReference(path);
 }
 
 /**
@@ -113,28 +115,22 @@ async function uploadCheckpointPhoto(
  * Camera checkpoint during cooking: the user photographs their food mid-step
  * and gets practical feedback on whether it looks right.
  */
-export async function POST(request: Request) {
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const rateLimit = await checkRateLimit(user.id);
-    if (!rateLimit.allowed) {
-      return createRateLimitResponse(rateLimit);
-    }
-
-    const parsed = requestSchema.safeParse(await request.json());
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Invalid request", issues: parsed.error.issues },
-        { status: 400 },
-      );
-    }
+export const POST = withAiRoute({
+  schema: requestSchema,
+  cost: AI_OPERATION_COSTS["step-check"],
+  async loadContext({ input, supabase }) {
+    if (!input.sessionId) return [];
+    const { data, error } = await supabase
+      .from("session_events")
+      .select("payload, created_at")
+      .eq("session_id", input.sessionId)
+      .eq("kind", "photo_check")
+      .order("created_at", { ascending: false })
+      .limit(5);
+    if (error) throw new Error("Could not load session context");
+    return data ?? [];
+  },
+  async handler({ input, trusted: pastChecks, supabase, user }) {
     const {
       image,
       context,
@@ -143,20 +139,13 @@ export async function POST(request: Request) {
       question,
       recipeId,
       recipeSlug,
-    } = parsed.data;
+    } = input;
 
     // Give the model memory of past checkpoints as text — the verdicts and
     // feedback from recent checks, so it can build on them ("still too
     // pale") without paying for extra image tokens.
     let pastSummary = "";
     if (sessionId) {
-      const { data: pastChecks } = await supabase
-        .from("session_events")
-        .select("payload, created_at")
-        .eq("session_id", sessionId)
-        .eq("kind", "photo_check")
-        .order("created_at", { ascending: false })
-        .limit(5);
       pastSummary = (pastChecks ?? [])
         .reverse()
         .map((e) => {
@@ -177,7 +166,7 @@ export async function POST(request: Request) {
     }
 
     const { object } = (await measuredGenerate("step-check", {
-      model: getModel(),
+      model: getModel("step-check"),
       schema: stepCheckSchema,
       temperature: 0.4,
       system: renderPrompt("step-check", {}),
@@ -244,9 +233,6 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json(object);
-  } catch (err) {
-    const message = friendlyAiError(err, "Step check failed");
-    return NextResponse.json({ error: message }, { status: 502 });
-  }
-}
+    return Response.json(object);
+  },
+});

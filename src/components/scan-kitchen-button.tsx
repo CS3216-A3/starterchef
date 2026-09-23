@@ -112,7 +112,10 @@ export function ScanKitchenButton() {
     if (res.error) {
       setState({ status: "error", message: res.error });
     } else {
-      setState({ status: "saved", added: res.count ?? items.length });
+      setState({
+        status: "saved",
+        added: "count" in res ? (res.count ?? items.length) : items.length,
+      });
     }
   }
 

@@ -57,19 +57,23 @@ export function useRealtimeAssistant({
       const res = await fetch("/api/ai/realtime/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider }),
+        body: JSON.stringify({ capability: "cooking-assistant" }),
       });
       const config = (await res.json()) as Record<string, unknown>;
       if (!res.ok) throw new Error(String(config.error ?? "Session failed"));
+      const sessionProvider = config.provider;
+      if (sessionProvider !== "openai" && sessionProvider !== "gemini") {
+        throw new Error("Invalid realtime session provider");
+      }
 
       const sessionConfig: VoiceSessionConfig = {
-        provider,
+        provider: sessionProvider,
         recipeTitle,
         stepTitle,
       };
 
       const cleanup =
-        provider === "openai"
+        sessionProvider === "openai"
           ? await connectOpenAIRealtime(
               config,
               sessionConfig,

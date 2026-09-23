@@ -24,19 +24,17 @@ export async function connectGeminiLive(
   metricsRef: MutableRefObject<VoiceAssistantMetrics>,
 ): Promise<() => void> {
   const model = config.model as string;
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_GENERATIVE_AI_API_KEY;
+  const token = config.token;
 
   if (typeof model !== "string") {
     throw new Error("Invalid Gemini Live config");
   }
 
-  if (!apiKey) {
-    throw new Error(
-      "NEXT_PUBLIC_GOOGLE_GENERATIVE_AI_API_KEY is required for Gemini Live",
-    );
+  if (typeof token !== "string") {
+    throw new Error("Invalid Gemini Live session token");
   }
 
-  const url = `wss://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?key=${encodeURIComponent(apiKey)}`;
+  const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?access_token=${encodeURIComponent(token)}`;
   const ws = new WebSocket(url);
 
   let cleanup = () => {};
