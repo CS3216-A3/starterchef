@@ -93,8 +93,8 @@ normalized_name)` constraint.
 - Add `merge_kitchen_items(p_items jsonb)` as a `SECURITY INVOKER` RPC. It
   derives `user_id` from `auth.uid()`, validates every item, atomically upserts,
   returns affected rows, and never deletes pantry items.
-- Rename `ai_usage_quota.count` to `units`; replace the mutable policy and old
-  RPC with service-role-only `consume_ai_usage(user_id, units)`.
+- Keep `ai_usage_quota.count` as the consumed-credit column; replace the mutable
+  policy and old RPC with service-role-only `consume_ai_usage(user_id, units)`.
 - Reconcile the remote broad grants/default privileges with explicit least-
   privilege grants. Preserve required current app access but remove client
   mutation access to quota, telemetry, and future draft/worker state.
@@ -149,9 +149,9 @@ pass against the non-production project.
 - Add the shared route helper described above and convert all protected existing
   routes: kitchen scan, kitchen voice, suggestions, assistant, realtime,
   import, edit, adapt, and step-check.
-- Move Zod parsing ahead of every quota call. Change the rate-limit helper to
-  consume named weighted units after valid input; expose read-only current-day
-  `units` to the existing profile credit card.
+- Move Zod parsing ahead of every quota call. The existing
+  `ai_usage_quota.count` column records consumed weighted AI credits and stays
+  read-only to users.
 - Add `server-only` to admin, quota, worker, provider, and private-media code.
   Replace raw provider/Storage/database error messages with stable errors and
   request-ID server logs that exclude content, tokens, URLs, keys, and media.
@@ -187,7 +187,7 @@ identity, worker state, telemetry, or another user's row.
 
 ## Phase 2 — trusted scanning and stored-recipe recommendations
 
-### Migration `0020_kitchen_scans_and_recommendations.sql`
+### Migration `0021_kitchen_scans_and_recommendations.sql`
 
 - Create `kitchen_scans` with owned status, private `object_path`, validated
   detections, stable failure code, idempotency key, timestamps, and 24-hour

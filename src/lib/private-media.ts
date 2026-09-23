@@ -1,3 +1,4 @@
+import "server-only";
 import type { createClient } from "@/lib/supabase/server";
 import type {
   RecipeRow,

@@ -1,3 +1,4 @@
+import "server-only";
 import { google } from "@ai-sdk/google";
 import { openai } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";

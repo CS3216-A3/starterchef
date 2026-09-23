@@ -2,7 +2,6 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { ScanKitchenButton } from "@/components/scan-kitchen-button";
 import { VoiceAddItems } from "@/components/voice-add-items";
-import { KitchenImageUpload } from "@/components/kitchen-image-upload";
 import { addKitchenItem, removeKitchenItem } from "@/app/(app)/kitchen/actions";
 import { getKitchenItems, getProfile } from "@/lib/data";
 import { kitchenIcon } from "@/lib/item-icons";
@@ -146,9 +145,6 @@ export default async function KitchenPage() {
             anything is saved.
           </p>
           <ScanKitchenButton />
-          <div className="border-t border-oat-dark pt-4">
-            <KitchenImageUpload />
-          </div>
         </aside>
       </div>
     </div>

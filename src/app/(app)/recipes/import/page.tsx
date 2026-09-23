@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { FileImage, Link2, Sparkles, Type, Video } from "lucide-react";
+import { getApiErrorMessage } from "@/lib/client-api-error";
 import { Button } from "@/components/button";
 import { createUserRecipe } from "@/app/(app)/recipes/actions";
 import type { ImportedRecipe } from "@/lib/ai/schemas/import";
@@ -14,7 +15,6 @@ interface ImportState {
   source: Source;
   text: string;
   url: string;
-  htmlFallback: string;
   photoDataUrl: string;
   videoUrl: string;
   videoDataUrl: string;
@@ -26,7 +26,6 @@ export default function ImportRecipePage() {
     source: "text",
     text: "",
     url: "",
-    htmlFallback: "",
     photoDataUrl: "",
     videoUrl: "",
     videoDataUrl: "",
@@ -50,16 +49,16 @@ export default function ImportRecipePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+      if (!res.ok) {
+        setError(await getApiErrorMessage(res, "Import failed"));
+        return;
+      }
       const data = (await res.json().catch(() => null)) as
-        ((ImportedRecipe & { imageUrl?: string }) | { error: string }) | null;
+        (ImportedRecipe & { imageUrl?: string }) | null;
       if (!data) {
         setError(
           "The import service returned an unexpected response. Please try again.",
         );
-        return;
-      }
-      if (!res.ok) {
-        setError("error" in data ? data.error : "Import failed");
         return;
       }
       setDraft(data as ImportedRecipe & { imageUrl?: string });
@@ -140,7 +139,8 @@ export default function ImportRecipePage() {
           active={state.source === "url"}
           onClick={() => setState((s) => ({ ...s, source: "url" }))}
           icon={<Link2 className="h-4 w-4" />}
-          label="Link"
+          label="Link (soon)"
+          disabled
         />
         <SourceButton
           active={state.source === "photo"}
@@ -152,7 +152,8 @@ export default function ImportRecipePage() {
           active={state.source === "video"}
           onClick={() => setState((s) => ({ ...s, source: "video" }))}
           icon={<Video className="h-4 w-4" />}
-          label="YouTube"
+          label="YouTube (soon)"
+          disabled
         />
       </div>
 
@@ -183,20 +184,6 @@ export default function ImportRecipePage() {
                 className="rounded-2xl border-2 border-espresso/10 bg-card p-4 text-sm font-semibold outline-none focus:border-flame"
                 required
               />
-              <details className="text-sm">
-                <summary className="cursor-pointer font-bold text-espresso-light">
-                  Site blocks fetching? Paste page HTML
-                </summary>
-                <textarea
-                  value={state.htmlFallback}
-                  onChange={(e) =>
-                    setState((s) => ({ ...s, htmlFallback: e.target.value }))
-                  }
-                  placeholder="Paste the page source HTML here..."
-                  rows={6}
-                  className="mt-2 w-full rounded-2xl border-2 border-espresso/10 bg-card p-4 text-sm font-semibold outline-none focus:border-flame"
-                />
-              </details>
             </div>
           )}
 
@@ -379,20 +366,23 @@ function SourceButton({
   onClick,
   icon,
   label,
+  disabled = false,
 }: {
   active: boolean;
   onClick: () => void;
   icon: React.ReactNode;
   label: string;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       className={`flex flex-col items-center gap-2 rounded-2xl p-3 text-xs font-extrabold transition-colors ${
-        active
+        active && !disabled
           ? "bg-flame text-white"
-          : "bg-card text-espresso-light ring-1 ring-oat hover:bg-oat"
+          : "bg-card text-espresso-light ring-1 ring-oat hover:bg-oat disabled:cursor-not-allowed disabled:opacity-50"
       }`}
     >
       {icon}
@@ -406,11 +396,7 @@ function buildRequestBody(state: ImportState): unknown {
     case "text":
       return { source: "text", content: state.text };
     case "url":
-      return {
-        source: "url",
-        url: state.url,
-        ...(state.htmlFallback ? { html: state.htmlFallback } : {}),
-      };
+      return { source: "url", url: state.url };
     case "photo":
       return { source: "photo", image: state.photoDataUrl };
     case "video":

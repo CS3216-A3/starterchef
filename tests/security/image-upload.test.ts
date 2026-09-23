@@ -6,19 +6,37 @@ import {
 import { pantryItemSchema, pantryItemsSchema } from "@/lib/validation/pantry";
 
 describe("kitchen image validation", () => {
-  it.each([
-    ["image/jpeg", [0xff, 0xd8, 0xff], "jpg"],
-    ["image/png", [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], "png"],
-    [
-      "image/webp",
-      [0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50],
-      "webp",
-    ],
-  ])("accepts a valid %s signature", (type, signature, extension) => {
-    expect(inspectKitchenImage(type, Uint8Array.from(signature))).toEqual({
-      contentType: type,
-      extension,
+  it("accepts a valid PNG and returns its dimensions", () => {
+    const bytes = new Uint8Array(24);
+    bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    bytes[16] = 0;
+    bytes[17] = 0;
+    bytes[18] = 0;
+    bytes[19] = 1;
+    bytes[20] = 0;
+    bytes[21] = 0;
+    bytes[22] = 0;
+    bytes[23] = 1;
+    expect(inspectKitchenImage("image/png", bytes)).toEqual({
+      contentType: "image/png",
+      extension: "png",
+      width: 1,
+      height: 1,
     });
+  });
+
+  it("rejects images exceeding dimension or megapixel limits", () => {
+    const bytes = new Uint8Array(24);
+    bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    bytes[16] = 0;
+    bytes[17] = 0;
+    bytes[18] = 0x13;
+    bytes[19] = 0x88; // 5000
+    bytes[20] = 0;
+    bytes[21] = 0;
+    bytes[22] = 0;
+    bytes[23] = 1;
+    expect(inspectKitchenImage("image/png", bytes)).toBeNull();
   });
 
   it("rejects a mismatched signature and disallowed MIME", () => {

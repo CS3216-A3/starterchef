@@ -1,12 +1,15 @@
-import { generateObject } from "ai";
 import { z } from "zod";
 import { scrapeRecipe } from "recipe-scrapers";
-import { measuredGenerate } from "@/lib/ai/instrument";
+import {
+  measuredGenerate,
+  type MeasuredGenerateArgs,
+} from "@/lib/ai/instrument";
 import { getModel } from "@/lib/ai/model";
 import { renderPrompt } from "@/lib/ai/prompts";
 import { AI_OPERATION_COSTS, withAiRoute } from "@/lib/ai/route";
 import { importedRecipeSchema } from "@/lib/ai/schemas/import";
-import { apiError } from "@/lib/api-error";
+import { protectedError } from "@/lib/protected-route";
+import { isAllowedRecipeUrl } from "@/lib/recipe-source-allowlist";
 
 const requestSchema = z.discriminatedUnion("source", [
   z.object({
@@ -64,10 +67,22 @@ export const maxDuration = 120;
 export const POST = withAiRoute({
   schema: requestSchema,
   cost: AI_OPERATION_COSTS.import,
-  async handler({ input }) {
+  async handler({ input, requestId }) {
+    if (
+      (input.source === "url" && !isAllowedRecipeUrl(input.url)) ||
+      input.source === "video"
+    ) {
+      return protectedError(
+        { requestId },
+        403,
+        "SOURCE_NOT_ALLOWED",
+        "This recipe source is not approved yet",
+      );
+    }
     const generateArgs = await buildGenerateArgs(input);
     if (!generateArgs.ok) {
-      return apiError(
+      return protectedError(
+        { requestId },
         generateArgs.status,
         "INVALID_REQUEST",
         generateArgs.error,
@@ -85,7 +100,7 @@ export const POST = withAiRoute({
   },
 });
 type GenerateArgsResult =
-  | { ok: true; args: Parameters<typeof generateObject>[0]; imageUrl?: string }
+  | { ok: true; args: MeasuredGenerateArgs; imageUrl?: string }
   | { ok: false; error: string; status: number };
 
 type ExtractionResult =

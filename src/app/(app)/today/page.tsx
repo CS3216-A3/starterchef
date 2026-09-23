@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import { FilterPills } from "@/components/filter-pills";
 import { KitchenPanel } from "@/components/kitchen-panel";
 import { RecipeCard } from "@/components/recipe-card";
+import { RecommendationPanel } from "@/components/recommendation-panel";
 import { redirect } from "next/navigation";
 import {
   getActiveCookingSession,
@@ -115,6 +116,8 @@ export default async function TodayPage({
               <ArrowRight className="h-5 w-5 text-espresso-light" />
             </Link>
           )}
+
+          <RecommendationPanel maxMinutes={maxMinutes} servings={minServings} />
 
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-extrabold">Your recipes</h2>

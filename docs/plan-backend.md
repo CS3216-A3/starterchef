@@ -63,10 +63,10 @@ Migration history is immutable. The next new migrations are exactly:
 
 1. `0018_security_and_pantry.sql`
 2. `0019_private_user_media.sql`
-3. `0020_kitchen_scans_and_recommendations.sql`
-4. `0021_recipe_drafts_and_verification.sql`
-5. `0022_session_integrity_and_retention.sql`
-6. `0023_ai_telemetry_and_capability_routing.sql`
+3. `0021_kitchen_scans_and_recommendations.sql`
+4. `0022_recipe_drafts_and_verification.sql`
+5. `0023_session_integrity_and_retention.sql`
+6. `0024_ai_telemetry_and_capability_routing.sql`
 
 If either former local migration named `0006` or `0007` has already been
 applied to a development project, do not rename, delete, replay, or reset it.
@@ -294,7 +294,8 @@ type TastePreferencesV1 = {
 
 #### `ai_usage_quota`
 
-- Rename `count` to `units` so its meaning is explicit.
+- Keep `count` as the existing consumed-credit column; document its weighted
+  credit meaning at the API boundary.
 - Drop the authenticated `FOR ALL` policy.
 - Optionally permit owner `SELECT`; grant no authenticated mutation privilege.
 - Replace `increment_ai_usage(uuid)` with
@@ -353,7 +354,7 @@ update its database path, and delete the public original. Only after the audit
 reports zero user-prefixed public objects may the public-read policy be limited
 to catalogue paths.
 
-### 5.3 `0020_kitchen_scans_and_recommendations.sql`
+### 5.3 `0021_kitchen_scans_and_recommendations.sql`
 
 Create owned `kitchen_scans` for the private-media flow in section 7.3. It has
 an owner, idempotency key, `processing`/`awaiting_confirmation`/terminal status,
@@ -363,7 +364,7 @@ perform every mutation. Index owner recency, `(user_id, idempotency_key)`, and
 expiry. Recommendations remain computed from server-owned stored data; they do
 not need a persistence table in v1.
 
-### 5.4 `0021_recipe_drafts_and_verification.sql`
+### 5.4 `0022_recipe_drafts_and_verification.sql`
 
 Extend `recipes`:
 

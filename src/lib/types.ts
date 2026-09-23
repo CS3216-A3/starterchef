@@ -28,6 +28,30 @@ export interface KitchenItemRow {
   created_at: string;
 }
 
+export type KitchenScanStatus =
+  "processing" | "awaiting_confirmation" | "applied" | "failed" | "expired";
+
+export interface KitchenScanCandidate {
+  id: string;
+  kind: KitchenItemKind;
+  name: string;
+  quantity: string | null;
+  expiresOn: string | null;
+  icon: string;
+  confidence: "high" | "medium" | "low";
+}
+
+export interface KitchenScanRow {
+  id: string;
+  user_id: string;
+  candidates: KitchenScanCandidate[];
+  accepted: unknown[] | null;
+  status: KitchenScanStatus;
+  failure_code: string | null;
+  created_at: string;
+  expires_at: string;
+}
+
 /** A single step inside `recipes.steps` / `cooking_sessions.recipe.steps`. */
 export interface RecipeStep {
   index: number;

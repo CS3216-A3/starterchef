@@ -1,3 +1,4 @@
+import "server-only";
 import { generateObject } from "ai";
 import { getModelName, getProvider } from "@/lib/ai/model";
 import { flushPostHogAI } from "@/lib/posthog/server";
@@ -13,9 +14,12 @@ import { flushPostHogAI } from "@/lib/posthog/server";
  * PostHog's default span attribution until the SDK adds support.
  */
 
-type GenerateObjectArgs = Parameters<typeof generateObject>[0];
+export type MeasuredGenerateArgs = Parameters<typeof generateObject>[0];
 
-export async function measuredGenerate(name: string, args: GenerateObjectArgs) {
+export async function measuredGenerate(
+  name: string,
+  args: MeasuredGenerateArgs,
+) {
   const startedAt = performance.now();
 
   const result = await generateObject({

@@ -3,14 +3,14 @@
 import { Camera, ScanLine, Sparkles, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/button";
-import { saveKitchenItems } from "@/app/(app)/kitchen/actions";
-import type { KitchenScanResult } from "@/lib/ai/schemas/kitchen-scan";
+import { getApiErrorMessage } from "@/lib/client-api-error";
+import type { KitchenScanCandidate } from "@/lib/types";
 
 type ScanState =
   | { status: "idle" }
   | { status: "preview" }
   | { status: "scanning" }
-  | { status: "done"; result: KitchenScanResult }
+  | { status: "done"; scanId: string; candidates: KitchenScanCandidate[] }
   | { status: "saving" }
   | { status: "saved"; added: number }
   | { status: "error"; message: string };
@@ -59,22 +59,44 @@ export function ScanKitchenButton() {
     if (!ctx) return;
     ctx.drawImage(video, 0, 0);
 
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-    stopCamera();
-    void scanImage(dataUrl);
+    canvas.toBlob(
+      (blob) => {
+        if (!blob)
+          return setState({
+            status: "error",
+            message: "Could not capture photo. Try again.",
+          });
+        stopCamera();
+        void scanImage(new File([blob], "kitchen.jpg", { type: "image/jpeg" }));
+      },
+      "image/jpeg",
+      0.85,
+    );
   }
 
-  async function scanImage(dataUrl: string) {
+  async function scanImage(image: File) {
     setState({ status: "scanning" });
     try {
-      const res = await fetch("/api/ai/kitchen-scan", {
+      const form = new FormData();
+      form.set("image", image);
+      form.set("idempotencyKey", crypto.randomUUID());
+      const res = await fetch("/api/kitchen-scans", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: dataUrl }),
+        body: form,
       });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? "Scan failed");
-      setState({ status: "done", result: body as KitchenScanResult });
+      if (!res.ok)
+        throw new Error(await getApiErrorMessage(res, "Scan failed"));
+      const body = (await res.json()) as {
+        id?: string;
+        candidates?: KitchenScanCandidate[];
+      };
+      if (!body.id || !Array.isArray(body.candidates))
+        throw new Error("Scan failed");
+      setState({
+        status: "done",
+        scanId: body.id,
+        candidates: body.candidates,
+      });
     } catch (err) {
       setState({
         status: "error",
@@ -83,41 +105,52 @@ export function ScanKitchenButton() {
     }
   }
 
-  async function addToKitchen(result: KitchenScanResult) {
+  async function addToKitchen(
+    scanId: string,
+    candidates: KitchenScanCandidate[],
+  ) {
+    const accepted = candidates
+      .filter((candidate) => selected.has(candidate.id))
+      .map((candidate) => ({
+        id: candidate.id,
+        name: candidate.name,
+        quantity: candidate.quantity,
+        expiresOn: candidate.expiresOn,
+      }));
+    if (accepted.length === 0)
+      return setState({
+        status: "error",
+        message: "Select at least one item to add.",
+      });
     setState({ status: "saving" });
-    const now = new Date();
-    const items = [
-      ...result.ingredients.map((i) => ({
-        kind: "ingredient" as const,
-        name: i.name,
-        quantity: i.estimatedQuantity ?? null,
-        expiresOn: i.expiresWithinDays
-          ? new Date(now.getTime() + i.expiresWithinDays * 86400000)
-              .toISOString()
-              .slice(0, 10)
-          : null,
-        icon: i.icon,
-        source: "scan" as const,
-      })),
-      ...result.equipment.map((i) => ({
-        kind: "equipment" as const,
-        name: i.name,
-        quantity: null as string | null,
-        expiresOn: null as string | null,
-        icon: i.icon,
-        source: "scan" as const,
-      })),
-    ];
-    const res = await saveKitchenItems(items);
-    if (res.error) {
-      setState({ status: "error", message: res.error });
-    } else {
+    try {
+      const res = await fetch(`/api/kitchen-scans/${scanId}/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(accepted),
+      });
+      if (!res.ok)
+        throw new Error(
+          await getApiErrorMessage(res, "Could not add detected items"),
+        );
+      const body = (await res.json()) as { items?: unknown[] };
       setState({
         status: "saved",
-        added: "count" in res ? (res.count ?? items.length) : items.length,
+        added: body.items?.length ?? accepted.length,
+      });
+      window.location.reload();
+    } catch (error) {
+      setState({
+        status: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Could not add detected items",
       });
     }
   }
+
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   function closePreview() {
     stopCamera();
@@ -164,18 +197,97 @@ export function ScanKitchenButton() {
       {state.status === "done" && (
         <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-oat">
           <p className="mb-2 text-sm font-bold">
-            Found {state.result.ingredients.length} ingredients and{" "}
-            {state.result.equipment.length} tools.
+            We found {state.candidates.length} possible items. Select what to
+            add.
           </p>
           <ul className="mb-3 flex flex-wrap gap-1 text-sm font-semibold text-espresso-light">
-            {state.result.ingredients.map((i) => (
-              <li key={i.name} className="rounded-full bg-oat px-2 py-0.5">
-                {i.name}
-              </li>
-            ))}
-            {state.result.equipment.map((i) => (
-              <li key={i.name} className="rounded-full bg-oat px-2 py-0.5">
-                {i.name}
+            {state.candidates.map((item) => (
+              <li
+                key={item.id}
+                className="flex items-center gap-2 rounded-xl bg-oat px-2 py-1"
+              >
+                <input
+                  aria-label={`Select ${item.name}`}
+                  type="checkbox"
+                  checked={selected.has(item.id)}
+                  onChange={() =>
+                    setSelected((current) => {
+                      const next = new Set(current);
+                      if (next.has(item.id)) next.delete(item.id);
+                      else next.add(item.id);
+                      return next;
+                    })
+                  }
+                />
+                <input
+                  aria-label={`${item.name} name`}
+                  className="min-w-0 bg-transparent font-semibold"
+                  value={item.name}
+                  onChange={(event) =>
+                    setState((current) =>
+                      current.status === "done"
+                        ? {
+                            ...current,
+                            candidates: current.candidates.map((candidate) =>
+                              candidate.id === item.id
+                                ? { ...candidate, name: event.target.value }
+                                : candidate,
+                            ),
+                          }
+                        : current,
+                    )
+                  }
+                />
+                {item.kind === "ingredient" ? (
+                  <input
+                    aria-label={`${item.name} quantity`}
+                    className="w-16 bg-transparent text-xs"
+                    placeholder="amount"
+                    value={item.quantity ?? ""}
+                    onChange={(event) =>
+                      setState((current) =>
+                        current.status === "done"
+                          ? {
+                              ...current,
+                              candidates: current.candidates.map((candidate) =>
+                                candidate.id === item.id
+                                  ? {
+                                      ...candidate,
+                                      quantity: event.target.value || null,
+                                    }
+                                  : candidate,
+                              ),
+                            }
+                          : current,
+                      )
+                    }
+                  />
+                ) : null}
+                {item.kind === "ingredient" ? (
+                  <input
+                    aria-label={`${item.name} expiry`}
+                    className="w-28 bg-transparent text-xs"
+                    type="date"
+                    value={item.expiresOn ?? ""}
+                    onChange={(event) =>
+                      setState((current) =>
+                        current.status === "done"
+                          ? {
+                              ...current,
+                              candidates: current.candidates.map((candidate) =>
+                                candidate.id === item.id
+                                  ? {
+                                      ...candidate,
+                                      expiresOn: event.target.value || null,
+                                    }
+                                  : candidate,
+                              ),
+                            }
+                          : current,
+                      )
+                    }
+                  />
+                ) : null}
               </li>
             ))}
           </ul>
@@ -185,7 +297,7 @@ export function ScanKitchenButton() {
           <Button
             type="button"
             className="w-full"
-            onClick={() => addToKitchen(state.result)}
+            onClick={() => addToKitchen(state.scanId, state.candidates)}
           >
             Add to my kitchen
           </Button>

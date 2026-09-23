@@ -35,7 +35,11 @@ const route = withAiRoute({
 });
 
 function request(body: string) {
-  return new Request("http://localhost/api/ai/test", { method: "POST", body });
+  return new Request("http://localhost/api/ai/test", {
+    method: "POST",
+    body,
+    headers: { Origin: "http://localhost" },
+  });
 }
 
 describe("authenticated AI route contract", () => {

@@ -1,6 +1,6 @@
 import type { User } from "@supabase/supabase-js";
 import type { z } from "zod";
-import { apiError } from "@/lib/api-error";
+import { protectedError, withProtectedRoute } from "@/lib/protected-route";
 import { checkRateLimit, createRateLimitResponse } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
@@ -24,6 +24,7 @@ interface RouteContext<TInput, TTrusted> {
   user: User;
   supabase: Supabase;
   request: Request;
+  requestId: string;
 }
 
 interface AiRouteOptions<TSchema extends z.ZodType, TTrusted = undefined> {
@@ -34,6 +35,7 @@ interface AiRouteOptions<TSchema extends z.ZodType, TTrusted = undefined> {
     user: User;
     supabase: Supabase;
   }) => Promise<TTrusted>;
+  shouldCharge?: (trusted: TTrusted) => boolean;
   handler: (
     context: RouteContext<z.infer<TSchema>, TTrusted>,
   ) => Promise<Response>;
@@ -43,32 +45,27 @@ interface AiRouteOptions<TSchema extends z.ZodType, TTrusted = undefined> {
 export function withAiRoute<TSchema extends z.ZodType, TTrusted = undefined>(
   options: AiRouteOptions<TSchema, TTrusted>,
 ) {
-  return async function handle(request: Request): Promise<Response> {
+  return withProtectedRoute(async ({ request, requestId, user, supabase }) => {
     try {
-      const supabase = await createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user)
-        return apiError(401, "UNAUTHORIZED", "Authentication required");
-
       const parsed = options.schema.safeParse(
         await request.json().catch(() => null),
       );
       if (!parsed.success) {
-        return apiError(
+        return protectedError(
+          { requestId },
           400,
           "INVALID_REQUEST",
           "Invalid request",
-          parsed.error.flatten(),
         );
       }
 
       const trusted = options.loadContext
         ? await options.loadContext({ input: parsed.data, user, supabase })
         : (undefined as TTrusted);
-      const quota = await checkRateLimit(user.id, options.cost);
-      if (!quota.allowed) return createRateLimitResponse(quota);
+      if (options.shouldCharge?.(trusted) ?? true) {
+        const quota = await checkRateLimit(user.id, options.cost);
+        if (!quota.allowed) return createRateLimitResponse(quota);
+      }
 
       return await options.handler({
         input: parsed.data,
@@ -76,17 +73,22 @@ export function withAiRoute<TSchema extends z.ZodType, TTrusted = undefined>(
         user,
         supabase,
         request,
+        requestId,
       });
-    } catch (error) {
+    } catch {
       console.error(
-        "AI route failed",
-        error instanceof Error ? { name: error.name } : {},
+        JSON.stringify({
+          route: new URL(request.url).pathname,
+          requestId,
+          code: "INTERNAL_ERROR",
+        }),
       );
-      return apiError(
+      return protectedError(
+        { requestId },
         502,
         "INTERNAL_ERROR",
         "The assistant is unavailable. Please try again.",
       );
     }
-  };
+  });
 }
