@@ -1,12 +1,9 @@
-import { NextResponse } from "next/server";
 import { z } from "zod";
 import { measuredGenerate } from "@/lib/ai/instrument";
 import { getModel } from "@/lib/ai/model";
 import { renderPrompt } from "@/lib/ai/prompts";
+import { withAiRoute } from "@/lib/ai/route";
 import { recipeSuggestionsSchema } from "@/lib/ai/schemas/recipe";
-import { checkRateLimit, createRateLimitResponse } from "@/lib/rate-limit";
-import { createClient } from "@/lib/supabase/server";
-import { friendlyAiError } from "@/lib/ai/errors";
 
 const requestSchema = z.object({
   ingredients: z.array(z.string()).default([]),
@@ -26,32 +23,12 @@ const requestSchema = z.object({
  * Ranks meal ideas against the user's inventory, dietary profile, skill, and
  * time budget. Returns RecipeSuggestions.
  */
-export async function POST(request: Request) {
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const rateLimit = await checkRateLimit(user.id);
-    if (!rateLimit.allowed) {
-      return createRateLimitResponse(rateLimit);
-    }
-
-    const parsed = requestSchema.safeParse(await request.json());
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Invalid request", issues: parsed.error.issues },
-        { status: 400 },
-      );
-    }
-    const input = parsed.data;
-
+export const POST = withAiRoute({
+  schema: requestSchema,
+  cost: 2,
+  async handler({ input }) {
     const { object } = await measuredGenerate("suggest-recipes", {
-      model: getModel(),
+      model: getModel("suggestions"),
       schema: recipeSuggestionsSchema,
       temperature: 0.4,
       system: renderPrompt("suggest-recipes", {
@@ -67,9 +44,6 @@ export async function POST(request: Request) {
       prompt: "Suggest meals I can cook tonight.",
     });
 
-    return NextResponse.json(object);
-  } catch (err) {
-    const message = friendlyAiError(err, "Recipe suggestion failed");
-    return NextResponse.json({ error: message }, { status: 502 });
-  }
-}
+    return Response.json(object);
+  },
+});

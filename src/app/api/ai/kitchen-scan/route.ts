@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server";
+import { z } from "zod";
 import { measuredGenerate } from "@/lib/ai/instrument";
 import { getModel } from "@/lib/ai/model";
 import { renderPrompt } from "@/lib/ai/prompts";
+import { withAiRoute } from "@/lib/ai/route";
 import { kitchenScanSchema } from "@/lib/ai/schemas/kitchen-scan";
-import { checkRateLimit, createRateLimitResponse } from "@/lib/rate-limit";
-import { createClient } from "@/lib/supabase/server";
-import { friendlyAiError } from "@/lib/ai/errors";
+
+const requestSchema = z.object({ image: z.string().min(1).max(12_000_000) });
 
 /**
  * POST /api/ai/kitchen-scan
@@ -13,31 +13,12 @@ import { friendlyAiError } from "@/lib/ai/errors";
  * Returns a KitchenScanResult. Detected items are suggestions — the client
  * must present them for confirmation before saving to the inventory.
  */
-export async function POST(request: Request) {
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const rateLimit = await checkRateLimit(user.id);
-    if (!rateLimit.allowed) {
-      return createRateLimitResponse(rateLimit);
-    }
-
-    const { image } = (await request.json()) as { image?: string };
-    if (!image) {
-      return NextResponse.json(
-        { error: "Missing `image` (data URL or base64)." },
-        { status: 400 },
-      );
-    }
-
+export const POST = withAiRoute({
+  schema: requestSchema,
+  cost: 3,
+  async handler({ input: { image } }) {
     const { object } = await measuredGenerate("kitchen-scan", {
-      model: getModel(),
+      model: getModel("kitchen-scan"),
       schema: kitchenScanSchema,
       temperature: 0.4,
       system: renderPrompt("kitchen-scan", {}),
@@ -55,9 +36,6 @@ export async function POST(request: Request) {
       ],
     });
 
-    return NextResponse.json(object);
-  } catch (err) {
-    const message = friendlyAiError(err, "Kitchen scan failed");
-    return NextResponse.json({ error: message }, { status: 502 });
-  }
-}
+    return Response.json(object);
+  },
+});

@@ -14,6 +14,18 @@ import type { LanguageModel } from "ai";
 export const AI_PROVIDERS = ["google", "openai", "google-lite"] as const;
 export type AiProvider = (typeof AI_PROVIDERS)[number];
 
+export const TEXT_CAPABILITIES = {
+  "kitchen-scan": AI_PROVIDERS,
+  "kitchen-voice": AI_PROVIDERS,
+  suggestions: AI_PROVIDERS,
+  assistant: AI_PROVIDERS,
+  import: AI_PROVIDERS,
+  edit: AI_PROVIDERS,
+  adapt: AI_PROVIDERS,
+  "step-check": AI_PROVIDERS,
+} as const;
+export type TextCapability = keyof typeof TEXT_CAPABILITIES;
+
 export function getProvider(): AiProvider {
   const value = process.env.AI_PROVIDER ?? "google";
   if (value === "google" || value === "openai" || value === "google-lite")
@@ -23,7 +35,25 @@ export function getProvider(): AiProvider {
   );
 }
 
-export function getModel(provider: AiProvider = getProvider()): LanguageModel {
+export function getModel(
+  capabilityOrProvider: TextCapability | AiProvider = "assistant",
+): LanguageModel {
+  const explicitProvider = (AI_PROVIDERS as readonly string[]).includes(
+    capabilityOrProvider,
+  );
+  const provider = explicitProvider
+    ? (capabilityOrProvider as AiProvider)
+    : getProvider();
+  if (
+    !explicitProvider &&
+    !(
+      TEXT_CAPABILITIES[
+        capabilityOrProvider as TextCapability
+      ] as readonly string[]
+    ).includes(provider)
+  ) {
+    throw new Error("Configured provider is not approved for this capability");
+  }
   switch (provider) {
     case "google":
       return google(process.env.GOOGLE_MODEL ?? "gemini-5.8-flash");

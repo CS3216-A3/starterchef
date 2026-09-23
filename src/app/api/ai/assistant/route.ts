@@ -1,13 +1,10 @@
-import { NextResponse } from "next/server";
 import { z } from "zod";
 import { measuredGenerate } from "@/lib/ai/instrument";
 import { getModel } from "@/lib/ai/model";
 import { renderPrompt } from "@/lib/ai/prompts";
+import { withAiRoute } from "@/lib/ai/route";
 import { assistantReplySchema } from "@/lib/ai/schemas/assistant";
-import { checkRateLimit, createRateLimitResponse } from "@/lib/rate-limit";
 import { getCookingMemory, logSessionEvent } from "@/lib/session-events";
-import { createClient } from "@/lib/supabase/server";
-import { friendlyAiError } from "@/lib/ai/errors";
 
 const requestSchema = z.object({
   question: z.string().min(1).max(1000),
@@ -29,30 +26,10 @@ const requestSchema = z.object({
  * this person cooks. The reply's optional `action` is a suggestion — the UI
  * offers it, the user confirms.
  */
-export async function POST(request: Request) {
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const rateLimit = await checkRateLimit(user.id);
-    if (!rateLimit.allowed) {
-      return createRateLimitResponse(rateLimit);
-    }
-
-    const parsed = requestSchema.safeParse(await request.json());
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Invalid request", issues: parsed.error.issues },
-        { status: 400 },
-      );
-    }
-    const { question, context, sessionId, stepIndex, channel } = parsed.data;
-
+export const POST = withAiRoute({
+  schema: requestSchema,
+  cost: 1,
+  async loadContext({ supabase, user }) {
     const [memory, { data: profile }] = await Promise.all([
       getCookingMemory(supabase, user.id),
       supabase
@@ -61,12 +38,17 @@ export async function POST(request: Request) {
         .eq("id", user.id)
         .maybeSingle(),
     ]);
+    return { memory, profile };
+  },
+  async handler({ input, trusted, supabase, user }) {
+    const { question, context, sessionId, stepIndex, channel } = input;
+    const { memory, profile } = trusted;
 
     const list = (v: string[] | null | undefined) =>
       v && v.length > 0 ? v.join(", ") : "none";
 
     const { object } = (await measuredGenerate("cooking-assistant", {
-      model: getModel(),
+      model: getModel("assistant"),
       schema: assistantReplySchema,
       temperature: 0.7,
       system: renderPrompt("cooking-assistant", {
@@ -89,9 +71,6 @@ export async function POST(request: Request) {
       payload: { question, answer: object.answer, channel: channel ?? "text" },
     });
 
-    return NextResponse.json(object);
-  } catch (err) {
-    const message = friendlyAiError(err, "Assistant request failed");
-    return NextResponse.json({ error: message }, { status: 502 });
-  }
-}
+    return Response.json(object);
+  },
+});
