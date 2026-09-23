@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { FinishForm } from "./finish-form";
-import { getRecipeBySlug } from "@/lib/data";
+import { getSessionById } from "@/lib/session-events";
 
 export const dynamic = "force-dynamic";
 
@@ -10,8 +10,8 @@ export default async function CookFinishPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const recipe = await getRecipeBySlug(id);
-  if (!recipe) notFound();
+  const session = await getSessionById(id);
+  if (!session || session.status === "abandoned") notFound();
 
   return (
     <div className="mx-auto flex max-w-lg flex-col gap-6">
@@ -21,7 +21,11 @@ export default async function CookFinishPage({
         </p>
         <h1 className="text-2xl font-extrabold">How did it go?</h1>
       </header>
-      <FinishForm recipe={recipe} />
+      <FinishForm
+        sessionId={session.id}
+        version={session.version}
+        title={session.recipe.title ?? "Cooking session"}
+      />
     </div>
   );
 }
