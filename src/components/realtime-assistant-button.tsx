@@ -3,17 +3,18 @@
 import { Sparkles } from "lucide-react";
 import { ChefBuddy } from "@/components/chef-buddy";
 import { useRealtimeAssistant } from "@/hooks/use-realtime-assistant";
+import type { AssistantReply } from "@/lib/ai/schemas/assistant";
 
 export function RealtimeAssistantButton({
-  recipeTitle,
-  stepTitle,
+  sessionId,
+  onAction,
 }: {
-  recipeTitle: string;
-  stepTitle: string;
+  sessionId: string;
+  onAction?: (action: NonNullable<AssistantReply["action"]>) => void;
 }) {
   const { state, start, stop, transcript } = useRealtimeAssistant({
-    recipeTitle,
-    stepTitle,
+    sessionId,
+    onAction,
   });
 
   const isActive = state.status !== "idle" && state.status !== "error";

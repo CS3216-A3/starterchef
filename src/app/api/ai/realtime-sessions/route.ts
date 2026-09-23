@@ -1,176 +1,256 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { AI_OPERATION_COSTS, withAiRoute } from "@/lib/ai/route";
-import { protectedError } from "@/lib/protected-route";
+import { protectedError, withProtectedRoute } from "@/lib/protected-route";
+import {
+  VOICE_PROPOSAL_DESCRIPTION,
+  VOICE_PROPOSAL_PARAMETERS,
+} from "@/lib/ai/voice-proposal";
 
-const requestSchema = z.object({
-  provider: z.enum(["openai", "gemini"]),
-  sessionId: z.uuid(),
-});
+const bodySchema = z
+  .object({
+    sessionId: z.uuid(),
+    attemptId: z.uuid(),
+    fallbackFrom: z.literal("openai").nullable(),
+  })
+  .strict();
 const MODELS = {
   openai: ["gpt-realtime-2.1-mini", "gpt-realtime-2.1"],
   gemini: ["gemini-3.8-live"],
 } as const;
 
-function configuredModel(provider: "openai" | "gemini") {
-  const fallback = MODELS[provider][0];
-  const model =
+function modelFor(provider: "openai" | "gemini") {
+  const configured =
     provider === "openai"
-      ? (process.env.OPENAI_REALTIME_MODEL ?? fallback)
-      : (process.env.GOOGLE_LIVE_MODEL ?? fallback);
-  return (MODELS[provider] as readonly string[]).includes(model) ? model : null;
+      ? (process.env.OPENAI_REALTIME_MODEL ?? MODELS.openai[0])
+      : (process.env.GOOGLE_LIVE_MODEL ?? MODELS.gemini[0]);
+  return (MODELS[provider] as readonly string[]).includes(configured)
+    ? configured
+    : null;
 }
 
-/** Mints a short-lived provider credential after loading the actual active
- * session. Audio never traverses Vercel and no transcript is persisted here. */
-export const POST = withAiRoute({
-  schema: requestSchema,
-  cost: AI_OPERATION_COSTS["realtime-session"],
-  async loadContext({ input, supabase, user }) {
-    const { data } = await supabase
-      .from("cooking_sessions")
-      .select("recipe,current_step,status")
-      .eq("id", input.sessionId)
-      .eq("user_id", user.id)
-      .maybeSingle();
-    return data;
-  },
-  shouldCharge: (session) =>
-    Boolean(session && session.status === "in_progress"),
-  async handler({ input, trusted: session, user, requestId }) {
-    if (!session || session.status !== "in_progress")
-      return protectedError(
-        { requestId },
-        404,
-        "NOT_FOUND",
-        "Active cooking session not found",
-      );
-    const model = configuredModel(input.provider);
-    if (!model)
-      return protectedError(
-        { requestId },
-        500,
-        "INTERNAL_ERROR",
-        "Realtime model is not approved",
-      );
-    const recipe = session.recipe as {
-      title?: string;
-      steps?: { index?: number; title?: string }[];
-    };
-    const step = recipe.steps?.find(
-      (candidate) => candidate.index === session.current_step,
+/** A logical attempt is charged exactly once by the database. Browser JSON
+ * provides IDs only; all voice instructions come from the owned snapshot. */
+export const POST = withProtectedRoute(async (context) => {
+  const parsed = bodySchema.safeParse(
+    await context.request.json().catch(() => null),
+  );
+  if (!parsed.success)
+    return protectedError(
+      context,
+      400,
+      "INVALID_REQUEST",
+      "Invalid realtime session request",
     );
-    const instructions = [
-      "You are StarterChef, a concise, safety-conscious cooking assistant.",
-      `Recipe: ${recipe.title ?? "the current recipe"}.`,
-      `Current step: ${step?.title ?? session.current_step}.`,
-      "Offer advice and adjustment proposals only; never claim to change the recipe or session.",
-      "Keep replies suitable for speech, under three sentences.",
-    ].join(" ");
-    if (input.provider === "openai") {
-      const key = process.env.OPENAI_API_KEY;
-      if (!key)
-        return protectedError(
-          { requestId },
-          503,
-          "INTERNAL_ERROR",
-          "Realtime provider is unavailable",
-        );
-      const response = await fetch(
-        "https://api.openai.com/v1/realtime/sessions",
+  const input = parsed.data;
+  const { data: session } = await context.supabase
+    .from("cooking_sessions")
+    .select("recipe,current_step,status")
+    .eq("id", input.sessionId)
+    .eq("user_id", context.user.id)
+    .maybeSingle();
+  if (!session || session.status !== "in_progress")
+    return protectedError(
+      context,
+      404,
+      "NOT_FOUND",
+      "Active cooking session not found",
+    );
+  const { data: claimed, error: claimError } = await context.supabase.rpc(
+    "claim_realtime_attempt",
+    {
+      p_session_id: input.sessionId,
+      p_attempt_id: input.attemptId,
+      p_fallback_from: input.fallbackFrom,
+    },
+  );
+  if (claimError) {
+    const status =
+      claimError.code === "P0001"
+        ? 429
+        : claimError.code === "P0002"
+          ? 404
+          : 409;
+    return protectedError(
+      context,
+      status,
+      status === 429 ? "RATE_LIMITED" : "CONFLICT",
+      status === 429
+        ? "Daily AI credit limit reached"
+        : "Realtime attempt is unavailable",
+    );
+  }
+  const provider = claimed as "openai" | "gemini";
+  const model = modelFor(provider);
+  if (!model)
+    return protectedError(
+      context,
+      503,
+      "INTERNAL_ERROR",
+      "Realtime model is unavailable",
+    );
+  const recipe = session.recipe as {
+    title?: string;
+    steps?: { index?: number; title?: string; instruction?: string }[];
+  };
+  const step = recipe.steps?.find(
+    (candidate) => candidate.index === session.current_step,
+  );
+  const instructions = [
+    "You are StarterChef, a concise, safety-conscious cooking assistant.",
+    `Recipe: ${recipe.title ?? "Cooking session"}.`,
+    `Current step: ${step?.title ?? session.current_step}. ${step?.instruction ?? ""}`,
+    "Offer advice and action proposals only; never claim to change the recipe or session. Use propose_cooking_action for timer, navigation, or step changes, and tell the user approval is required.",
+    "Keep replies suitable for speech, under three sentences.",
+  ].join(" ");
+  try {
+    return await issueCredential(
+      provider,
+      model,
+      instructions,
+      context.user.id,
+      input.attemptId,
+    );
+  } catch {
+    // No media has begun when credential creation fails. Reuse the charged
+    // logical attempt; the database permits this transition only once.
+    if (provider === "openai") {
+      const { data: fallback, error } = await context.supabase.rpc(
+        "claim_realtime_attempt",
         {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${key}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model,
-            instructions,
-            voice: process.env.OPENAI_REALTIME_VOICE ?? "alloy",
-            client_secret: { expires_after: { seconds: 900 } },
-            safety_identifier: createHash("sha256")
-              .update(user.id)
-              .digest("hex"),
-          }),
+          p_session_id: input.sessionId,
+          p_attempt_id: input.attemptId,
+          p_fallback_from: "openai",
         },
       );
-      if (!response.ok)
-        return protectedError(
-          { requestId },
-          502,
-          "INTERNAL_ERROR",
-          "Realtime provider rejected session",
-        );
-      const data = (await response.json()) as {
-        client_secret?: { value?: string; expires_at?: number };
-      };
-      if (!data.client_secret?.value || !data.client_secret.expires_at)
-        return protectedError(
-          { requestId },
-          502,
-          "INTERNAL_ERROR",
-          "Realtime provider returned no credential",
-        );
-      return Response.json({
-        provider: "openai",
-        model,
-        credential: data.client_secret.value,
-        expiresAt: data.client_secret.expires_at,
-      });
+      const geminiModel = modelFor("gemini");
+      if (!error && fallback === "gemini" && geminiModel) {
+        try {
+          return await issueCredential(
+            "gemini",
+            geminiModel,
+            instructions,
+            context.user.id,
+            input.attemptId,
+          );
+        } catch {
+          /* the typed assistant remains available */
+        }
+      }
     }
-    if (process.env.AI_GEMINI_LIVE_ENABLED !== "true")
-      return protectedError(
-        { requestId },
-        503,
-        "INTERNAL_ERROR",
-        "Gemini Live is not enabled",
-      );
-    const key = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-    if (!key)
-      return protectedError(
-        { requestId },
-        503,
-        "INTERNAL_ERROR",
-        "Realtime provider is unavailable",
-      );
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    return protectedError(
+      context,
+      503,
+      "INTERNAL_ERROR",
+      "Live voice is unavailable; use the text assistant",
+    );
+  }
+});
+
+async function issueCredential(
+  provider: "openai" | "gemini",
+  model: string,
+  instructions: string,
+  userId: string,
+  attemptId: string,
+) {
+  if (provider === "openai") {
+    const key = process.env.OPENAI_API_KEY;
+    if (!key) throw new Error("openai_unavailable");
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1alpha/authTokens?key=${encodeURIComponent(key)}`,
+      "https://api.openai.com/v1/realtime/client_secrets",
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${key}`,
+          "Content-Type": "application/json",
+          "OpenAI-Safety-Identifier": createHash("sha256")
+            .update(userId)
+            .digest("hex"),
+        },
         body: JSON.stringify({
-          uses: 1,
-          expireTime: expiresAt,
-          newSessionExpireTime: new Date(Date.now() + 60_000).toISOString(),
-          bidiGenerateContentSetup: {
-            model: `models/${model}`,
-            systemInstruction: { parts: [{ text: instructions }] },
+          session: {
+            type: "realtime",
+            model,
+            instructions,
+            audio: {
+              output: { voice: process.env.OPENAI_REALTIME_VOICE ?? "marin" },
+            },
+            tools: [
+              {
+                type: "function",
+                name: "propose_cooking_action",
+                description: VOICE_PROPOSAL_DESCRIPTION,
+                parameters: VOICE_PROPOSAL_PARAMETERS,
+              },
+            ],
+            tool_choice: "auto",
           },
         }),
+        signal: AbortSignal.timeout(10_000),
       },
     );
-    if (!response.ok)
-      return protectedError(
-        { requestId },
-        502,
-        "INTERNAL_ERROR",
-        "Realtime provider rejected session",
-      );
-    const data = (await response.json()) as { name?: string };
-    if (!data.name)
-      return protectedError(
-        { requestId },
-        502,
-        "INTERNAL_ERROR",
-        "Realtime provider returned no credential",
-      );
+    if (!response.ok) throw new Error("openai_unavailable");
+    const data = (await response.json()) as {
+      value?: string;
+      expires_at?: number;
+    };
+    if (!data.value) throw new Error("openai_unavailable");
     return Response.json({
-      provider: "gemini",
+      provider,
       model,
-      credential: data.name,
-      expiresAt,
+      credential: data.value,
+      expiresAt: data.expires_at ?? Math.floor(Date.now() / 1000) + 60,
+      attemptId,
     });
-  },
-});
+  }
+  if (
+    process.env.AI_GEMINI_LIVE_ENABLED !== "true" ||
+    !process.env.GOOGLE_GENERATIVE_AI_API_KEY
+  )
+    throw new Error("gemini_unavailable");
+  const expiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
+  const response = await fetch(
+    "https://generativelanguage.googleapis.com/v1beta/auth_tokens",
+    {
+      method: "POST",
+      headers: {
+        "x-goog-api-key": process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        uses: 1,
+        expireTime: expiresAt,
+        newSessionExpireTime: new Date(Date.now() + 60_000).toISOString(),
+        liveConnectConstraints: {
+          model: `models/${model}`,
+          config: {
+            responseModalities: ["AUDIO"],
+            systemInstruction: { parts: [{ text: instructions }] },
+            tools: [
+              {
+                functionDeclarations: [
+                  {
+                    name: "propose_cooking_action",
+                    description: VOICE_PROPOSAL_DESCRIPTION,
+                    parameters: VOICE_PROPOSAL_PARAMETERS,
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      }),
+      signal: AbortSignal.timeout(10_000),
+    },
+  );
+  if (!response.ok) throw new Error("gemini_unavailable");
+  const data = (await response.json()) as { name?: string };
+  if (!data.name) throw new Error("gemini_unavailable");
+  return Response.json({
+    provider,
+    model,
+    credential: data.name,
+    expiresAt,
+    attemptId,
+  });
+}
