@@ -21,6 +21,13 @@ const APPROVED_MODELS: Record<AiProvider, readonly string[]> = {
   openai: ["gpt-5.6-luna"],
 };
 
+/**
+ * Gemini's Interactions API is the supported path for public YouTube-video
+ * understanding. Keep this separate from general chat-model routing so a
+ * video recipe cannot accidentally be sent to a text/image-only provider.
+ */
+const APPROVED_GEMINI_VIDEO_MODELS = ["gemini-3.8-flash"] as const;
+
 export const TEXT_CAPABILITIES = {
   "kitchen-scan": AI_PROVIDERS,
   "kitchen-voice": AI_PROVIDERS,
@@ -89,6 +96,27 @@ export function getModelName(provider: AiProvider = getProvider()): string {
     throw new Error("Configured model is not in the application allowlist");
   }
   return configured;
+}
+
+export function getGeminiVideoModelName(): string {
+  const configured = process.env.GOOGLE_VIDEO_MODEL ?? "gemini-3.8-flash";
+  if (
+    !(APPROVED_GEMINI_VIDEO_MODELS as readonly string[]).includes(configured)
+  ) {
+    throw new Error(
+      "Configured Gemini video model is not in the application allowlist",
+    );
+  }
+  return configured;
+}
+
+/**
+ * Use Gemini Interactions rather than Gemini's ordinary text-generation API:
+ * it accepts public YouTube URLs as video input and supports agentic video
+ * processing. The API key remains server-only through @ai-sdk/google.
+ */
+export function getGeminiVideoModel(): LanguageModel {
+  return google.interactions(getGeminiVideoModelName());
 }
 
 /** Safe configuration probe for diagnostics; credentials never leave process.env. */

@@ -1,6 +1,12 @@
 import { FatalError } from "workflow";
 import { measuredGenerate } from "@/lib/ai/instrument";
-import { getModel, getProvider, type AiProvider } from "@/lib/ai/model";
+import {
+  getGeminiVideoModel,
+  getGeminiVideoModelName,
+  getModel,
+  getProvider,
+  type AiProvider,
+} from "@/lib/ai/model";
 import { renderPrompt } from "@/lib/ai/prompts";
 import { importedRecipeSchema } from "@/lib/ai/schemas/import";
 import {
@@ -93,7 +99,7 @@ async function claimDraft(draftId: string) {
   const admin = createAdminClient();
   const { data } = await admin
     .from("recipe_drafts")
-    .select("id,status")
+    .select("id,status,kind")
     .eq("id", draftId)
     .maybeSingle();
   if (!data) throw new FatalError("Draft not found");
@@ -108,7 +114,16 @@ async function claimDraft(draftId: string) {
     routing === "cross-provider"
       ? (["openai", "google"] as const)
       : [getProvider()];
-  const missing = providers
+  // Public YouTube video input is intentionally Gemini-only. Verification
+  // after extraction still follows RECIPE_VERIFICATION_ROUTING, preserving
+  // the selectable single- and cross-provider review policies.
+  const requiredProviders = Array.from(
+    new Set<AiProvider>([
+      ...providers,
+      ...(data.kind === "youtube" ? (["google"] as const) : []),
+    ]),
+  );
+  const missing = requiredProviders
     .filter((provider) => !hasCredential(provider))
     .map(credentialName);
   if (missing.length) {
@@ -117,13 +132,20 @@ async function claimDraft(draftId: string) {
       .update({
         status: "failed_retryable",
         failure_code:
-          routing === "cross-provider"
-            ? missing.includes("GOOGLE_GENERATIVE_AI_API_KEY")
-              ? "GEMINI_PROVIDER_NOT_CONFIGURED"
-              : "OPENAI_PROVIDER_NOT_CONFIGURED"
-            : "SELECTED_PROVIDER_NOT_CONFIGURED",
+          data.kind === "youtube" &&
+          missing.includes("GOOGLE_GENERATIVE_AI_API_KEY")
+            ? "GEMINI_VIDEO_PROVIDER_NOT_CONFIGURED"
+            : routing === "cross-provider"
+              ? missing.includes("GOOGLE_GENERATIVE_AI_API_KEY")
+                ? "GEMINI_PROVIDER_NOT_CONFIGURED"
+                : "OPENAI_PROVIDER_NOT_CONFIGURED"
+              : "SELECTED_PROVIDER_NOT_CONFIGURED",
         verification: {
-          summary: `Recipe verification needs ${missing.join(" and ")} configured on the server for ${routing} routing.`,
+          summary:
+            data.kind === "youtube" &&
+            missing.includes("GOOGLE_GENERATIVE_AI_API_KEY")
+              ? "YouTube recipe extraction uses Gemini. Configure GOOGLE_GENERATIVE_AI_API_KEY on the server, then retry this review."
+              : `Recipe verification needs ${missing.join(" and ")} configured on the server for ${routing} routing.`,
         },
         updated_at: new Date().toISOString(),
       })
@@ -213,23 +235,39 @@ async function acquireOrGenerateRecipe(draftId: string) {
   } else if (draft.kind === "youtube") {
     const url = requiredRequestString(draft.request, "url");
     recipe = (
-      await measuredGenerate("recipe-youtube-extraction", {
-        ...args,
-        system: renderPrompt("import-recipe", {}),
-        model: getModel(generationProvider),
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: `${context}\nExtract the recipe from this YouTube cooking video. Use its spoken and on-screen instructions.`,
-              },
-              { type: "file", data: new URL(url), mediaType: "video/mp4" },
-            ],
-          },
-        ],
-      })
+      await measuredGenerate(
+        "recipe-youtube-extraction",
+        {
+          ...args,
+          system: renderPrompt("import-recipe", {}),
+          // Gemini Interactions is Google's documented endpoint for direct,
+          // public YouTube video URLs. Agentic processing lets Gemini inspect
+          // the relevant recipe moments instead of sampling the whole video at
+          // a fixed rate.
+          model: getGeminiVideoModel(),
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: `${context}\nExtract the recipe from this YouTube cooking video. Use its spoken and on-screen instructions.`,
+                },
+                {
+                  type: "file",
+                  data: { type: "url", url: new URL(url) },
+                  mediaType: "video/mp4",
+                  providerOptions: { google: { processing: "agentic" } },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          provider: "google",
+          model: getGeminiVideoModelName(),
+        },
+      )
     ).object;
   } else {
     const source =
@@ -549,6 +587,7 @@ async function recordWorkflowFailure(draftId: string, message: string) {
     draft.status === "failed_retryable" &&
     [
       "GEMINI_PROVIDER_NOT_CONFIGURED",
+      "GEMINI_VIDEO_PROVIDER_NOT_CONFIGURED",
       "OPENAI_PROVIDER_NOT_CONFIGURED",
       "SELECTED_PROVIDER_NOT_CONFIGURED",
     ].includes(draft.failure_code ?? "")

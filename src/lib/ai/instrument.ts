@@ -1,6 +1,6 @@
 import "server-only";
 import { APICallError, generateObject } from "ai";
-import { getModelName, getProvider } from "@/lib/ai/model";
+import { getModelName, getProvider, type AiProvider } from "@/lib/ai/model";
 import { flushPostHogAI } from "@/lib/posthog/server";
 
 /**
@@ -72,13 +72,15 @@ export function safeAiFailureCode(error: unknown): string {
 export async function measuredGenerate(
   name: string,
   args: MeasuredGenerateArgs,
+  modelContext?: { provider: AiProvider; model: string },
 ) {
   const startedAt = performance.now();
   // OpenAI reasoning models reject sampling controls. The provider adapter
   // currently removes them with a warning; normalize once at the gateway so
   // all routes share quiet, provider-compatible behavior.
+  const provider = modelContext?.provider ?? getProvider();
   const providerArgs =
-    getProvider() === "openai" ? { ...args, temperature: undefined } : args;
+    provider === "openai" ? { ...args, temperature: undefined } : args;
 
   const result = await generateObject({
     ...providerArgs,
@@ -93,8 +95,8 @@ export async function measuredGenerate(
     JSON.stringify({
       event: "ai_call",
       name,
-      provider: getProvider(),
-      model: getModelName(),
+      provider,
+      model: modelContext?.model ?? getModelName(provider),
       latencyMs,
       usage: result.usage,
     }),
