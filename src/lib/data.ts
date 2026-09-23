@@ -1,5 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { getDailyAiLimit } from "@/lib/rate-limit";
+import {
+  resolveRecipeMedia,
+  resolveSessionRecipeMedia,
+} from "@/lib/private-media";
 import type {
   CookingSessionRow,
   KitchenItemRow,
@@ -94,7 +98,11 @@ export async function getRecipes(limit?: number): Promise<RecipeRow[]> {
   if (limit) query = query.limit(limit);
   const { data, error } = await query;
   assertQuery(error, "load recipes");
-  return (data as RecipeRow[] | null) ?? [];
+  return Promise.all(
+    ((data as RecipeRow[] | null) ?? []).map((recipe) =>
+      resolveRecipeMedia(supabase, recipe),
+    ),
+  );
 }
 
 export async function getRecipeBySlug(slug: string): Promise<RecipeRow | null> {
@@ -106,7 +114,7 @@ export async function getRecipeBySlug(slug: string): Promise<RecipeRow | null> {
     .eq("slug", slug)
     .maybeSingle();
   assertQuery(error, "load recipe by slug");
-  if (data) return data as RecipeRow;
+  if (data) return resolveRecipeMedia(supabase, data as RecipeRow);
   // User recipes may be linked by id instead of slug.
   return getRecipeById(slug);
 }
@@ -120,7 +128,7 @@ export async function getRecipeById(id: string): Promise<RecipeRow | null> {
     .eq("id", id)
     .maybeSingle();
   assertQuery(error, "load recipe by id");
-  return (data as RecipeRow | null) ?? null;
+  return data ? resolveRecipeMedia(supabase, data as RecipeRow) : null;
 }
 
 /** Recipes imported or personalised by the current user. */
@@ -133,7 +141,11 @@ export async function getUserRecipes(): Promise<RecipeRow[]> {
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
   assertQuery(error, "load user recipes");
-  return (data as RecipeRow[] | null) ?? [];
+  return Promise.all(
+    ((data as RecipeRow[] | null) ?? []).map((recipe) =>
+      resolveRecipeMedia(supabase, recipe),
+    ),
+  );
 }
 
 /** Recipes the user has saved, joined through saved_recipes. */
@@ -147,7 +159,11 @@ export async function getSavedRecipes(): Promise<RecipeRow[]> {
     .order("created_at", { ascending: false });
   assertQuery(error, "load saved recipes");
   const rows = (data ?? []) as unknown as { recipe: RecipeRow | null }[];
-  return rows.flatMap((r) => (r.recipe ? [r.recipe] : []));
+  return Promise.all(
+    rows
+      .flatMap((r) => (r.recipe ? [r.recipe] : []))
+      .map((recipe) => resolveRecipeMedia(supabase, recipe)),
+  );
 }
 
 export async function getSavedRecipeIds(): Promise<Set<string>> {
@@ -176,5 +192,10 @@ export async function getActiveCookingSession(): Promise<CookingSessionRow | nul
     .limit(1)
     .maybeSingle();
   assertQuery(error, "load active cooking session");
-  return (data as CookingSessionRow | null) ?? null;
+  if (!data) return null;
+  const session = data as CookingSessionRow;
+  return {
+    ...session,
+    recipe: await resolveSessionRecipeMedia(supabase, session.recipe),
+  };
 }

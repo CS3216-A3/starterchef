@@ -26,7 +26,10 @@ export function RecipeEditForm({ recipe }: { recipe: RecipeRow }) {
   const [ingredients, setIngredients] = useState(recipe.ingredients.join("\n"));
   const [equipment, setEquipment] = useState(recipe.equipment.join("\n"));
   const [tags, setTags] = useState(recipe.tags.join(", "));
-  const [imageUrl, setImageUrl] = useState(recipe.image_url ?? "");
+  const [imageUrl, setImageUrl] = useState(
+    recipe.image_reference ?? recipe.image_url ?? "",
+  );
+  const [imagePreview, setImagePreview] = useState(recipe.image_url ?? "");
   const [uploading, setUploading] = useState(false);
   const [steps, setSteps] = useState(
     recipe.steps.map((s) => ({
@@ -215,7 +218,10 @@ export function RecipeEditForm({ recipe }: { recipe: RecipeRow }) {
         <TextField
           label="Cover image URL"
           value={imageUrl}
-          onChange={setImageUrl}
+          onChange={(value) => {
+            setImageUrl(value);
+            setImagePreview(value);
+          }}
           placeholder="https://… or upload below"
         />
         <input
@@ -234,8 +240,9 @@ export function RecipeEditForm({ recipe }: { recipe: RecipeRow }) {
             setUploading(false);
             if ("error" in result && result.error) {
               setError(result.error);
-            } else if ("url" in result && result.url) {
-              setImageUrl(result.url);
+            } else if ("url" in result && result.url && result.path) {
+              setImageUrl(result.path);
+              setImagePreview(result.url);
             }
           }}
         />
@@ -244,10 +251,10 @@ export function RecipeEditForm({ recipe }: { recipe: RecipeRow }) {
             Uploading…
           </p>
         )}
-        {imageUrl && (
+        {imagePreview && (
           <div className="relative aspect-[16/9] max-w-xs overflow-hidden rounded-2xl ring-1 ring-oat">
             <Image
-              src={imageUrl}
+              src={imagePreview}
               alt="Cover preview"
               fill
               unoptimized

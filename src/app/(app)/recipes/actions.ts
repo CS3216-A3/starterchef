@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { getActiveSession, logSessionEvent } from "@/lib/session-events";
 import { createClient } from "@/lib/supabase/server";
@@ -12,6 +13,11 @@ import {
   updateRecipeSchema,
   uuidSchema,
 } from "@/lib/validation/actions";
+import {
+  inspectKitchenImage,
+  KITCHEN_IMAGE_MAX_BYTES,
+} from "@/lib/image-upload";
+import { privateMediaReference } from "@/lib/private-media";
 
 /** Save or unsave a catalogue recipe for the current user. */
 export async function toggleSavedRecipe(recipeId: string, save: boolean) {
@@ -268,8 +274,8 @@ export async function saveRecipeFeedback(
 }
 
 /**
- * Upload a cover/step image to the `recipe-images` bucket under the user's
- * own folder and return its public URL.
+ * Upload a cover/step image privately and return an opaque reference plus a
+ * short-lived preview URL. Only the opaque reference may be persisted.
  */
 export async function uploadRecipeImage(formData: FormData) {
   const supabase = await createClient();
@@ -279,28 +285,28 @@ export async function uploadRecipeImage(formData: FormData) {
   if (!user) return { error: "Not signed in" };
 
   const file = formData.get("file");
-  const recipeId = String(formData.get("recipeId") ?? "misc");
-  const name = String(formData.get("name") ?? "image");
+  const recipeId = uuidSchema.safeParse(formData.get("recipeId"));
   if (!(file instanceof File) || file.size === 0) {
     return { error: "No file provided" };
   }
-  if (!file.type.startsWith("image/")) {
-    return { error: "File must be an image" };
-  }
-  if (file.size > 5 * 1024 * 1024) {
-    return { error: "Image must be under 5 MB" };
-  }
-
-  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-  const path = `${user.id}/${recipeId}/${name}-${Date.now()}.${ext}`;
+  if (!recipeId.success) return { error: "Invalid recipe" };
+  if (file.size > KITCHEN_IMAGE_MAX_BYTES)
+    return { error: "Image must be under 8 MiB" };
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const inspected = inspectKitchenImage(file.type, bytes);
+  if (!inspected) return { error: "Choose a valid JPEG, PNG, or WebP image" };
+  const path = `${user.id}/recipes/${recipeId.data}/${randomUUID()}.${inspected.extension}`;
 
   const { error } = await supabase.storage
-    .from("recipe-images")
-    .upload(path, file, { contentType: file.type });
-  if (error) return { error: error.message };
+    .from("recipe-inputs")
+    .upload(path, bytes, { contentType: inspected.contentType, upsert: false });
+  if (error) return safeActionFailure("upload this image", error);
 
-  const { data } = supabase.storage.from("recipe-images").getPublicUrl(path);
-  return { ok: true, url: data.publicUrl };
+  const { data, error: signError } = await supabase.storage
+    .from("recipe-inputs")
+    .createSignedUrl(path, 10 * 60);
+  if (signError) return safeActionFailure("preview this image", signError);
+  return { ok: true, path: privateMediaReference(path), url: data.signedUrl };
 }
 
 /** Delete a user-owned recipe. */

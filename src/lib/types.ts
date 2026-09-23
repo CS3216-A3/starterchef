@@ -54,6 +54,8 @@ export interface RecipeRow {
   icon: string;
   image_tint: string;
   image_url: string | null;
+  /** Original opaque private reference; present only at authorized server boundaries. */
+  image_reference?: string | null;
   ingredients: string[];
   equipment: string[];
   steps: RecipeStep[];

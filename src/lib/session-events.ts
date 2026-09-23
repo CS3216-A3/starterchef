@@ -5,6 +5,10 @@ import type {
   SessionEventPayload,
   SessionEventRow,
 } from "@/lib/types";
+import {
+  resolveEventMedia,
+  resolveSessionRecipeMedia,
+} from "@/lib/private-media";
 
 /**
  * Session memory helpers. Every AI interaction during cooking appends to
@@ -64,7 +68,11 @@ export async function getSessionEvents(
     .select("*")
     .eq("session_id", sessionId)
     .order("created_at", { ascending: true });
-  return (data as SessionEventRow[] | null) ?? [];
+  return Promise.all(
+    ((data as SessionEventRow[] | null) ?? []).map((event) =>
+      resolveEventMedia(supabase, event),
+    ),
+  );
 }
 
 export async function getSessionById(
@@ -76,7 +84,12 @@ export async function getSessionById(
     .select("*")
     .eq("id", sessionId)
     .maybeSingle();
-  return (data as CookingSessionRow | null) ?? null;
+  if (!data) return null;
+  const session = data as CookingSessionRow;
+  return {
+    ...session,
+    recipe: await resolveSessionRecipeMedia(supabase, session.recipe),
+  };
 }
 
 /** Past sessions for a recipe — powers "Your cooking history". */
@@ -91,7 +104,12 @@ export async function getSessionsForRecipe(
     .or(`recipe_id.eq.${recipeId},recipe->>slug.eq.${slug}`)
     .order("started_at", { ascending: false })
     .limit(10);
-  return (data as CookingSessionRow[] | null) ?? [];
+  return Promise.all(
+    ((data as CookingSessionRow[] | null) ?? []).map(async (session) => ({
+      ...session,
+      recipe: await resolveSessionRecipeMedia(supabase, session.recipe),
+    })),
+  );
 }
 
 /**

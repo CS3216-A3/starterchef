@@ -6,6 +6,8 @@ import { withAiRoute } from "@/lib/ai/route";
 import { stepCheckSchema, type StepCheck } from "@/lib/ai/schemas/cooking";
 import { logSessionEvent } from "@/lib/session-events";
 import { createClient } from "@/lib/supabase/server";
+import { privateMediaReference } from "@/lib/private-media";
+import { inspectKitchenImage } from "@/lib/image-upload";
 
 const requestSchema = z.object({
   image: z.string().min(1).max(5_000_000),
@@ -96,14 +98,16 @@ async function uploadCheckpointPhoto(
   const match = /^data:(image\/[\w+.-]+);base64,(.+)$/.exec(dataUrl);
   if (!match) return null;
   const [, mime, base64] = match;
-  const ext = mime.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
-  const path = `${userId}/checkpoints/${sessionId}-${Date.now()}.${ext}`;
+  const bytes = Buffer.from(base64, "base64");
+  const inspected = inspectKitchenImage(mime, bytes);
+  if (!inspected) return null;
+  const ext = inspected.extension;
+  const path = `${userId}/checkpoints/${sessionId}-${crypto.randomUUID()}.${ext}`;
   const { error } = await supabase.storage
-    .from("recipe-images")
-    .upload(path, Buffer.from(base64, "base64"), { contentType: mime });
+    .from("recipe-inputs")
+    .upload(path, bytes, { contentType: inspected.contentType });
   if (error) return null;
-  return supabase.storage.from("recipe-images").getPublicUrl(path).data
-    .publicUrl;
+  return privateMediaReference(path);
 }
 
 /**
