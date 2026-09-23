@@ -1,6 +1,6 @@
 import { FatalError } from "workflow";
 import { measuredGenerate } from "@/lib/ai/instrument";
-import { getModel } from "@/lib/ai/model";
+import { getModel, getProvider, type AiProvider } from "@/lib/ai/model";
 import { renderPrompt } from "@/lib/ai/prompts";
 import { importedRecipeSchema } from "@/lib/ai/schemas/import";
 import {
@@ -20,16 +20,52 @@ type Draft = {
   retry_count: number;
 };
 
+type RecipeVerificationRouting = "single" | "cross-provider";
+
+/**
+ * Single-provider verification is the safe operational default: it keeps a
+ * review within the provider selected by AI_PROVIDER. Set this explicitly to
+ * cross-provider only when both provider keys and the independent-verifier
+ * operational cost are intended.
+ */
+function getRecipeVerificationRouting(): RecipeVerificationRouting {
+  const value = process.env.RECIPE_VERIFICATION_ROUTING ?? "single";
+  if (value === "single" || value === "cross-provider") return value;
+  throw new Error(
+    'Unsupported RECIPE_VERIFICATION_ROUTING. Expected "single" or "cross-provider".',
+  );
+}
+
+function providerForStage(
+  stage: "generation" | "verification" | "adjudication",
+) {
+  if (getRecipeVerificationRouting() === "single") return getProvider();
+  if (stage === "verification") return "google" as const;
+  return "openai" as const;
+}
+
+function credentialName(provider: AiProvider) {
+  return provider === "openai"
+    ? "OPENAI_API_KEY"
+    : "GOOGLE_GENERATIVE_AI_API_KEY";
+}
+
+function hasCredential(provider: AiProvider) {
+  return provider === "openai"
+    ? Boolean(process.env.OPENAI_API_KEY)
+    : Boolean(process.env.GOOGLE_GENERATIVE_AI_API_KEY);
+}
+
 export async function recipeVerificationWorkflow(draftId: string) {
   "use workflow";
   try {
     await claimDraft(draftId);
     await acquireOrGenerateRecipe(draftId);
     await deterministicGuard(draftId, "before_verification");
-    await geminiVerify(draftId, "initial");
+    await verifyRecipe(draftId, "initial");
     await adjudicate(draftId);
     await deterministicGuard(draftId, "after_adjudication");
-    await geminiVerify(draftId, "final");
+    await verifyRecipe(draftId, "final");
     await finalizeDraft(draftId);
   } catch (error) {
     await recordWorkflowFailure(
@@ -57,25 +93,27 @@ async function claimDraft(draftId: string) {
     )
   )
     throw new FatalError("Draft is terminal");
-  // This workflow intentionally uses two providers: OpenAI generates and
-  // adjudicates, while Gemini independently verifies. Never silently reduce
-  // that gate to one provider.
-  const missing = [
-    !process.env.OPENAI_API_KEY ? "OPENAI_API_KEY" : null,
-    !process.env.GOOGLE_GENERATIVE_AI_API_KEY
-      ? "GOOGLE_GENERATIVE_AI_API_KEY"
-      : null,
-  ].filter((value): value is string => value !== null);
+  const routing = getRecipeVerificationRouting();
+  const providers =
+    routing === "cross-provider"
+      ? (["openai", "google"] as const)
+      : [getProvider()];
+  const missing = providers
+    .filter((provider) => !hasCredential(provider))
+    .map(credentialName);
   if (missing.length) {
     await admin
       .from("recipe_drafts")
       .update({
         status: "failed_retryable",
-        failure_code: missing.includes("GOOGLE_GENERATIVE_AI_API_KEY")
-          ? "GEMINI_PROVIDER_NOT_CONFIGURED"
-          : "OPENAI_PROVIDER_NOT_CONFIGURED",
+        failure_code:
+          routing === "cross-provider"
+            ? missing.includes("GOOGLE_GENERATIVE_AI_API_KEY")
+              ? "GEMINI_PROVIDER_NOT_CONFIGURED"
+              : "OPENAI_PROVIDER_NOT_CONFIGURED"
+            : "SELECTED_PROVIDER_NOT_CONFIGURED",
         verification: {
-          summary: `Recipe verification needs ${missing.join(" and ")} configured on the server.`,
+          summary: `Recipe verification needs ${missing.join(" and ")} configured on the server for ${routing} routing.`,
         },
         updated_at: new Date().toISOString(),
       })
@@ -128,6 +166,7 @@ async function acquireOrGenerateRecipe(draftId: string) {
     temperature: 0.3,
     system: renderPrompt("recipe-generate", {}),
   };
+  const generationProvider = providerForStage("generation");
   let recipe: unknown;
   if (draft.kind === "photo") {
     if (!draft.input_id) throw new FatalError("Photo draft has no input");
@@ -146,7 +185,7 @@ async function acquireOrGenerateRecipe(draftId: string) {
     recipe = (
       await measuredGenerate("recipe-photo-extraction", {
         ...args,
-        model: getModel("google"),
+        model: getModel(generationProvider),
         messages: [
           {
             role: "user",
@@ -167,7 +206,7 @@ async function acquireOrGenerateRecipe(draftId: string) {
     recipe = (
       await measuredGenerate("recipe-generation", {
         ...args,
-        model: getModel("openai"),
+        model: getModel(generationProvider),
         prompt: context,
       })
     ).object;
@@ -227,15 +266,16 @@ async function deterministicGuard(draftId: string, phase: string) {
   }
 }
 
-async function geminiVerify(draftId: string, stage: "initial" | "final") {
+async function verifyRecipe(draftId: string, stage: "initial" | "final") {
   "use step";
+  const verificationProvider = providerForStage("verification");
   logWorkflowEvent("recipe_workflow_step_started", draftId, {
-    stage: `gemini_${stage}_verification`,
+    stage: `${verificationProvider}_${stage}_verification`,
   });
   const admin = createAdminClient();
   const draft = await loadDraft(admin, draftId);
-  const result = await measuredGenerate(`recipe-gemini-${stage}-verification`, {
-    model: getModel("google"),
+  const result = await measuredGenerate(`recipe-${stage}-verification`, {
+    model: getModel(verificationProvider),
     schema: independentVerificationSchema,
     temperature: 0,
     system: renderPrompt("recipe-verify", {}),
@@ -243,7 +283,7 @@ async function geminiVerify(draftId: string, stage: "initial" | "final") {
   });
   const verification = {
     ...(draft.verification ?? {}),
-    [`gemini_${stage}`]: result.object,
+    [`verification_${stage}`]: result.object,
   };
   await admin
     .from("recipe_drafts")
@@ -268,13 +308,14 @@ async function geminiVerify(draftId: string, stage: "initial" | "final") {
 
 async function adjudicate(draftId: string) {
   "use step";
+  const adjudicationProvider = providerForStage("adjudication");
   logWorkflowEvent("recipe_workflow_step_started", draftId, {
-    stage: "openai_adjudication",
+    stage: `${adjudicationProvider}_adjudication`,
   });
   const admin = createAdminClient();
   const draft = await loadDraft(admin, draftId);
-  const decision = await measuredGenerate("recipe-openai-adjudication", {
-    model: getModel("openai"),
+  const decision = await measuredGenerate("recipe-adjudication", {
+    model: getModel(adjudicationProvider),
     schema: adjudicationSchema,
     temperature: 0,
     system: renderPrompt("recipe-adjudicate", {}),
@@ -352,8 +393,8 @@ async function finalizeDraft(draftId: string) {
   });
   const admin = createAdminClient();
   const draft = await loadDraft(admin, draftId);
-  const final = draft.verification?.gemini_final as
-    { verdict?: string } | undefined;
+  const final = (draft.verification?.verification_final ??
+    draft.verification?.gemini_final) as { verdict?: string } | undefined;
   if (final?.verdict !== "pass") {
     await block(admin, draftId, "FINAL_INDEPENDENT_VERIFIER_FAILED", "final");
     throw new FatalError("Missing passing final verifier");
@@ -422,6 +463,7 @@ async function recordWorkflowFailure(draftId: string, message: string) {
     [
       "GEMINI_PROVIDER_NOT_CONFIGURED",
       "OPENAI_PROVIDER_NOT_CONFIGURED",
+      "SELECTED_PROVIDER_NOT_CONFIGURED",
     ].includes(draft.failure_code ?? "")
   )
     return;

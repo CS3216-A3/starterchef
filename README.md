@@ -20,6 +20,9 @@ voice-enabled AI sous-chef.
 - **Tailwind CSS v4** — brand tokens in `src/app/globals.css`
 - **Vercel AI SDK** — provider-agnostic LLM layer (`src/lib/ai/`), swappable
   via `AI_PROVIDER` env var
+- **Recipe verification routing** â€” uses the selected provider end-to-end by
+  default; set `RECIPE_VERIFICATION_ROUTING=cross-provider` to opt into the
+  OpenAI/Gemini independent-verifier workflow (requires both keys)
 - **Supabase** — auth, Postgres, storage (`supabase/migrations/`)
 - **Vitest** + **ESLint/Prettier** + **Husky/lint-staged** + **GitHub Actions**
 

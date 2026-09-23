@@ -34,6 +34,10 @@ type DraftResponse = {
       summary?: string;
       findings?: { severity?: string; message?: string }[];
     };
+    verification_final?: {
+      summary?: string;
+      findings?: { severity?: string; message?: string }[];
+    };
   } | null;
 };
 
@@ -50,9 +54,9 @@ const STAGES: { statuses: DraftStatus[]; label: string; detail: string }[] = [
   },
   {
     statuses: ["verifying"],
-    label: "Independent safety check",
+    label: "Safety check",
     detail:
-      "A second model is checking ingredients, timings, allergens, and instructions.",
+      "Weâ€™re checking ingredients, timings, allergens, and instructions.",
   },
   {
     statuses: ["adjudicating"],
@@ -175,7 +179,10 @@ export function RecipeDraftProgress({ draftId }: { draftId: string }) {
   }
 
   const stage = draft ? currentStage(draft.status) : 0;
-  const finalReview = draft?.review?.gemini_final ?? draft?.review;
+  const finalReview =
+    draft?.review?.verification_final ??
+    draft?.review?.gemini_final ??
+    draft?.review;
   const failure =
     draft &&
     ["blocked", "failed_permanent", "failed_retryable", "rejected"].includes(
