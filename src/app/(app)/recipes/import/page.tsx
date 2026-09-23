@@ -66,51 +66,33 @@ export default function ImportRecipePage() {
     setDraft(null);
 
     try {
-      if (state.source === "photo") {
-        if (!state.photoInputId) {
-          setError("Choose a recipe image first.");
-          return;
-        }
-        const queued = await fetch("/api/recipe-drafts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            kind: "photo",
-            inputId: state.photoInputId,
-            idempotencyKey: crypto.randomUUID(),
-          }),
-        });
-        if (!queued.ok)
-          setError(
-            await getApiErrorMessage(queued, "Could not queue recipe review"),
-          );
-        else {
-          const body = (await queued.json()) as { draftId?: string };
-          if (!body.draftId)
-            setError("Recipe review was queued but could not be opened.");
-          else setReviewDraftId(body.draftId);
-        }
-        return;
-      }
-      const body = buildRequestBody(state);
-      const res = await fetch("/api/ai/import-recipe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        setError(await getApiErrorMessage(res, "Import failed"));
-        return;
-      }
-      const data = (await res.json().catch(() => null)) as
-        (ImportedRecipe & { imageUrl?: string }) | null;
-      if (!data) {
+      const draftRequest = buildDraftRequest(state);
+      if (!draftRequest) {
         setError(
-          "The import service returned an unexpected response. Please try again.",
+          state.source === "photo"
+            ? "Choose and finish uploading a recipe image first."
+            : "Paste a recipe source first.",
         );
         return;
       }
-      setDraft(data as ImportedRecipe & { imageUrl?: string });
+      const queued = await fetch("/api/recipe-drafts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...draftRequest,
+          idempotencyKey: crypto.randomUUID(),
+        }),
+      });
+      if (!queued.ok) {
+        setError(
+          await getApiErrorMessage(queued, "Could not queue recipe review"),
+        );
+        return;
+      }
+      const body = (await queued.json()) as { draftId?: string };
+      if (!body.draftId)
+        setError("Recipe review was queued but could not be opened.");
+      else setReviewDraftId(body.draftId);
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -196,8 +178,7 @@ export default function ImportRecipePage() {
           active={state.source === "url"}
           onClick={() => setState((s) => ({ ...s, source: "url" }))}
           icon={<Link2 className="h-4 w-4" />}
-          label="Link (soon)"
-          disabled
+          label="Link"
         />
         <SourceButton
           active={state.source === "photo"}
@@ -209,8 +190,7 @@ export default function ImportRecipePage() {
           active={state.source === "video"}
           onClick={() => setState((s) => ({ ...s, source: "video" }))}
           icon={<Video className="h-4 w-4" />}
-          label="YouTube (soon)"
-          disabled
+          label="YouTube"
         />
       </div>
 
@@ -320,8 +300,7 @@ export default function ImportRecipePage() {
                   className="rounded-2xl border-2 border-espresso/10 bg-card p-4 text-sm font-semibold outline-none focus:border-flame"
                 />
                 <p className="text-xs font-semibold text-espresso-light">
-                  Links work for public YouTube videos only (youtube.com or
-                  youtu.be).
+                  The video is extracted and verified before it can be saved.
                 </p>
               </div>
 
@@ -362,9 +341,7 @@ export default function ImportRecipePage() {
               loading ||
               uploadProgress !== null ||
               (state.source === "photo" && !state.photoInputId) ||
-              (state.source === "video" &&
-                !state.videoUrl &&
-                !state.videoDataUrl)
+              (state.source === "video" && !state.videoUrl)
             }
             size="lg"
           >
@@ -513,18 +490,26 @@ function SourceButton({
   );
 }
 
-function buildRequestBody(state: ImportState): unknown {
+function buildDraftRequest(
+  state: ImportState,
+):
+  | { kind: "text"; content: string }
+  | { kind: "url" | "youtube"; url: string }
+  | { kind: "photo"; inputId: string }
+  | null {
   switch (state.source) {
     case "text":
-      return { source: "text", content: state.text };
+      return state.text.trim() ? { kind: "text", content: state.text } : null;
     case "url":
-      return { source: "url", url: state.url };
+      return state.url.trim() ? { kind: "url", url: state.url } : null;
     case "photo":
-      return { source: "photo", image: state.photoDataUrl };
+      return state.photoInputId
+        ? { kind: "photo", inputId: state.photoInputId }
+        : null;
     case "video":
-      return state.videoUrl
-        ? { source: "video", url: state.videoUrl }
-        : { source: "video", video: state.videoDataUrl };
+      return state.videoUrl.trim()
+        ? { kind: "youtube", url: state.videoUrl }
+        : null;
   }
 }
 

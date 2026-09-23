@@ -8,11 +8,12 @@ import {
   independentVerificationSchema,
 } from "@/lib/ai/schemas/recipe-verification";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { loadRecipeWebSource } from "@/lib/recipe-web-source";
 
 type Draft = {
   id: string;
   user_id: string;
-  kind: "generated" | "photo" | "youtube" | "adapted";
+  kind: "generated" | "photo" | "youtube" | "adapted" | "text" | "url";
   request: Record<string, unknown>;
   input_id: string | null;
   canonical_recipe: unknown;
@@ -173,7 +174,6 @@ async function acquireOrGenerateRecipe(draftId: string) {
   const args = {
     schema: importedRecipeSchema,
     temperature: 0.3,
-    system: renderPrompt("recipe-generate", {}),
   };
   const generationProvider = providerForStage("generation");
   let recipe: unknown;
@@ -194,6 +194,7 @@ async function acquireOrGenerateRecipe(draftId: string) {
     recipe = (
       await measuredGenerate("recipe-photo-extraction", {
         ...args,
+        system: renderPrompt("import-recipe", {}),
         model: getModel(generationProvider),
         messages: [
           {
@@ -209,14 +210,50 @@ async function acquireOrGenerateRecipe(draftId: string) {
         ],
       })
     ).object;
+  } else if (draft.kind === "youtube") {
+    const url = requiredRequestString(draft.request, "url");
+    recipe = (
+      await measuredGenerate("recipe-youtube-extraction", {
+        ...args,
+        system: renderPrompt("import-recipe", {}),
+        model: getModel(generationProvider),
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `${context}\nExtract the recipe from this YouTube cooking video. Use its spoken and on-screen instructions.`,
+              },
+              { type: "file", data: new URL(url), mediaType: "video/mp4" },
+            ],
+          },
+        ],
+      })
+    ).object;
   } else {
-    if (draft.kind === "youtube")
-      throw new FatalError("Unapproved source type");
+    const source =
+      draft.kind === "text"
+        ? requiredRequestString(draft.request, "content")
+        : draft.kind === "url"
+          ? await loadRecipeWebSource(
+              requiredRequestString(draft.request, "url"),
+            )
+          : context;
     recipe = (
       await measuredGenerate("recipe-generation", {
         ...args,
+        system: renderPrompt(
+          draft.kind === "text" || draft.kind === "url"
+            ? "import-recipe"
+            : "recipe-generate",
+          {},
+        ),
         model: getModel(generationProvider),
-        prompt: context,
+        prompt:
+          draft.kind === "text" || draft.kind === "url"
+            ? JSON.stringify({ context, source })
+            : source,
       })
     ).object;
   }
@@ -230,6 +267,13 @@ async function acquireOrGenerateRecipe(draftId: string) {
       updated_at: new Date().toISOString(),
     })
     .eq("id", draftId);
+}
+
+function requiredRequestString(request: Record<string, unknown>, key: string) {
+  const value = request[key];
+  if (typeof value !== "string" || !value.trim())
+    throw new FatalError(`Draft is missing ${key}`);
+  return value;
 }
 
 async function deterministicGuard(draftId: string, phase: string) {

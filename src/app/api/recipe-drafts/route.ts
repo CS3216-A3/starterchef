@@ -19,6 +19,16 @@ const requestSchema = z.discriminatedUnion("kind", [
     idempotencyKey: z.uuid(),
   }),
   z.object({
+    kind: z.literal("text"),
+    content: z.string().trim().min(1).max(20_000),
+    idempotencyKey: z.uuid(),
+  }),
+  z.object({
+    kind: z.literal("url"),
+    url: z.url(),
+    idempotencyKey: z.uuid(),
+  }),
+  z.object({
     kind: z.literal("adapted"),
     recipeId: z.uuid(),
     intent: z.string().trim().min(1).max(1000),
@@ -43,7 +53,10 @@ export const POST = withProtectedRoute(async ({ request, requestId, user }) => {
       "Invalid recipe draft request",
     );
   const input = parsed.data;
-  if (input.kind === "youtube" && !isAllowedRecipeUrl(input.url)) {
+  if (
+    (input.kind === "url" || input.kind === "youtube") &&
+    !isAllowedRecipeUrl(input.url)
+  ) {
     return protectedError(
       { requestId },
       403,
@@ -84,7 +97,7 @@ export const POST = withProtectedRoute(async ({ request, requestId, user }) => {
         "Recipe not found",
       );
   }
-  const requestJson = input.kind === "photo" ? {} : input;
+  const requestJson = requestForDraft(input);
   const { data: inserted, error } = await admin
     .from("recipe_drafts")
     .upsert(
@@ -172,3 +185,23 @@ export const POST = withProtectedRoute(async ({ request, requestId, user }) => {
     { status: inserted?.length ? 202 : 200 },
   );
 });
+
+function requestForDraft(input: z.infer<typeof requestSchema>) {
+  switch (input.kind) {
+    case "photo":
+      return {};
+    case "text":
+      return { content: input.content };
+    case "url":
+    case "youtube":
+      return { url: input.url };
+    case "generated":
+      return {
+        request: input.request,
+        maxMinutes: input.maxMinutes,
+        servings: input.servings,
+      };
+    case "adapted":
+      return { recipeId: input.recipeId, intent: input.intent };
+  }
+}
