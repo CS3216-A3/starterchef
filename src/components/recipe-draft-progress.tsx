@@ -23,6 +23,7 @@ type DraftResponse = {
   draftId: string;
   status: DraftStatus;
   failureCode: string | null;
+  restartCount?: number;
   acceptedRecipeId: string | null;
   review: {
     summary?: string;
@@ -132,6 +133,39 @@ export function RecipeDraftProgress({ draftId }: { draftId: string }) {
     }
   }
 
+  async function restart() {
+    setActing(true);
+    try {
+      const response = await fetch(`/api/recipe-drafts/${draftId}/restart`, {
+        method: "POST",
+      });
+      if (!response.ok)
+        throw new Error(
+          await getApiErrorMessage(response, "Could not restart recipe review"),
+        );
+      const next = (await response.json()) as { restartCount: number };
+      setDraft((current) =>
+        current
+          ? {
+              ...current,
+              status: "queued",
+              failureCode: null,
+              restartCount: next.restartCount,
+            }
+          : current,
+      );
+      setError(null);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not restart recipe review",
+      );
+    } finally {
+      setActing(false);
+    }
+  }
+
   const stage = draft ? currentStage(draft.status) : 0;
   const finalReview = draft?.review?.gemini_final ?? draft?.review;
   const failure =
@@ -158,7 +192,7 @@ export function RecipeDraftProgress({ draftId }: { draftId: string }) {
         </h2>
         <p className="mt-1 text-sm font-semibold text-espresso-light">
           {failure
-            ? failureMessage(draft.status)
+            ? failureMessage(draft.status, draft.failureCode)
             : draft
               ? STAGES[Math.max(stage, 0)]?.detail
               : "Connecting to your recipe review…"}
@@ -231,6 +265,16 @@ export function RecipeDraftProgress({ draftId }: { draftId: string }) {
             : "You can start a new recipe review with a clearer source."}
         </div>
       )}
+      {draft?.status === "failed_retryable" &&
+        (draft.restartCount ?? 0) < 2 && (
+          <Button
+            className="w-full"
+            onClick={() => void restart()}
+            disabled={acting}
+          >
+            {acting ? "Restartingâ€¦" : "Retry review"}
+          </Button>
+        )}
       {error && (
         <p className="rounded-2xl bg-flame-soft p-3 text-sm font-bold text-espresso">
           {error}
@@ -251,7 +295,9 @@ function isTerminal(status: DraftStatus) {
   ].includes(status);
 }
 
-function failureMessage(status: DraftStatus) {
+function failureMessage(status: DraftStatus, code: string | null) {
+  if (code === "PROVIDER_TEMPORARILY_UNAVAILABLE")
+    return "The AI provider is temporarily busy. You can retry this review without uploading the recipe again.";
   if (status === "failed_retryable")
     return "The verification service had a temporary problem. Start a new review in a moment.";
   if (status === "blocked")

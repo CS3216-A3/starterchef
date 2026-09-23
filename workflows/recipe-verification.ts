@@ -22,14 +22,21 @@ type Draft = {
 
 export async function recipeVerificationWorkflow(draftId: string) {
   "use workflow";
-  await claimDraft(draftId);
-  await acquireOrGenerateRecipe(draftId);
-  await deterministicGuard(draftId, "before_verification");
-  await geminiVerify(draftId, "initial");
-  await adjudicate(draftId);
-  await deterministicGuard(draftId, "after_adjudication");
-  await geminiVerify(draftId, "final");
-  await finalizeDraft(draftId);
+  try {
+    await claimDraft(draftId);
+    await acquireOrGenerateRecipe(draftId);
+    await deterministicGuard(draftId, "before_verification");
+    await geminiVerify(draftId, "initial");
+    await adjudicate(draftId);
+    await deterministicGuard(draftId, "after_adjudication");
+    await geminiVerify(draftId, "final");
+    await finalizeDraft(draftId);
+  } catch (error) {
+    await recordWorkflowFailure(
+      draftId,
+      error instanceof Error ? error.message : "Workflow failed",
+    );
+  }
 }
 
 async function claimDraft(draftId: string) {
@@ -374,4 +381,49 @@ async function block(
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
+}
+
+async function recordWorkflowFailure(draftId: string, message: string) {
+  "use step";
+  const admin = createAdminClient();
+  const { data: draft } = await admin
+    .from("recipe_drafts")
+    .select("status,failure_code,verification")
+    .eq("id", draftId)
+    .maybeSingle();
+  // Deterministic guards already wrote a terminal safety verdict.
+  if (
+    !draft ||
+    ["accepted", "rejected", "blocked", "failed_permanent"].includes(
+      draft.status,
+    )
+  )
+    return;
+  if (
+    draft.status === "failed_retryable" &&
+    [
+      "GEMINI_PROVIDER_NOT_CONFIGURED",
+      "OPENAI_PROVIDER_NOT_CONFIGURED",
+    ].includes(draft.failure_code ?? "")
+  )
+    return;
+  const temporary = /high demand|rate limit|temporar|unavailable|retry/i.test(
+    message,
+  );
+  await admin
+    .from("recipe_drafts")
+    .update({
+      status: "failed_retryable",
+      failure_code: temporary
+        ? "PROVIDER_TEMPORARILY_UNAVAILABLE"
+        : "WORKFLOW_FAILED",
+      verification: {
+        ...((draft.verification as Record<string, unknown>) ?? {}),
+        summary: temporary
+          ? "The AI provider is temporarily busy. You can retry this review without uploading the recipe again."
+          : "Recipe verification could not finish. You can retry this review.",
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", draftId);
 }
