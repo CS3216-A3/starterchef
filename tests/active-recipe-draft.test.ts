@@ -66,7 +66,11 @@ describe("active recipe review lookup", () => {
     expect(mocks.query.eq).toHaveBeenCalledWith("user_id", "user-a");
     expect(mocks.query.in).toHaveBeenCalledWith(
       "status",
-      expect.arrayContaining(["queued", "awaiting_user_acceptance"]),
+      expect.arrayContaining([
+        "queued",
+        "awaiting_user_input",
+        "awaiting_user_acceptance",
+      ]),
     );
     expect(await response.json()).toEqual({
       activeDraft: {

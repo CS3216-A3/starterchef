@@ -20,6 +20,7 @@ const requestSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("photo"),
     inputId: z.uuid(),
+    dishHint: z.string().trim().max(120).optional(),
     idempotencyKey: z.uuid(),
   }),
   z.object({
@@ -51,6 +52,7 @@ const activeStatuses = [
   "extracting_or_generating",
   "verifying",
   "adjudicating",
+  "awaiting_user_input",
   "awaiting_user_acceptance",
 ];
 
@@ -246,7 +248,7 @@ export const POST = withProtectedRoute(
 function requestForDraft(input: z.infer<typeof requestSchema>) {
   switch (input.kind) {
     case "photo":
-      return {};
+      return input.dishHint ? { dishHint: input.dishHint } : {};
     case "text":
       return { content: input.content };
     case "url":

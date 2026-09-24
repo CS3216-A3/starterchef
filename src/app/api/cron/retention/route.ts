@@ -19,6 +19,20 @@ export async function GET(request: Request) {
     return new Response("Unauthorized", { status: 401 });
   const admin = createAdminClient();
   const now = new Date().toISOString();
+  // Release paused photo drafts before their private inputs are removed.
+  const { error: expiredDraftError } = await admin
+    .from("recipe_drafts")
+    .update({
+      status: "blocked",
+      failure_code: "PHOTO_CLARIFICATION_EXPIRED",
+      updated_at: now,
+    })
+    .eq("status", "awaiting_user_input")
+    .lte("clarification_expires_at", now);
+  if (expiredDraftError)
+    return new Response("Could not expire photo clarifications", {
+      status: 500,
+    });
   const { data: checkpoints } = await admin
     .from("cooking_checkpoints")
     .select("id,object_path")

@@ -15,7 +15,7 @@ export const GET = withProtectedRoute(
     const { data, error } = await supabase
       .from("recipe_drafts")
       .select(
-        "id,status,failure_code,canonical_recipe,verification,accepted_recipe_id,expires_at,restart_count,updated_at",
+        "id,status,failure_code,canonical_recipe,verification,clarification_expires_at,accepted_recipe_id,expires_at,restart_count,updated_at",
       )
       .eq("id", id)
       .maybeSingle();
@@ -45,11 +45,18 @@ export const GET = withProtectedRoute(
       parsedRecipe.success
         ? parsedRecipe.data
         : null;
+    const clarificationExpired =
+      data.status === "awaiting_user_input" &&
+      data.clarification_expires_at &&
+      new Date(data.clarification_expires_at).getTime() <= Date.now();
     return Response.json({
       draftId: data.id,
-      status: data.status,
-      failureCode: data.failure_code,
+      status: clarificationExpired ? "blocked" : data.status,
+      failureCode: clarificationExpired
+        ? "PHOTO_CLARIFICATION_EXPIRED"
+        : data.failure_code,
       review: data.verification,
+      clarificationExpiresAt: data.clarification_expires_at,
       acceptedRecipeId: data.accepted_recipe_id,
       recipe,
       restartCount: data.restart_count,
