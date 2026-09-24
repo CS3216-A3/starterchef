@@ -111,6 +111,12 @@ export interface RecipeFeedbackRow {
 export interface SessionRecipeSnapshot {
   slug?: string;
   title?: string;
+  description?: string;
+  minutes?: number;
+  difficulty?: RecipeDifficulty;
+  servings?: number;
+  ingredients?: string[];
+  equipment?: string[];
   steps?: RecipeStep[];
 }
 

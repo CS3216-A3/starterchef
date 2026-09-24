@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import {
+  activeCookingContext,
+  cookingPrompt,
+  loadCookingAssistantContext,
+} from "@/lib/ai/cooking-context";
 import { protectedError, withProtectedRoute } from "@/lib/protected-route";
 import {
   VOICE_PROPOSAL_DESCRIPTION,
@@ -42,13 +47,14 @@ export const POST = withProtectedRoute(async (context) => {
       "Invalid realtime session request",
     );
   const input = parsed.data;
-  const { data: session } = await context.supabase
-    .from("cooking_sessions")
-    .select("recipe,current_step,status")
-    .eq("id", input.sessionId)
-    .eq("user_id", context.user.id)
-    .maybeSingle();
-  if (!session || session.status !== "in_progress")
+  const owned = activeCookingContext(
+    await loadCookingAssistantContext(
+      context.supabase,
+      context.user.id,
+      input.sessionId,
+    ),
+  );
+  if (!owned)
     return protectedError(
       context,
       404,
@@ -88,20 +94,22 @@ export const POST = withProtectedRoute(async (context) => {
       "INTERNAL_ERROR",
       "Realtime model is unavailable",
     );
-  const recipe = session.recipe as {
-    title?: string;
-    steps?: { index?: number; title?: string; instruction?: string }[];
-  };
-  const step = recipe.steps?.find(
-    (candidate) => candidate.index === session.current_step,
-  );
-  const instructions = [
-    "You are StarterChef, a concise, safety-conscious cooking assistant.",
-    `Recipe: ${recipe.title ?? "Cooking session"}.`,
-    `Current step: ${step?.title ?? session.current_step}. ${step?.instruction ?? ""}`,
-    "Offer advice and action proposals only; never claim to change the recipe or session. Use propose_cooking_action for timer, navigation, or step changes, and tell the user approval is required. For a step change, include detail and a full replacementInstruction that preserves food-safety guidance.",
-    "Keep replies suitable for speech, under three sentences.",
-  ].join(" ");
+  const instructions = cookingPrompt(owned, "live");
+  const { data: attempt } = await context.supabase
+    .from("realtime_attempts")
+    .select("expires_at")
+    .eq("id", input.attemptId)
+    .eq("session_id", input.sessionId)
+    .eq("user_id", context.user.id)
+    .maybeSingle();
+  if (!attempt)
+    return protectedError(
+      context,
+      409,
+      "CONFLICT",
+      "Realtime attempt is unavailable",
+    );
+  const sessionDeadlineAt = attempt.expires_at;
   try {
     return await issueCredential(
       provider,
@@ -109,6 +117,7 @@ export const POST = withProtectedRoute(async (context) => {
       instructions,
       context.user.id,
       input.attemptId,
+      sessionDeadlineAt,
     );
   } catch {
     // No media has begun when credential creation fails. Reuse the charged
@@ -131,6 +140,7 @@ export const POST = withProtectedRoute(async (context) => {
             instructions,
             context.user.id,
             input.attemptId,
+            sessionDeadlineAt,
           );
         } catch {
           /* the typed assistant remains available */
@@ -152,6 +162,7 @@ async function issueCredential(
   instructions: string,
   userId: string,
   attemptId: string,
+  sessionDeadlineAt: string,
 ) {
   if (provider === "openai") {
     const key = process.env.OPENAI_API_KEY;
@@ -201,6 +212,7 @@ async function issueCredential(
       credential: data.value,
       expiresAt: data.expires_at ?? Math.floor(Date.now() / 1000) + 60,
       attemptId,
+      sessionDeadlineAt,
     });
   }
   if (
@@ -210,7 +222,7 @@ async function issueCredential(
     throw new Error("gemini_unavailable");
   const expiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
   const response = await fetch(
-    "https://generativelanguage.googleapis.com/v1beta/auth_tokens",
+    "https://generativelanguage.googleapis.com/v1alpha/auth_tokens",
     {
       method: "POST",
       headers: {
@@ -218,26 +230,32 @@ async function issueCredential(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        // Resuming a session can reuse this token even with one new-session
+        // use. Lock the model, instructions, and tools on the server while
+        // leaving sessionResumption.handle available to the browser.
         uses: 1,
         expireTime: expiresAt,
         newSessionExpireTime: new Date(Date.now() + 60_000).toISOString(),
-        liveConnectConstraints: {
+        fieldMask:
+          "model,generation_config,system_instruction,tools,context_window_compression",
+        bidiGenerateContentSetup: {
           model: `models/${model}`,
-          config: {
+          generationConfig: {
             responseModalities: ["AUDIO"],
-            systemInstruction: { parts: [{ text: instructions }] },
-            tools: [
-              {
-                functionDeclarations: [
-                  {
-                    name: "propose_cooking_action",
-                    description: VOICE_PROPOSAL_DESCRIPTION,
-                    parameters: VOICE_PROPOSAL_PARAMETERS,
-                  },
-                ],
-              },
-            ],
           },
+          systemInstruction: { parts: [{ text: instructions }] },
+          contextWindowCompression: { slidingWindow: {} },
+          tools: [
+            {
+              functionDeclarations: [
+                {
+                  name: "propose_cooking_action",
+                  description: VOICE_PROPOSAL_DESCRIPTION,
+                  parameters: VOICE_PROPOSAL_PARAMETERS,
+                },
+              ],
+            },
+          ],
         },
       }),
       signal: AbortSignal.timeout(10_000),
@@ -252,5 +270,6 @@ async function issueCredential(
     credential: data.name,
     expiresAt,
     attemptId,
+    sessionDeadlineAt,
   });
 }

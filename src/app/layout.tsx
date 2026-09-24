@@ -1,11 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import { Nunito } from "next/font/google";
+import localFont from "next/font/local";
 import { PostHogProvider } from "@/components/posthog-provider";
 import "./globals.css";
 
-const nunito = Nunito({
+const nunito = localFont({
+  src: "./fonts/Nunito-Latin-Variable.woff2",
   variable: "--font-nunito",
-  subsets: ["latin"],
+  weight: "200 1000",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
