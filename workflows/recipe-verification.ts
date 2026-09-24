@@ -21,6 +21,7 @@ import {
 } from "@/lib/ai/schemas/recipe-verification";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadRecipeWebSource } from "@/lib/recipe-web-source";
+import { workflowErrorMessage } from "@/lib/workflow-error";
 import { recipeSafetyFailure } from "@/lib/validation/recipe-safety";
 import {
   applyPhotoCompleteness,
@@ -118,7 +119,7 @@ export async function recipeVerificationWorkflow(
     if (claimed) {
       await recordWorkflowFailure(
         draftId,
-        error instanceof Error ? error.message : "Workflow failed",
+        workflowErrorMessage(error),
         attemptId,
       );
     }
@@ -427,9 +428,14 @@ async function acquireOrGenerateRecipe(
         : draft.kind === "url"
           ? await loadRecipeWebSource(
               requiredRequestString(draft.request, "url"),
-            ).catch(() => {
+            ).catch((error: unknown) => {
               // Blocked, missing, or non-recipe pages won't succeed on a
               // workflow retry; tag them so the UI can suggest the Text tab.
+              // The reason is our own fetch/parse message (e.g. "Could not
+              // fetch recipe page (403)"), never page content.
+              logWorkflowEvent("recipe_source_unreadable", draftId, {
+                reason: workflowErrorMessage(error, "unknown"),
+              });
               throw new FatalError(SOURCE_UNREADABLE_MESSAGE);
             })
           : draft.kind === "adapted"
@@ -970,7 +976,7 @@ function logWorkflowEvent(
 }
 
 function workflowFailureCategory(error: unknown) {
-  const message = error instanceof Error ? error.message : "";
+  const message = workflowErrorMessage(error, "");
   if (/high demand|rate limit|temporar|unavailable|retry/i.test(message))
     return "provider_temporarily_unavailable";
   if (/api key|not configured|authentication|unauthorized/i.test(message))
