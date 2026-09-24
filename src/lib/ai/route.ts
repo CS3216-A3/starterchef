@@ -1,5 +1,6 @@
 import type { User } from "@supabase/supabase-js";
 import type { z } from "zod";
+import { safeAiFailureCode } from "@/lib/ai/instrument";
 import { protectedError, withProtectedRoute } from "@/lib/protected-route";
 import { checkRateLimit, createRateLimitResponse } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
@@ -75,12 +76,13 @@ export function withAiRoute<TSchema extends z.ZodType, TTrusted = undefined>(
         request,
         requestId,
       });
-    } catch {
+    } catch (error) {
       console.error(
         JSON.stringify({
           route: new URL(request.url).pathname,
           requestId,
           code: "INTERNAL_ERROR",
+          failureCode: safeAiFailureCode(error),
         }),
       );
       return protectedError(

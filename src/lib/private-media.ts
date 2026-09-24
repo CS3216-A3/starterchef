@@ -1,5 +1,6 @@
 import "server-only";
 import type { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type {
   RecipeRow,
   RecipeStep,
@@ -71,6 +72,25 @@ export async function resolveEventMedia(
   supabase: Supabase,
   event: SessionEventRow,
 ) {
+  if (typeof event.payload.checkpointId === "string") {
+    const { data: checkpoint } = await supabase
+      .from("cooking_checkpoints")
+      .select("object_path,expires_at")
+      .eq("id", event.payload.checkpointId)
+      .eq("session_id", event.session_id)
+      .maybeSingle();
+    if (checkpoint && new Date(checkpoint.expires_at).getTime() > Date.now()) {
+      const { data } = await createAdminClient()
+        .storage.from("recipe-inputs")
+        .createSignedUrl(checkpoint.object_path, 5 * 60);
+      if (data)
+        return {
+          ...event,
+          payload: { ...event.payload, photoUrl: data.signedUrl },
+        };
+    }
+    return event;
+  }
   const photoUrl = event.payload.photoUrl;
   if (typeof photoUrl !== "string") return event;
   return {

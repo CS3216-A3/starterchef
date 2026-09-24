@@ -19,6 +19,42 @@ export async function GET(request: Request) {
     return new Response("Unauthorized", { status: 401 });
   const admin = createAdminClient();
   const now = new Date().toISOString();
+  // Release paused photo drafts before their private inputs are removed.
+  const { error: expiredDraftError } = await admin
+    .from("recipe_drafts")
+    .update({
+      status: "blocked",
+      failure_code: "PHOTO_CLARIFICATION_EXPIRED",
+      updated_at: now,
+    })
+    .eq("status", "awaiting_user_input")
+    .lte("clarification_expires_at", now);
+  if (expiredDraftError)
+    return new Response("Could not expire photo clarifications", {
+      status: 500,
+    });
+  const { data: checkpoints } = await admin
+    .from("cooking_checkpoints")
+    .select("id,object_path")
+    .lt("expires_at", now)
+    .limit(500);
+  const checkpointIds = (checkpoints ?? []).map((checkpoint) => checkpoint.id);
+  const checkpointObjects = (checkpoints ?? []).map(
+    (checkpoint) => checkpoint.object_path,
+  );
+  let purgedCheckpoints = 0;
+  if (checkpointObjects.length) {
+    const { error } = await admin.storage
+      .from("recipe-inputs")
+      .remove(checkpointObjects);
+    if (!error) {
+      const deleted = await admin
+        .from("cooking_checkpoints")
+        .delete()
+        .in("id", checkpointIds);
+      if (!deleted.error) purgedCheckpoints = checkpointIds.length;
+    }
+  }
   const { data: inputs } = await admin
     .from("recipe_inputs")
     .select("id,object_path")
@@ -49,9 +85,14 @@ export async function GET(request: Request) {
       ? [ref.slice("recipe-inputs:".length)]
       : [];
   });
-  if (checkpointPaths.length)
-    await admin.storage.from("recipe-inputs").remove(checkpointPaths);
-  if (events?.length)
+  let legacyMediaRemoved = true;
+  if (checkpointPaths.length) {
+    const { error } = await admin.storage
+      .from("recipe-inputs")
+      .remove(checkpointPaths);
+    legacyMediaRemoved = !error;
+  }
+  if (events?.length && legacyMediaRemoved)
     await admin
       .from("session_events")
       .delete()
@@ -61,6 +102,7 @@ export async function GET(request: Request) {
       );
   return Response.json({
     purgedInputs: inputPaths.length,
-    purgedEvents: events?.length ?? 0,
+    purgedCheckpoints,
+    purgedEvents: legacyMediaRemoved ? (events?.length ?? 0) : 0,
   });
 }

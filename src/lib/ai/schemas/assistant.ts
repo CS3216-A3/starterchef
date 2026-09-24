@@ -1,5 +1,22 @@
 import { z } from "zod";
 
+export const voiceActionSchema = z
+  .object({
+    type: z.enum(["adjust-step", "set-timer", "goto-step"]),
+    detail: z.string().trim().min(1).max(1000).optional(),
+    replacementInstruction: z.string().trim().min(1).max(1000).optional(),
+    timerSeconds: z.number().int().min(1).max(86400).optional(),
+    stepIndex: z.number().int().min(1).max(100).optional(),
+  })
+  .strict()
+  .refine((action) =>
+    action.type === "adjust-step"
+      ? Boolean(action.detail && action.replacementInstruction)
+      : action.type === "set-timer"
+        ? Boolean(action.timerSeconds)
+        : Boolean(action.stepIndex),
+  );
+
 /**
  * Response from the in-cooking voice assistant. `answer` is spoken back to the
  * user; `action` describes a structured intent the UI can offer to apply
@@ -20,16 +37,32 @@ export const assistantReplySchema = z.object({
         "repeat-step",
         "needs-human",
       ]),
-      detail: z.string().optional(),
-      timerSeconds: z.number().int().positive().optional(),
+      detail: z.string().nullable(),
+      replacementInstruction: z.string().trim().min(1).max(1000).nullable(),
+      timerSeconds: z.number().int().positive().nullable(),
       stepIndex: z
         .number()
         .int()
         .positive()
-        .optional()
+        .nullable()
         .describe("For goto-step: the 1-based step to navigate to"),
     })
-    .optional(),
+    .strict()
+    .nullable(),
 });
 
 export type AssistantReply = z.infer<typeof assistantReplySchema>;
+
+/** Realtime tool arguments permit omitted fields; the text-assistant's
+ * structured-output contract requires explicit nulls for those fields. */
+export function normalizeVoiceAction(
+  action: z.infer<typeof voiceActionSchema>,
+): NonNullable<AssistantReply["action"]> {
+  return {
+    type: action.type,
+    detail: action.detail ?? null,
+    replacementInstruction: action.replacementInstruction ?? null,
+    timerSeconds: action.timerSeconds ?? null,
+    stepIndex: action.stepIndex ?? null,
+  };
+}

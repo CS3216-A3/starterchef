@@ -20,6 +20,9 @@ export const independentVerificationSchema = z.object({
   findings: z.array(verificationFindingSchema).max(20),
   summary: z.string().trim().min(1).max(1000),
 });
+export type IndependentVerification = z.infer<
+  typeof independentVerificationSchema
+>;
 
 export const adjudicationSchema = independentVerificationSchema.extend({
   // A revision is a complete canonical recipe, not free-form JSON. Keeping it

@@ -54,11 +54,13 @@ export const stepCheckSchema = z.object({
     ),
   feedback: z
     .string()
+    .max(1200)
     .describe(
       "1–3 short sentences of practical feedback on what the photo shows vs what the step expects",
     ),
   tip: z
     .string()
+    .max(600)
     .nullable()
     .transform((value) => value ?? undefined)
     .describe("One concrete fix or next action, if anything needs adjusting"),

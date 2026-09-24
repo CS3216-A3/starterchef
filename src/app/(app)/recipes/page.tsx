@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { Plus } from "lucide-react";
 import { RecipeCard } from "@/components/recipe-card";
+import { ActiveRecipeDraftNotice } from "@/components/active-recipe-draft-notice";
 import { getSavedRecipes, getUserRecipes } from "@/lib/data";
 import { toRecipeCardModel } from "@/lib/recipe-view";
 
@@ -33,6 +34,8 @@ export default async function RecipesPage() {
           <Plus className="h-4 w-4" /> Import
         </Link>
       </div>
+
+      <ActiveRecipeDraftNotice />
 
       {myRecipes.length === 0 ? (
         <div className="flex flex-col items-start gap-3 rounded-3xl bg-card p-6 ring-1 ring-oat">
