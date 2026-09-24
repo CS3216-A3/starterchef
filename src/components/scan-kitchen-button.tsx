@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, ScanLine, Sparkles, X } from "lucide-react";
+import { Camera, CircleAlert, ScanLine, Sparkles, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/button";
 import { getApiErrorMessage } from "@/lib/client-api-error";
@@ -109,6 +109,26 @@ export function ScanKitchenButton() {
         status: "done",
         scanId: body.id,
         candidates: body.candidates,
+      });
+      // Confident matches come pre-checked; low-confidence items are left
+      // for the cook to confirm before they are added.
+      setSelected(
+        new Set(
+          body.candidates
+            .filter((candidate) => candidate.confidence !== "low")
+            .map((candidate) => candidate.id),
+        ),
+      );
+      trackEvent("kitchen_scan_completed", {
+        ingredient_count: body.candidates.filter(
+          (candidate) => candidate.kind === "ingredient",
+        ).length,
+        equipment_count: body.candidates.filter(
+          (candidate) => candidate.kind === "equipment",
+        ).length,
+        uncertain_count: body.candidates.filter(
+          (candidate) => candidate.confidence === "low",
+        ).length,
       });
       if (body.status && body.status !== "processing") {
         window.sessionStorage.removeItem("starterchef:kitchen-scan-key");
@@ -223,15 +243,26 @@ export function ScanKitchenButton() {
       {state.status === "done" && (
         <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-oat">
           <p className="mb-2 text-sm font-bold">
-            We found {state.candidates.length} possible items. Select what to
-            add.
+            We found {state.candidates.length} possible items
+            {state.candidates.some((item) => item.confidence === "low")
+              ? ` — ${state.candidates.filter((item) => item.confidence === "low").length} to check`
+              : ""}
+            . Select what to add.
           </p>
           <ul className="mb-3 flex flex-wrap gap-1 text-sm font-semibold text-espresso-light">
             {state.candidates.map((item) => (
               <li
                 key={item.id}
-                className="flex items-center gap-2 rounded-xl bg-oat px-2 py-1"
+                className={`flex items-center gap-2 rounded-xl px-2 py-1 ${
+                  item.confidence === "low" ? "bg-flame-soft" : "bg-oat"
+                }`}
               >
+                {item.confidence === "low" && (
+                  <CircleAlert
+                    className="h-3.5 w-3.5 shrink-0 text-flame"
+                    aria-label="Low confidence — check before adding"
+                  />
+                )}
                 <input
                   aria-label={`Select ${item.name}`}
                   type="checkbox"

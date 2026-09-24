@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/button";
 import { loadActiveRecipeDraft } from "@/lib/active-recipe-draft";
+import { trackEvent } from "@/lib/posthog/events";
 
 /** Customisation is a request for an owned adaptation draft. The browser never
  * supplies a mutable recipe or saves an AI result directly. */
@@ -18,6 +19,12 @@ export function RecipeChat({ recipeId }: { recipeId: string }) {
     const value = intent.trim();
     if (!value) return;
     setError(null);
+    // Only coarse metadata — the free-form dietary request itself is not
+    // exported to analytics.
+    trackEvent("recipe_adaptation_requested", {
+      recipe_id: recipeId,
+      request_length: value.length,
+    });
     startTransition(async () => {
       const response = await fetch("/api/recipe-drafts", {
         method: "POST",
