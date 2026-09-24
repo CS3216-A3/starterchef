@@ -47,6 +47,65 @@ export default async function CookPage({
     session?.recipe?.slug === recipe.slug ? session.id : undefined;
   const progress = Math.round((stepIndex / steps.length) * 100);
 
+  // No ?step → mise en place: the cook gathers ingredients and equipment
+  // before the first instruction, instead of being dropped into step 1.
+  if (!step) {
+    return (
+      <div className="mx-auto flex max-w-lg flex-col gap-6">
+        <header className="flex flex-col gap-1">
+          <p className="text-xs font-bold tracking-wide text-espresso-light uppercase">
+            {recipeTitle}
+          </p>
+          <h1 className="text-2xl font-extrabold">Get everything ready</h1>
+          <p className="text-sm font-semibold text-espresso-light">
+            {recipe.minutes} min · {recipe.difficulty} · serves{" "}
+            {recipe.servings} · {steps.length} steps
+          </p>
+        </header>
+
+        <section className="flex flex-col gap-2 rounded-3xl bg-card p-4 shadow-sm ring-1 ring-oat">
+          <h2 className="text-xs font-extrabold tracking-wide text-espresso-light uppercase">
+            Ingredients
+          </h2>
+          <ul className="flex flex-wrap gap-2">
+            {recipe.ingredients.map((item) => (
+              <li
+                key={item}
+                className="rounded-full bg-oat px-3 py-1.5 text-sm font-bold"
+              >
+                {item}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {recipe.equipment.length > 0 ? (
+          <section className="flex flex-col gap-2 rounded-3xl bg-card p-4 shadow-sm ring-1 ring-oat">
+            <h2 className="text-xs font-extrabold tracking-wide text-espresso-light uppercase">
+              Equipment
+            </h2>
+            <ul className="flex flex-wrap gap-2">
+              {recipe.equipment.map((item) => (
+                <li
+                  key={item}
+                  className="rounded-full bg-oat px-3 py-1.5 text-sm font-bold"
+                >
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
+        <Link href={`/cook/${id}?step=1`} className="self-stretch">
+          <Button size="md" className="w-full">
+            Start cooking <ArrowRight className="h-4 w-4" />
+          </Button>
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto flex max-w-lg flex-col gap-6">
       {sessionId && <StepTracker sessionId={sessionId} stepIndex={stepIndex} />}
@@ -141,7 +200,11 @@ export default async function CookPage({
             </Button>
           </Link>
         ) : (
-          <span />
+          <Link href={`/cook/${id}`}>
+            <Button variant="outline" size="md">
+              <ArrowLeft className="h-4 w-4" /> Prep list
+            </Button>
+          </Link>
         )}
         {stepIndex < steps.length ? (
           <Link href={`/cook/${id}?step=${stepIndex + 1}`}>
