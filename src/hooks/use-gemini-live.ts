@@ -6,6 +6,7 @@ import type {
   VoiceAssistantState,
 } from "@/lib/ai/voice";
 import {
+  normalizeVoiceAction,
   voiceActionSchema,
   type AssistantReply,
 } from "@/lib/ai/schemas/assistant";
@@ -181,7 +182,7 @@ export async function connectGeminiLive(
               call.name === "propose_cooking_action"
                 ? voiceActionSchema.safeParse(call.args)
                 : null;
-            if (action?.success) onAction?.(action.data);
+            if (action?.success) onAction?.(normalizeVoiceAction(action.data));
             return {
               id: call.id,
               name: call.name,

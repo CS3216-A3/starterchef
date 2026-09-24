@@ -36,16 +36,30 @@ export const assistantReplySchema = z.object({
         "repeat-step",
         "needs-human",
       ]),
-      detail: z.string().optional(),
-      timerSeconds: z.number().int().positive().optional(),
+      detail: z.string().nullable(),
+      timerSeconds: z.number().int().positive().nullable(),
       stepIndex: z
         .number()
         .int()
         .positive()
-        .optional()
+        .nullable()
         .describe("For goto-step: the 1-based step to navigate to"),
     })
-    .optional(),
+    .strict()
+    .nullable(),
 });
 
 export type AssistantReply = z.infer<typeof assistantReplySchema>;
+
+/** Realtime tool arguments permit omitted fields; the text-assistant's
+ * structured-output contract requires explicit nulls for those fields. */
+export function normalizeVoiceAction(
+  action: z.infer<typeof voiceActionSchema>,
+): NonNullable<AssistantReply["action"]> {
+  return {
+    type: action.type,
+    detail: action.detail ?? null,
+    timerSeconds: action.timerSeconds ?? null,
+    stepIndex: action.stepIndex ?? null,
+  };
+}

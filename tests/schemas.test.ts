@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { assistantReplySchema } from "@/lib/ai/schemas/assistant";
+import {
+  assistantReplySchema,
+  normalizeVoiceAction,
+} from "@/lib/ai/schemas/assistant";
 import { cookingStepSchema } from "@/lib/ai/schemas/cooking";
 import { kitchenScanSchema } from "@/lib/ai/schemas/kitchen-scan";
 import { recipeSuggestionsSchema } from "@/lib/ai/schemas/recipe";
@@ -79,8 +82,37 @@ describe("assistantReplySchema", () => {
   it("accepts a spoken answer with a timer action", () => {
     const result = assistantReplySchema.safeParse({
       answer: "Set a two minute timer.",
-      action: { type: "set-timer", timerSeconds: 120 },
+      action: {
+        type: "set-timer",
+        detail: null,
+        timerSeconds: 120,
+        stepIndex: null,
+      },
     });
     expect(result.success).toBe(true);
+  });
+
+  it("requires all structured-output fields, using null for absent values", () => {
+    expect(
+      assistantReplySchema.safeParse({ answer: "Keep stirring.", action: null })
+        .success,
+    ).toBe(true);
+    expect(
+      assistantReplySchema.safeParse({
+        answer: "Set a timer.",
+        action: { type: "set-timer", timerSeconds: 120 },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("normalizes optional realtime tool fields for the shared action shape", () => {
+    expect(
+      normalizeVoiceAction({ type: "set-timer", timerSeconds: 120 }),
+    ).toEqual({
+      type: "set-timer",
+      detail: null,
+      timerSeconds: 120,
+      stepIndex: null,
+    });
   });
 });

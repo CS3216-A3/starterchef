@@ -5,7 +5,10 @@ import type {
   VoiceAssistantMetrics,
   VoiceAssistantState,
 } from "@/lib/ai/voice";
-import { voiceActionSchema } from "@/lib/ai/schemas/assistant";
+import {
+  normalizeVoiceAction,
+  voiceActionSchema,
+} from "@/lib/ai/schemas/assistant";
 import type { AssistantReply } from "@/lib/ai/schemas/assistant";
 
 type SetState = React.Dispatch<React.SetStateAction<VoiceAssistantState>>;
@@ -117,7 +120,7 @@ export async function connectOpenAIRealtime(
             args = null;
           }
           const action = voiceActionSchema.safeParse(args);
-          if (action.success) onAction?.(action.data);
+          if (action.success) onAction?.(normalizeVoiceAction(action.data));
           if (events.readyState === "open") {
             events.send(
               JSON.stringify({
