@@ -183,9 +183,9 @@ export default function ImportRecipePage() {
           YouTube cooking video.
         </p>
         <p className="mt-2 text-sm font-semibold text-espresso-light">
-          Building any recipe starts a six-credit daily AI review. Uploading a
-          photo only stores it privately; the review starts when you tap Build
-          recipe.
+          Text, link, and YouTube reviews use six daily AI credits; photo
+          reviews use seven. Uploading a photo only stores it privately; the
+          review starts when you tap Build recipe.
         </p>
       </div>
 

@@ -134,8 +134,9 @@ export default async function SettingsPage() {
         </div>
         <p className="text-xs font-semibold text-espresso-light">
           AI actions use different amounts of this shared allowance. Starting a
-          recipe review from text or a photo uses six credits. The allowance
-          resets at midnight UTC. Monthly plan credits are not yet active.
+          text, link, or YouTube recipe review uses six credits; a photo review
+          uses seven. The allowance resets at midnight UTC. Monthly plan credits
+          are not yet active.
         </p>
       </section>
     </div>

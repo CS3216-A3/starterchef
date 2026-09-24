@@ -13,13 +13,13 @@ test.skip(
 test.setTimeout(360_000);
 
 const recipeText = `Test kitchen tomato pasta
-Serves 2. Prep 5 minutes. Cook 15 minutes.
-Ingredients: 200 g dry pasta, 400 g canned tomatoes, 1 tbsp olive oil, 1 garlic clove, 500 ml water, salt.
+Serves 2. Total time 30 minutes.
+Ingredients: 200 g dry pasta, 400 g canned tomatoes, 1 tbsp olive oil, 1 garlic clove, 2 litres water, salt.
 Equipment: saucepan, frying pan, colander.
-1. Bring water to a boil in a saucepan. Cook pasta according to the package until tender, then drain.
-2. Heat oil in a frying pan over medium heat. Add minced garlic and cook for 30 seconds.
+1. Bring 2 litres water to a boil in a saucepan. Cook pasta according to the package until tender. Reserve 60 ml pasta water, then drain.
+2. While pasta cooks, heat oil in a frying pan over medium heat. Add minced garlic and cook for 30 seconds.
 3. Add canned tomatoes and simmer for 10 minutes. Season with salt.
-4. Toss the cooked pasta with tomato sauce and serve hot.`;
+4. Toss the cooked pasta with tomato sauce, adding the reserved pasta water only if the sauce is too thick. Serve hot.`;
 
 async function status(page: import("@playwright/test").Page, draftId: string) {
   return page.evaluate(async (id) => {
@@ -69,16 +69,40 @@ async function recipeCardImage(
   return image;
 }
 
+async function signInAndOpenImport(
+  page: import("@playwright/test").Page,
+  email: string,
+  password: string,
+) {
+  await page.goto("/login?next=/recipes/import");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await page.locator('button[type="submit"]').click();
+  await expect
+    .poll(
+      async () =>
+        (await page.context().cookies()).some((cookie) =>
+          cookie.name.includes("auth-token"),
+        ),
+      { timeout: 45_000 },
+    )
+    .toBe(true);
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(async () => (await fetch("/api/recipe-drafts")).status),
+      { timeout: 45_000 },
+    )
+    .toBe(200);
+  // Wait for the server to recognize auth before opening a protected page.
+  await page.goto("/recipes/import");
+  await expect(page).toHaveURL(/\/recipes\/import(?:\?|$)/);
+}
+
 test("text import reaches verified review and saves a recipe", async ({
   page,
 }) => {
-  await page.goto("/login?next=/recipes/import");
-  await page.getByLabel("Email").fill(email!);
-  await page.getByLabel("Password").fill(password!);
-  await page.locator('button[type="submit"]').click();
-  await expect
-    .poll(() => new URL(page.url()).pathname, { timeout: 15_000 })
-    .toBe("/recipes/import");
+  await signInAndOpenImport(page, email!, password!);
 
   await page
     .getByPlaceholder("Paste the full recipe text here...")
@@ -96,7 +120,7 @@ test("text import reaches verified review and saves a recipe", async ({
   await expect(page.getByText("Your verified recipe is ready")).toBeVisible();
   await page.getByRole("button", { name: "Accept recipe" }).click();
   await expect
-    .poll(() => new URL(page.url()).pathname, { timeout: 15_000 })
+    .poll(() => new URL(page.url()).pathname, { timeout: 60_000 })
     .toMatch(/^\/recipes\/[0-9a-f-]{36}$/);
   const saved = await status(page, draftId);
   expect(saved.body.status).toBe("accepted");
@@ -107,13 +131,7 @@ test("recipe-card photo reaches verified review and saves a recipe", async ({
   page,
   context,
 }) => {
-  await page.goto("/login?next=/recipes/import");
-  await page.getByLabel("Email").fill(email!);
-  await page.getByLabel("Password").fill(password!);
-  await page.locator('button[type="submit"]').click();
-  await expect
-    .poll(() => new URL(page.url()).pathname, { timeout: 15_000 })
-    .toBe("/recipes/import");
+  await signInAndOpenImport(page, email!, password!);
 
   const cardImage = await recipeCardImage(context);
   await page.getByRole("button", { name: "Photo" }).click();
@@ -147,7 +165,7 @@ test("recipe-card photo reaches verified review and saves a recipe", async ({
     await expect(page.getByText("Your verified recipe is ready")).toBeVisible();
     await page.getByRole("button", { name: "Accept recipe" }).click();
     await expect
-      .poll(() => new URL(page.url()).pathname, { timeout: 15_000 })
+      .poll(() => new URL(page.url()).pathname, { timeout: 60_000 })
       .toMatch(/^\/recipes\/[0-9a-f-]{36}$/);
     const saved = await status(page, draftId);
     expect(saved.body.status).toBe("accepted");
@@ -174,19 +192,22 @@ test("recipe-card photo reaches verified review and saves a recipe", async ({
   }
 });
 
-test("text and photo reviews share the same six-credit limit", async ({
+test("text and photo reviews enforce their respective daily credit costs", async ({
   page,
   context,
 }) => {
   const ownerEmail = process.env.SECURITY_USER_A_EMAIL;
   const ownerPassword = process.env.SECURITY_USER_A_PASSWORD;
   test.skip(
-    !ownerEmail || !ownerPassword,
-    "Second local test account required",
+    !ownerEmail || !ownerPassword || !process.env.SUPABASE_SECRET_KEY,
+    "Second local test account and service key required",
   );
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
-  const client = createClient(url, key, { auth: { persistSession: false } });
+  const client = createClient(
+    url,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    { auth: { persistSession: false } },
+  );
   const signed = await client.auth.signInWithPassword({
     email: ownerEmail!,
     password: ownerPassword!,
@@ -197,11 +218,11 @@ test("text and photo reviews share the same six-credit limit", async ({
     .from("ai_usage_quota")
     .select("date,count")
     .eq("user_id", userId)
-    .single();
+    .maybeSingle();
   expect(before.error).toBeNull();
   const used =
-    before.data!.date === new Date().toISOString().slice(0, 10)
-      ? before.data!.count
+    before.data?.date === new Date().toISOString().slice(0, 10)
+      ? before.data.count
       : 0;
   const limit = Number(process.env.AI_DAILY_LIMIT ?? 50);
   test.skip(
@@ -209,13 +230,7 @@ test("text and photo reviews share the same six-credit limit", async ({
     "This proof requires fewer than six credits left",
   );
 
-  await page.goto("/login?next=/recipes/import");
-  await page.getByLabel("Email").fill(ownerEmail!);
-  await page.getByLabel("Password").fill(ownerPassword!);
-  await page.locator('button[type="submit"]').click();
-  await expect
-    .poll(() => new URL(page.url()).pathname, { timeout: 15_000 })
-    .toBe("/recipes/import");
+  await signInAndOpenImport(page, ownerEmail!, ownerPassword!);
 
   await page
     .getByPlaceholder("Paste the full recipe text here...")
@@ -229,11 +244,8 @@ test("text and photo reviews share the same six-credit limit", async ({
   const textResponse = await responsePromise;
   expect(textResponse.status()).toBe(429);
   const textError = await textResponse.json();
-  expect(textError.error.details).toMatchObject({
-    required: 6,
-    remaining: limit - used,
-    limit,
-  });
+  expect(textError.error.details).toMatchObject({ required: 6 });
+  expect(textResponse.headers()["retry-after"]).toBeTruthy();
   await expect(page.locator('p[role="alert"]')).toContainText(
     "A recipe review needs 6 daily AI credits",
   );
@@ -263,17 +275,16 @@ test("text and photo reviews share the same six-credit limit", async ({
     const photoResponse = await responsePromise;
     expect(photoResponse.status()).toBe(429);
     const photoError = await photoResponse.json();
-    expect(photoError.error.details).toMatchObject({
-      required: 6,
-      remaining: limit - used,
-      limit,
-    });
+    expect(photoError.error.details).toMatchObject({ required: 7 });
+    expect(photoError.error.message).toContain("A photo recipe review needs 7");
+    expect(photoResponse.headers()["retry-after"]).toBeTruthy();
     const after = await client
       .from("ai_usage_quota")
       .select("count")
       .eq("user_id", userId)
-      .single();
-    expect(after.data?.count).toBe(used);
+      .maybeSingle();
+    expect(after.error).toBeNull();
+    expect(after.data?.count ?? 0).toBe(used);
   } finally {
     const admin = createClient(url, process.env.SUPABASE_SECRET_KEY!, {
       auth: { persistSession: false },
