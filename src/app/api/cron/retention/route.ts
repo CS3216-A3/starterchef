@@ -12,14 +12,47 @@ function authorized(request: Request) {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
-/** Daily retention job. It purges objects first and metadata second; failed
- * object removals leave metadata for the following daily run to retry. */
+const uuid = "[0-9a-f-]{36}";
+export function validRetentionPath(
+  kind: "scan" | "input" | "checkpoint" | "event",
+  owner: string,
+  path: string,
+  sessionId?: string,
+) {
+  if (!new RegExp(`^${uuid}$`, "i").test(owner)) return false;
+  if (kind === "scan") return new RegExp(`^${owner}/${uuid}$`, "i").test(path);
+  if (kind === "input")
+    return new RegExp(`^${owner}/${uuid}\\.(jpg|png|webp)$`, "i").test(path);
+  if (kind === "checkpoint")
+    return (
+      !!sessionId &&
+      new RegExp(
+        `^${owner}/checkpoints/${sessionId}/${uuid}\\.(jpg|png|webp)$`,
+        "i",
+      ).test(path)
+    );
+  return new RegExp(
+    `^${owner}/checkpoints/${uuid}/${uuid}\\.(jpg|png|webp)$`,
+    "i",
+  ).test(path);
+}
+
+/** Hourly retention. Metadata stays in place whenever object deletion fails,
+ * so the next invocation can retry the exact object and row. */
 export async function GET(request: Request) {
   if (!authorized(request))
     return new Response("Unauthorized", { status: 401 });
   const admin = createAdminClient();
   const now = new Date().toISOString();
-  // Release paused photo drafts before their private inputs are removed.
+  const counts = {
+    scans: 0,
+    inputs: 0,
+    drafts: 0,
+    checkpoints: 0,
+    events: 0,
+    attempts: 0,
+    failed: 0,
+  };
   const { error: expiredDraftError } = await admin
     .from("recipe_drafts")
     .update({
@@ -33,76 +66,147 @@ export async function GET(request: Request) {
     return new Response("Could not expire photo clarifications", {
       status: 500,
     });
-  const { data: checkpoints } = await admin
-    .from("cooking_checkpoints")
-    .select("id,object_path")
+
+  const { data: scans, error: scanError } = await admin
+    .from("kitchen_scans")
+    .select("id,user_id,object_path")
     .lt("expires_at", now)
     .limit(500);
-  const checkpointIds = (checkpoints ?? []).map((checkpoint) => checkpoint.id);
-  const checkpointObjects = (checkpoints ?? []).map(
-    (checkpoint) => checkpoint.object_path,
-  );
-  let purgedCheckpoints = 0;
-  if (checkpointObjects.length) {
-    const { error } = await admin.storage
-      .from("recipe-inputs")
-      .remove(checkpointObjects);
-    if (!error) {
-      const deleted = await admin
-        .from("cooking_checkpoints")
-        .delete()
-        .in("id", checkpointIds);
-      if (!deleted.error) purgedCheckpoints = checkpointIds.length;
+  if (scanError) counts.failed++;
+  for (const scan of scans ?? []) {
+    if (!validRetentionPath("scan", scan.user_id, scan.object_path)) {
+      counts.failed++;
+      continue;
     }
+    const removed = await admin.storage
+      .from("kitchen-images")
+      .remove([scan.object_path]);
+    if (removed.error) {
+      counts.failed++;
+      continue;
+    }
+    const deleted = await admin
+      .from("kitchen_scans")
+      .delete()
+      .eq("id", scan.id)
+      .eq("user_id", scan.user_id);
+    if (deleted.error) counts.failed++;
+    else counts.scans++;
   }
-  const { data: inputs } = await admin
-    .from("recipe_inputs")
-    .select("id,object_path")
+
+  const { data: checkpoints, error: checkpointError } = await admin
+    .from("cooking_checkpoints")
+    .select("id,user_id,session_id,object_path")
     .lt("expires_at", now)
     .limit(500);
-  const inputPaths = (inputs ?? []).map((input) => input.object_path);
-  if (inputPaths.length) {
-    const { error } = await admin.storage
+  if (checkpointError) counts.failed++;
+  for (const checkpoint of checkpoints ?? []) {
+    if (
+      !validRetentionPath(
+        "checkpoint",
+        checkpoint.user_id,
+        checkpoint.object_path,
+        checkpoint.session_id,
+      )
+    ) {
+      counts.failed++;
+      continue;
+    }
+    const removed = await admin.storage
       .from("recipe-inputs")
-      .remove(inputPaths);
-    if (!error)
-      await admin
-        .from("recipe_inputs")
-        .delete()
-        .in(
-          "id",
-          (inputs ?? []).map((input) => input.id),
-        );
+      .remove([checkpoint.object_path]);
+    if (removed.error) {
+      counts.failed++;
+      continue;
+    }
+    const deleted = await admin
+      .from("cooking_checkpoints")
+      .delete()
+      .eq("id", checkpoint.id)
+      .eq("user_id", checkpoint.user_id);
+    if (deleted.error) counts.failed++;
+    else counts.checkpoints++;
   }
-  const { data: events } = await admin
+
+  const { data: inputs, error: inputError } = await admin
+    .from("recipe_inputs")
+    .select("id,user_id,object_path")
+    .lt("expires_at", now)
+    .limit(500);
+  if (inputError) counts.failed++;
+  for (const input of inputs ?? []) {
+    if (!validRetentionPath("input", input.user_id, input.object_path)) {
+      counts.failed++;
+      continue;
+    }
+    const removed = await admin.storage
+      .from("recipe-inputs")
+      .remove([input.object_path]);
+    if (removed.error) {
+      counts.failed++;
+      continue;
+    }
+    const deleted = await admin
+      .from("recipe_inputs")
+      .delete()
+      .eq("id", input.id)
+      .eq("user_id", input.user_id);
+    if (deleted.error) counts.failed++;
+    else counts.inputs++;
+  }
+
+  const { data: events, error: eventError } = await admin
     .from("session_events")
-    .select("id,payload")
+    .select("id,user_id,payload")
     .lt("expires_at", now)
     .limit(1000);
-  const checkpointPaths = (events ?? []).flatMap((event) => {
-    const ref = (event.payload as { photoUrl?: unknown }).photoUrl;
-    return typeof ref === "string" && ref.startsWith("recipe-inputs:")
-      ? [ref.slice("recipe-inputs:".length)]
-      : [];
-  });
-  let legacyMediaRemoved = true;
-  if (checkpointPaths.length) {
-    const { error } = await admin.storage
-      .from("recipe-inputs")
-      .remove(checkpointPaths);
-    legacyMediaRemoved = !error;
-  }
-  if (events?.length && legacyMediaRemoved)
-    await admin
+  if (eventError) counts.failed++;
+  for (const event of events ?? []) {
+    const reference = (event.payload as { photoUrl?: unknown }).photoUrl;
+    if (
+      typeof reference === "string" &&
+      reference.startsWith("recipe-inputs:")
+    ) {
+      const path = reference.slice("recipe-inputs:".length);
+      if (!validRetentionPath("event", event.user_id, path)) {
+        counts.failed++;
+        continue;
+      }
+      const removed = await admin.storage.from("recipe-inputs").remove([path]);
+      if (removed.error) {
+        counts.failed++;
+        continue;
+      }
+    }
+    const deleted = await admin
       .from("session_events")
       .delete()
-      .in(
-        "id",
-        events.map((event) => event.id),
-      );
-  return Response.json({
-    purgedInputs: inputPaths.length,
-    purgedCheckpoints,
-    purgedEvents: legacyMediaRemoved ? (events?.length ?? 0) : 0,
-  });
+      .eq("id", event.id)
+      .eq("user_id", event.user_id);
+    if (deleted.error) counts.failed++;
+    else counts.events++;
+  }
+
+  const { data: drafts, error: draftError } = await admin
+    .from("recipe_drafts")
+    .select("id,user_id")
+    .lt("expires_at", now)
+    .limit(500);
+  if (draftError) counts.failed++;
+  for (const draft of drafts ?? []) {
+    const purged = await admin.rpc("purge_expired_recipe_draft_service", {
+      p_draft_id: draft.id,
+    });
+    if (purged.error || !purged.data) counts.failed++;
+    else counts.drafts++;
+  }
+
+  const attempts = await admin
+    .from("realtime_attempts")
+    .delete()
+    .lt("expires_at", now)
+    .select("id");
+  if (attempts.error) counts.failed++;
+  else counts.attempts = attempts.data?.length ?? 0;
+  return Response.json(counts, { status: counts.failed ? 503 : 200 });
 }

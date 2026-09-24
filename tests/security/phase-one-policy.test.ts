@@ -45,7 +45,7 @@ describe("private media references", () => {
     await expect(
       resolveMediaReference(supabase as never, reference),
     ).resolves.toContain("token=short-lived");
-    expect(createSignedUrl).toHaveBeenCalledWith(path, 600);
+    expect(createSignedUrl).toHaveBeenCalledWith(path, 300);
   });
 
   it("leaves public catalogue URLs unchanged", async () => {
