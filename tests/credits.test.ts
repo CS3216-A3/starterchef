@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  CORE_FEATURES,
   CREDITS_PER_TYPICAL_COOK,
   CREDIT_COSTS,
+  FEATURE_ROWS,
   PLANS,
   SGD_PER_USD,
   TOP_UPS,
@@ -59,14 +61,16 @@ describe("plan economics", () => {
     expect(plus.annualPriceSgd).toBeLessThan(plus.priceSgd * 12);
   });
 
-  it("gives the free grant enough credits to be a real trial", () => {
+  it("gives Free at least one full cook a month, but strictly fewer than Plus", () => {
     const free = PLANS.find((p) => p.id === "free")!;
-    expect(approxCooks(free.credits)).toBeGreaterThanOrEqual(10);
+    const plus = PLANS.find((p) => p.id === "plus")!;
+    expect(approxCooks(free.credits)).toBeGreaterThanOrEqual(1);
+    expect(free.credits).toBeLessThan(plus.credits);
   });
 
-  it("covers roughly a cook a day on Plus", () => {
+  it("covers well over a cook a week on Plus", () => {
     const plus = PLANS.find((p) => p.id === "plus")!;
-    expect(approxCooks(plus.credits)).toBeGreaterThanOrEqual(28);
+    expect(approxCooks(plus.credits)).toBeGreaterThanOrEqual(4);
   });
 
   it("derives a typical cook from its component actions", () => {
@@ -76,5 +80,22 @@ describe("plan economics", () => {
         CREDIT_COSTS.step_check +
         CREDIT_COSTS.session_recap,
     );
+  });
+});
+
+describe("launch feature comparison", () => {
+  it("lists at least one core feature shared by every plan", () => {
+    expect(CORE_FEATURES.length).toBeGreaterThan(0);
+  });
+
+  it("gives Plus a real, non-empty upgrade over Free on every gated row", () => {
+    for (const row of FEATURE_ROWS) {
+      expect(row.plus).not.toBe("");
+      expect(row.plus).not.toBe(row.free);
+    }
+  });
+
+  it("locks at least one feature entirely behind Plus", () => {
+    expect(FEATURE_ROWS.some((row) => row.free === "—")).toBe(true);
   });
 });

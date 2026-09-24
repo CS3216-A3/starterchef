@@ -1,7 +1,7 @@
 /**
  * Credit model — the single source of truth for what AI actions cost and what
- * each plan includes. Pricing UI, quota enforcement and the writeup all read
- * from here so they can't drift apart.
+ * each plan includes. Pricing UI and the writeup read from here. The live backend still uses
+ * separate daily quotas; monthly credit enforcement is not implemented.
  *
  * Costs are derived from measured token profiles per action and the per-model
  * rates in `evals/costs.ts`. See `docs/credits.md` for the full derivation and
@@ -93,26 +93,18 @@ export interface Plan {
   name: string;
   priceSgd: number;
   annualPriceSgd?: number;
-  /** Free: one-off welcome grant. Plus: refreshed every month. */
+  /** Granted every month, both tiers. */
   credits: number;
-  recurring: boolean;
 }
 
 export const PLANS: Plan[] = [
-  {
-    id: "free",
-    name: "Free Starter",
-    priceSgd: 0,
-    credits: 1000,
-    recurring: false,
-  },
+  { id: "free", name: "Free Starter", priceSgd: 0, credits: 100 },
   {
     id: "plus",
-    name: "Plus",
+    name: "StarterChef Plus",
     priceSgd: 4.9,
     annualPriceSgd: 39.9,
-    credits: 2500,
-    recurring: true,
+    credits: 1500,
   },
 ];
 
@@ -124,8 +116,39 @@ export interface TopUp {
 }
 
 export const TOP_UPS: TopUp[] = [
-  { id: "small", name: "Small", priceSgd: 2.9, credits: 1000 },
-  { id: "large", name: "Large", priceSgd: 7.9, credits: 3000 },
+  { id: "small", name: "Small", priceSgd: 2.9, credits: 500 },
+  { id: "large", name: "Large", priceSgd: 7.9, credits: 1500 },
+];
+
+/**
+ * Launch tiers gate access two ways: a monthly credit budget (above) and a
+ * feature ceiling on Free, so a Free user can't just save up 3 months of
+ * credits to unlock voice or history. `plus` access implies the whole
+ * feature is available, not just cheaper.
+ */
+export interface FeatureRow {
+  label: string;
+  free: string;
+  plus: string;
+}
+
+export const CORE_FEATURES = [
+  "Kitchen profile & inventory",
+  "Personal recipe book",
+  "Manual recipe entry",
+  "Timers & step-by-step navigation",
+];
+
+export const FEATURE_ROWS: FeatureRow[] = [
+  { label: "Kitchen scanning", free: "Limited", plus: "More scans" },
+  { label: "Recipe imports", free: "Limited", plus: "More imports" },
+  { label: "AI recommendations", free: "Limited", plus: "Expanded" },
+  { label: "Cooking assistance", free: "Limited", plus: "Full access" },
+  { label: "Voice cooking assistance", free: "—", plus: "✓" },
+  { label: "Photo checkpoints", free: "—", plus: "✓" },
+  { label: "Personalised recipe versions", free: "—", plus: "✓" },
+  { label: "Cooking history & cross-session memory", free: "—", plus: "✓" },
+  { label: "Priority AI processing", free: "—", plus: "✓" },
 ];
 
 /**
