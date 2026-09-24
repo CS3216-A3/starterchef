@@ -134,6 +134,21 @@ interface SuiteReport {
 }
 
 const RESULTS_DIR = path.join(process.cwd(), "evals", "results");
+let lastAiRequestStartedAt = 0;
+
+async function paceAiRequests(): Promise<void> {
+  const delayMs = Math.max(
+    0,
+    Number.parseInt(process.env.EVAL_DELAY_MS ?? "0", 10) || 0,
+  );
+  if (delayMs === 0) return;
+
+  const waitMs = delayMs - (Date.now() - lastAiRequestStartedAt);
+  if (lastAiRequestStartedAt > 0 && waitMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+  }
+  lastAiRequestStartedAt = Date.now();
+}
 
 function loadDataset<T>(name: string): T[] {
   const file = path.join(process.cwd(), "evals", "datasets", `${name}.jsonl`);
@@ -376,6 +391,7 @@ async function runRecommendations(
       );
 
       if (!offline && eligible.length > 0) {
+        await paceAiRequests();
         const startedAt = performance.now();
         const generated = await generateObject({
           model: getModel(provider),
@@ -487,6 +503,7 @@ async function runAssistant(
 
   for (const testCase of dataset) {
     for (let run = 1; run <= runsPerCase; run++) {
+      await paceAiRequests();
       const startedAt = performance.now();
       const generated = await generateObject({
         model: getModel(provider),

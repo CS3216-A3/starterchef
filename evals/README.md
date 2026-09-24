@@ -45,6 +45,13 @@ Live evaluation requires the selected provider key in `.env.local`:
 AI_PROVIDER=google EVAL_RUNS=3 npm run eval -- all
 ```
 
+For a provider with a low requests-per-minute quota, pace request starts. A
+5-second interval sends at most 12 request starts per minute:
+
+```bash
+AI_PROVIDER=google-lite EVAL_DELAY_MS=5000 EVAL_RUNS=3 npm run eval -- all
+```
+
 Use three runs per case for final evidence because model output can vary. A
 single run is useful during development:
 
