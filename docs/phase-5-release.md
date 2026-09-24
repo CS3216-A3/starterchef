@@ -68,10 +68,10 @@ store the HTTPS retention URL and same secret in Supabase Vault, then execute
 `scripts/install-retention-cron.sql` to schedule the protected route hourly.
 Vercel's daily invocation in `vercel.json` remains a backstop.
 
-## Local evidence, 2026-09-24
+## Local evidence, 2026-09-24 to 2026-09-25
 
-- `0033` applied to the linked project; the security integration suite passed
-  22/22 tests and Playwright passed 3/3.
+- `0033` and `0034` applied to the linked project; the serialized security
+  integration suite passed 23/23 tests and Playwright passed 3/3.
 - The public-media migration verified and moved five user objects; the final
   audit found zero user and zero catalogue objects in `recipe-images`.
 - OpenAI recipe eval passed 4/4; assistant eval passed 3/3, including the

@@ -969,6 +969,10 @@ export type Database = {
         };
         Returns: Json;
       };
+      unsafe_perishable_storage: {
+        Args: { p_instruction: string };
+        Returns: boolean;
+      };
       update_cooking_session_progress: {
         Args: {
           p_expected_version: number;
