@@ -9,6 +9,13 @@ import {
 import Link from "next/link";
 import type { Metadata } from "next";
 import { Button } from "@/components/button";
+import {
+  PLANS,
+  TOP_UPS,
+  approxCooks,
+  type Plan,
+  type TopUp,
+} from "@/lib/credits";
 
 export const metadata: Metadata = {
   title: "StarterChef · Cook with what you have",
@@ -37,24 +44,31 @@ const features = [
   },
 ];
 
-const tiers = [
-  {
-    name: "Home cook",
-    price: "Free",
-    blurb: "Everything you need to start cooking with what's in your kitchen.",
-    points: ["Kitchen scanning", "Recipe suggestions", "Step-by-step cooking"],
-  },
-  {
-    name: "Sous-chef",
-    price: "$8/mo",
-    blurb: "For cooks who want a sharper assistant and deeper personalisation.",
+const planCopy: Record<Plan["id"], { blurb: string; points: string[] }> = {
+  free: {
+    blurb: "A one-off welcome grant — enough to genuinely try the AI.",
     points: [
-      "Voice assistant during cooking",
-      "Photo checkpoints and watch-me-cook tips",
-      "Adaptive skill progression",
+      "Kitchen profile & recipe book",
+      "Timers & manual recipe entry",
+      "Basic step navigation",
     ],
   },
-];
+  plus: {
+    blurb: "Credits refresh every month, on top of everything in Free Starter.",
+    points: [
+      "Personal recipe versions",
+      "Progress history",
+      "Priority AI processing",
+    ],
+  },
+};
+
+const topUpCopy: Record<TopUp["id"], string> = {
+  small: "Occasional extra AI help.",
+  large: "Better value for frequent video imports and live voice.",
+};
+
+const sgd = (amount: number) => `S$${amount.toFixed(2)}`;
 
 export default function LandingPage() {
   return (
@@ -116,30 +130,71 @@ export default function LandingPage() {
         id="pricing"
         className="mx-auto w-full max-w-5xl scroll-mt-20 px-4 pb-24 sm:px-6"
       >
-        <h2 className="mb-8 text-center text-2xl font-extrabold sm:text-3xl">
+        <h2 className="mb-2 text-center text-2xl font-extrabold sm:text-3xl">
           Simple pricing
         </h2>
+        <p className="mx-auto mb-8 max-w-md text-center text-sm font-semibold text-espresso-light">
+          AI features (scanning, suggestions, voice, adaptations) run on
+          credits. Everything else is free, always.
+        </p>
         <div className="grid gap-4 sm:grid-cols-2">
-          {tiers.map((tier) => (
+          {PLANS.map((plan) => (
             <div
-              key={tier.name}
+              key={plan.id}
               className="flex flex-col rounded-3xl bg-card p-6 shadow-sm ring-1 ring-oat"
             >
-              <h3 className="text-lg font-extrabold">{tier.name}</h3>
+              <h3 className="text-lg font-extrabold">{plan.name}</h3>
               <p className="mt-1 text-3xl font-extrabold text-flame">
-                {tier.price}
+                {plan.priceSgd === 0 ? "Free" : `${sgd(plan.priceSgd)}/mo`}
+                {plan.annualPriceSgd && (
+                  <span className="ml-1.5 text-sm font-bold text-espresso-light">
+                    or {sgd(plan.annualPriceSgd)}/year
+                  </span>
+                )}
               </p>
-              <p className="mt-2 text-sm font-semibold text-espresso-light">
-                {tier.blurb}
+              <p className="mt-2 text-sm font-extrabold">
+                {plan.credits.toLocaleString()} credits
+                {plan.recurring ? " every month" : " to start"}
+                <span className="font-semibold text-espresso-light">
+                  {" "}
+                  — about {approxCooks(plan.credits)} cooks
+                </span>
+              </p>
+              <p className="mt-1 text-sm font-semibold text-espresso-light">
+                {planCopy[plan.id].blurb}
               </p>
               <ul className="mt-4 flex flex-col gap-2 text-sm font-semibold">
-                {tier.points.map((point) => (
+                {planCopy[plan.id].points.map((point) => (
                   <li key={point} className="flex items-center gap-2">
                     <span className="h-1.5 w-1.5 rounded-full bg-flame" />
                     {point}
                   </li>
                 ))}
               </ul>
+            </div>
+          ))}
+        </div>
+
+        <h3 className="mt-8 mb-4 text-center text-sm font-extrabold tracking-wide text-espresso-light uppercase">
+          Need more credits? Top up any time
+        </h3>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {TOP_UPS.map((topUp) => (
+            <div
+              key={topUp.id}
+              className="flex items-center justify-between gap-4 rounded-2xl bg-oat p-4"
+            >
+              <div>
+                <p className="text-sm font-extrabold">
+                  {topUp.name} · {topUp.credits.toLocaleString()} credits
+                </p>
+                <p className="text-xs font-semibold text-espresso-light">
+                  {topUpCopy[topUp.id]}
+                </p>
+              </div>
+              <p className="shrink-0 text-lg font-extrabold text-flame">
+                {sgd(topUp.priceSgd)}
+              </p>
             </div>
           ))}
         </div>

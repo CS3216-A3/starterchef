@@ -111,7 +111,7 @@ export default async function SettingsPage() {
       <section className="flex flex-col gap-3 rounded-3xl bg-oat p-5">
         <div className="flex items-center justify-between">
           <h2 className="inline-flex items-center gap-2 text-sm font-extrabold">
-            <Sparkles className="h-4 w-4 text-flame" /> AI credits today
+            <Sparkles className="h-4 w-4 text-flame" /> AI requests today
           </h2>
           <span className="text-sm font-extrabold">
             {usage.limit - usage.used}{" "}
@@ -134,8 +134,10 @@ export default async function SettingsPage() {
         </div>
         <p className="text-xs font-semibold text-espresso-light">
           Every feature marked with a{" "}
-          <Sparkles className="inline h-3 w-3 text-flame" /> uses one credit.
-          Credits reset daily at midnight UTC.
+          <Sparkles className="inline h-3 w-3 text-flame" /> uses one request,
+          whatever it costs to run. Resets daily at midnight UTC. Credit-based
+          plans, which price each action by what it actually costs, replace this
+          allowance when billing ships.
         </p>
       </section>
     </div>

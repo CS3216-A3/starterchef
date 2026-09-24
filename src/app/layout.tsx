@@ -25,6 +25,12 @@ export const metadata: Metadata = {
       "Scan your kitchen, get recipes that fit what you have, and cook hands-free with an AI sous-chef.",
     type: "website",
   },
+  twitter: {
+    card: "summary_large_image",
+    title: "StarterChef — Your kitchen, your next meal",
+    description:
+      "Scan your kitchen, get recipes that fit what you have, and cook hands-free with an AI sous-chef.",
+  },
   icons: {
     icon: "/logo.png",
     apple: "/logowbg.png",

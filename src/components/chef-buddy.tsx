@@ -51,7 +51,6 @@ export function ChefBuddy({
           alt=""
           width={Math.round(size * 0.82)}
           height={Math.round(size * 0.82)}
-          unoptimized
           className={cn(
             "object-contain",
             state === "speaking"
