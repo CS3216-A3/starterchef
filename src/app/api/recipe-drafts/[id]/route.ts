@@ -15,7 +15,7 @@ export const GET = withProtectedRoute(
     const { data, error } = await supabase
       .from("recipe_drafts")
       .select(
-        "id,status,failure_code,canonical_recipe,verification,clarification_expires_at,accepted_recipe_id,expires_at,restart_count,updated_at",
+        "id,status,failure_code,canonical_recipe,verification,accepted_recipe_id,expires_at,restart_count,updated_at",
       )
       .eq("id", id)
       .maybeSingle();
@@ -45,10 +45,21 @@ export const GET = withProtectedRoute(
       parsedRecipe.success
         ? parsedRecipe.data
         : null;
+    // Keep reads compatible with projects where migration 0030 has not yet
+    // been applied. The worker mirrors the deadline in existing verification
+    // JSON; the database column remains authoritative for clarification RPCs.
+    const review =
+      data.verification && typeof data.verification === "object"
+        ? (data.verification as Record<string, unknown>)
+        : {};
+    const clarificationExpiresAt =
+      typeof review.clarificationExpiresAt === "string"
+        ? review.clarificationExpiresAt
+        : null;
     const clarificationExpired =
       data.status === "awaiting_user_input" &&
-      data.clarification_expires_at &&
-      new Date(data.clarification_expires_at).getTime() <= Date.now();
+      clarificationExpiresAt &&
+      new Date(clarificationExpiresAt).getTime() <= Date.now();
     return Response.json({
       draftId: data.id,
       status: clarificationExpired ? "blocked" : data.status,
@@ -56,7 +67,7 @@ export const GET = withProtectedRoute(
         ? "PHOTO_CLARIFICATION_EXPIRED"
         : data.failure_code,
       review: data.verification,
-      clarificationExpiresAt: data.clarification_expires_at,
+      clarificationExpiresAt,
       acceptedRecipeId: data.accepted_recipe_id,
       recipe,
       restartCount: data.restart_count,
