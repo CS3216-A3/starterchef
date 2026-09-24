@@ -42,8 +42,8 @@ export default async function CookPage({
     const recipe = session.recipe_id
       ? await getRecipeById(session.recipe_id)
       : null;
-    const allIngredients = recipe?.ingredients ?? [];
-    const allEquipment = recipe?.equipment ?? [];
+    const allIngredients = session.recipe.ingredients ?? [];
+    const allEquipment = session.recipe.equipment ?? [];
     return (
       <div className="mx-auto flex max-w-lg flex-col gap-6">
         <BackButton />
@@ -53,14 +53,16 @@ export default async function CookPage({
           </p>
           <h1 className="text-2xl font-extrabold">Get everything ready</h1>
           <p className="text-sm font-semibold text-espresso-light">
-            {recipe
-              ? `${recipe.minutes} min · ${recipe.difficulty} · serves ${recipe.servings} · `
+            {session.recipe.minutes ? `${session.recipe.minutes} min · ` : ""}
+            {session.recipe.difficulty ? `${session.recipe.difficulty} · ` : ""}
+            {session.recipe.servings
+              ? `serves ${session.recipe.servings} · `
               : ""}
             {steps.length} steps
           </p>
-          {recipe?.description ? (
+          {session.recipe.description ? (
             <p className="text-sm font-semibold text-espresso-light">
-              {recipe.description}
+              {session.recipe.description}
             </p>
           ) : null}
         </header>

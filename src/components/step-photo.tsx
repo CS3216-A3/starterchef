@@ -57,11 +57,14 @@ export function StepPhoto({
           type="button"
           onClick={onRemove}
           disabled={removing}
-          aria-label="Remove this photo from the step"
-          className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-espresso text-cream shadow-sm transition-opacity hover:opacity-80 disabled:opacity-40"
+          aria-label="Remove this photo from the step; the check result stays in your timeline"
+          className="absolute -top-2 -right-2 flex h-10 w-10 items-center justify-center rounded-full bg-espresso text-cream shadow-sm transition-opacity hover:opacity-80 disabled:opacity-40"
         >
           <X className="h-3.5 w-3.5" strokeWidth={2.5} />
         </button>
+      </span>
+      <span className="mt-1 block text-xs font-semibold text-espresso-light">
+        Removing the photo keeps the check result in your cooking timeline.
       </span>
       {error && <p className="mt-1 text-xs font-bold text-flame">{error}</p>}
     </span>
