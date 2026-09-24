@@ -10,10 +10,11 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { Button } from "@/components/button";
 import {
+  CORE_FEATURES,
+  FEATURE_ROWS,
   PLANS,
   TOP_UPS,
   approxCooks,
-  type Plan,
   type TopUp,
 } from "@/lib/credits";
 
@@ -43,25 +44,6 @@ const features = [
     body: "StarterChef learns your taste, remembers your wins and mistakes, and gradually unlocks new techniques as your skills grow.",
   },
 ];
-
-const planCopy: Record<Plan["id"], { blurb: string; points: string[] }> = {
-  free: {
-    blurb: "A one-off welcome grant — enough to genuinely try the AI.",
-    points: [
-      "Kitchen profile & recipe book",
-      "Timers & manual recipe entry",
-      "Basic step navigation",
-    ],
-  },
-  plus: {
-    blurb: "Credits refresh every month, on top of everything in Free Starter.",
-    points: [
-      "Personal recipe versions",
-      "Progress history",
-      "Priority AI processing",
-    ],
-  },
-};
 
 const topUpCopy: Record<TopUp["id"], string> = {
   small: "Occasional extra AI help.",
@@ -134,9 +116,10 @@ export default function LandingPage() {
           Simple pricing
         </h2>
         <p className="mx-auto mb-8 max-w-md text-center text-sm font-semibold text-espresso-light">
-          AI features (scanning, suggestions, voice, adaptations) run on
-          credits. Everything else is free, always.
+          Every plan gets the core app for free. AI features run on a monthly
+          credit budget, and Plus unlocks the full experience.
         </p>
+
         <div className="grid gap-4 sm:grid-cols-2">
           {PLANS.map((plan) => (
             <div
@@ -153,26 +136,54 @@ export default function LandingPage() {
                 )}
               </p>
               <p className="mt-2 text-sm font-extrabold">
-                {plan.credits.toLocaleString()} credits
-                {plan.recurring ? " every month" : " to start"}
+                {plan.credits.toLocaleString()} AI credits / month
                 <span className="font-semibold text-espresso-light">
                   {" "}
-                  — about {approxCooks(plan.credits)} cooks
+                  — about {approxCooks(plan.credits)} cook
+                  {approxCooks(plan.credits) === 1 ? "" : "s"}
                 </span>
               </p>
-              <p className="mt-1 text-sm font-semibold text-espresso-light">
-                {planCopy[plan.id].blurb}
-              </p>
-              <ul className="mt-4 flex flex-col gap-2 text-sm font-semibold">
-                {planCopy[plan.id].points.map((point) => (
-                  <li key={point} className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-flame" />
-                    {point}
-                  </li>
-                ))}
-              </ul>
             </div>
           ))}
+        </div>
+
+        <div className="mt-6 overflow-x-auto rounded-3xl bg-card shadow-sm ring-1 ring-oat">
+          <table className="w-full min-w-[480px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-oat">
+                <th className="p-4 font-extrabold">Feature</th>
+                <th className="p-4 text-center font-extrabold">Free Starter</th>
+                <th className="p-4 text-center font-extrabold text-flame">
+                  Plus
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-oat">
+                <td className="p-4 font-bold">Core features</td>
+                <td
+                  colSpan={2}
+                  className="p-4 text-xs font-semibold text-espresso-light"
+                >
+                  {CORE_FEATURES.join(" · ")}
+                </td>
+              </tr>
+              {FEATURE_ROWS.map((row) => (
+                <tr
+                  key={row.label}
+                  className="border-b border-oat last:border-0"
+                >
+                  <td className="p-4 font-bold">{row.label}</td>
+                  <td className="p-4 text-center font-semibold text-espresso-light">
+                    {row.free}
+                  </td>
+                  <td className="p-4 text-center font-bold text-flame">
+                    {row.plus}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
         <h3 className="mt-8 mb-4 text-center text-sm font-extrabold tracking-wide text-espresso-light uppercase">

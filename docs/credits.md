@@ -60,55 +60,78 @@ so we never under-charge.
 
 ## Plan economics
 
-At S$1.28 per USD:
+Launch pricing (approved), at S$1.28 per USD:
 
-| Plan         | Price      | Credits    | Our cost | Revenue  | Gross margin   |
-| ------------ | ---------- | ---------- | -------- | -------- | -------------- |
-| Free Starter | Free       | 1,000 once | $0.10    | —        | — (trial cost) |
-| Plus         | S$4.90/mo  | 2,500/mo   | $0.25    | US$3.83  | 93.5%          |
-| Plus annual  | S$39.90/yr | 30,000/yr  | $3.00    | US$31.17 | 90.4%          |
-| Top-up Small | S$2.90     | 1,000      | $0.10    | US$2.27  | 95.6%          |
-| Top-up Large | S$7.90     | 3,000      | $0.30    | US$6.17  | 95.1%          |
+| Plan         | Price      | Credits/mo | Our cost/mo | Revenue  | Gross margin |
+| ------------ | ---------- | ---------- | ----------- | -------- | ------------ |
+| Free Starter | Free       | 100        | $0.01       | —        | — (CAC)      |
+| Plus         | S$4.90/mo  | 1,500      | $0.15       | US$3.83  | 96.1%        |
+| Plus annual  | S$39.90/yr | 18,000/yr  | $1.80/yr    | US$31.17 | 94.2%        |
+| Top-up Small | S$2.90     | 500        | $0.05       | US$2.27  | 97.8%        |
+| Top-up Large | S$7.90     | 1,500      | $0.15       | US$6.17  | 97.6%        |
 
-The ladder is sound: a Plus credit (S$0.00196, or S$0.00133 annual) is cheaper
-than a Large top-up credit (S$0.00263), which is cheaper than a Small one
-(S$0.00290). Subscribing is always the best value, and the annual plan is a 32%
-discount on twelve monthly payments. Every paid tier is asserted to hold
+The ladder is sound: a Plus credit (S$0.00327/mo, S$0.00222/yr annual) is
+cheaper than a Large top-up credit (S$0.00527), which is cheaper than a Small
+one (S$0.00580) — subscribing is always the best value, and paying annually is
+a 32% discount on twelve monthly payments. Every paid tier is asserted to hold
 positive margin in `tests/credits.test.ts`.
+
+Free costs about **US$0.01/user/month** in model spend — a rounding error next
+to any other per-user cost (hosting, storage, support), so it's priced as
+acquisition cost, not evaluated on its own margin.
+
+## Two gates, not one
+
+Launch pricing gates access two ways, and the credit budget is the smaller of
+the two constraints:
+
+1. **A monthly credit budget** — 100 (Free) vs. 1,500 (Plus), enforced by
+   `creditCostFor()` per action.
+2. **A feature ceiling on Free** — kitchen scanning, recipe imports, AI
+   recommendations and cooking assistance are all explicitly "Limited" on
+   Free regardless of credit balance, and voice, photo checkpoints,
+   personalised recipe versions, cooking history and priority processing are
+   unavailable on Free entirely (`FEATURE_ROWS` in `src/lib/credits.ts`).
+
+This matters for the credit numbers below: Free's 100 credits aren't meant to
+cover a full trial of everything, because most of "everything" is already
+feature-gated. They only need to cover a few core-loop actions (a scan, a
+couple of suggestions) before a user hits the feature wall, not the credit
+wall. **Not yet decided:** the actual per-feature caps behind "Limited" (e.g.
+scans/month, imports/month) — `src/lib/credits.ts` only encodes the credit
+side today; the feature-ceiling side needs its own quotas defined before it
+can be enforced in code.
 
 ## What the allocations actually buy
 
 A representative cook — one suggestion run, four assistant questions, one camera
 checkpoint, one recap — is **29 credits** (`CREDITS_PER_TYPICAL_COOK`).
 
-- 1,000 free credits ≈ 34 cooks.
-- 2,500 Plus credits ≈ 86 cooks per month.
+- 100 free credits ≈ 3 cooks/month — enough to taste the core loop before
+  hitting the feature wall above, not a full trial on its own.
+- 1,500 Plus credits ≈ 51 cooks/month — comfortably more than daily use.
 
 ## Open questions for the team
 
-Three things this model surfaces that are product calls, not frontend ones:
+Two things this model surfaces that are product calls, not frontend ones:
 
-1. **The allocations are generous for text and vision.** Nobody cooks 86 times a
-   month, so for a normal user credits will never bind. That's fine if credits
-   are meant as a safety valve against abuse rather than a meter, but it does
-   mean the free tier alone (≈34 cooks) may cover a casual user indefinitely and
-   soften the reason to upgrade. Worth Angel's view on whether the free grant
-   should be smaller.
+1. **Live voice is the tightest constraint on Plus, and it conflicts with the
+   pitch.** At 120 credits/minute, a Plus user who spent every monthly credit
+   on live voice alone would get **12.5 minutes** — well under one cooking
+   session — while "cook hands-free" is a headline feature. The fix already
+   exists in the codebase: the `web-speech` voice provider does browser STT →
+   `/api/ai/assistant` → browser TTS, so it only costs the 3-credit assistant
+   call (500 minutes-equivalent for the same budget). **Recommendation:** make
+   `web-speech` the default voice path, and treat native live audio (Gemini
+   Live / OpenAI Realtime) as a distinct, separately-communicated premium
+   mode rather than folding it into "Voice cooking assistance ✓" on the
+   pricing table as if it were unlimited. This needs no new code, just a
+   provider default change and a pricing-page caveat.
 
-2. **Live voice is the real constraint, and it conflicts with the pitch.** At
-   120 credits/minute, a Plus user gets about 21 minutes of native-audio voice a
-   month — roughly one cooking session — while "cook hands-free" is a headline
-   feature. The fix already exists in the codebase: the `web-speech` voice
-   provider does browser STT → `/api/ai/assistant` → browser TTS, so it only
-   costs the 3-credit assistant call. **Recommendation:** make `web-speech` the
-   default voice path and treat native live audio (Gemini Live / OpenAI
-   Realtime) as a Plus-only premium mode billed per minute. This is both the
-   cheaper and the more honest option, and it needs no new code.
-
-3. **Expiry and rollover are undefined.** The usual shape — subscription credits
-   expire at the end of each month, purchased top-up credits never expire —
-   needs an explicit decision before the ledger is built, because it changes the
-   schema.
+2. **Expiry and rollover are undefined.** The usual shape — subscription
+   credits expire at the end of each month, purchased top-up credits never
+   expire — needs an explicit decision before the ledger is built, because it
+   changes the schema.
 
 ## Not built yet
 
@@ -122,6 +145,9 @@ owned by backend rather than frontend:
   is actually purchasable.
 - Wiring `creditCostFor()` into each `api/ai/*` route in place of the current
   one-request-one-unit increment.
+- The Free-tier feature ceiling itself: `FEATURE_ROWS` documents which
+  features are "Limited" on Free, but the actual per-feature quotas (scans
+  per month, imports per month, etc.) aren't decided or enforced anywhere yet.
 
 Until that lands, the landing page describes the intended model and the settings
 page honestly reports the daily request allowance that is actually enforced.
