@@ -44,6 +44,7 @@ export function CookStepNavigation({
         trackEvent("step_completed", {
           session_id: sessionId,
           step_index: currentStep,
+          total_steps: totalSteps,
         });
       }
       router.refresh();
