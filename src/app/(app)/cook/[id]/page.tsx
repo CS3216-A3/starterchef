@@ -108,7 +108,7 @@ export default async function CookPage({
           <ol className="flex flex-col gap-1.5">
             {steps.map((s) => (
               <li key={s.index} className="flex gap-2.5 text-sm font-semibold">
-                <span className="w-5 shrink-0 text-right font-extrabold text-flame">
+                <span className="w-5 shrink-0 text-right font-extrabold text-flame-ink">
                   {s.index}
                 </span>
                 <span className="text-espresso-light">{s.title}</span>
@@ -168,7 +168,9 @@ export default async function CookPage({
           <h1 className="text-xl font-extrabold">
             Step {session.current_step} of {steps.length}
           </h1>
-          <span className="text-sm font-extrabold text-flame">{progress}%</span>
+          <span className="text-sm font-extrabold text-flame-ink">
+            {progress}%
+          </span>
         </div>
         <div
           className="h-2 overflow-hidden rounded-full bg-oat"

@@ -93,7 +93,7 @@ export interface Plan {
   name: string;
   priceSgd: number;
   annualPriceSgd?: number;
-  /** Free: one-off welcome grant. Plus: refreshed every month. */
+  /** Monthly allowance on both tiers — free refills, plus is the bigger tap. */
   credits: number;
   recurring: boolean;
 }
@@ -103,15 +103,15 @@ export const PLANS: Plan[] = [
     id: "free",
     name: "Free Starter",
     priceSgd: 0,
-    credits: 1000,
-    recurring: false,
+    credits: 100,
+    recurring: true,
   },
   {
     id: "plus",
-    name: "Plus",
+    name: "StarterChef Plus",
     priceSgd: 4.9,
     annualPriceSgd: 39.9,
-    credits: 2500,
+    credits: 1500,
     recurring: true,
   },
 ];
@@ -124,8 +124,8 @@ export interface TopUp {
 }
 
 export const TOP_UPS: TopUp[] = [
-  { id: "small", name: "Small", priceSgd: 2.9, credits: 1000 },
-  { id: "large", name: "Large", priceSgd: 7.9, credits: 3000 },
+  { id: "small", name: "Small", priceSgd: 2.9, credits: 500 },
+  { id: "large", name: "Large", priceSgd: 7.9, credits: 1500 },
 ];
 
 /**

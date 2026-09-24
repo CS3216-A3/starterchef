@@ -74,7 +74,7 @@ export function RecipePreviewButton({ recipe }: { recipe: RecipePreview }) {
                 <Users className="h-3.5 w-3.5" /> Serves {recipe.servings}
               </span>
             </p>
-            <p className="inline-flex items-center gap-1.5 text-xs font-bold text-flame">
+            <p className="inline-flex items-center gap-1.5 text-xs font-bold text-flame-ink">
               <Sparkles className="h-3.5 w-3.5" /> {recipe.whyGood}
             </p>
 
@@ -107,7 +107,7 @@ export function RecipePreviewButton({ recipe }: { recipe: RecipePreview }) {
                         key={step.index}
                         className="flex gap-2.5 text-sm font-semibold"
                       >
-                        <span className="w-5 shrink-0 text-right font-extrabold text-flame">
+                        <span className="w-5 shrink-0 text-right font-extrabold text-flame-ink">
                           {step.index}
                         </span>
                         <span className="text-espresso-light">

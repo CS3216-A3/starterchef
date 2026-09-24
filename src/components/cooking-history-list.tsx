@@ -35,7 +35,7 @@ export function CookingHistoryList({
         </p>
         <Link
           href="/today"
-          className="inline-flex h-11 items-center rounded-full bg-flame px-6 font-bold text-white transition-colors hover:bg-flame-dark"
+          className="inline-flex h-11 items-center rounded-full bg-flame px-6 font-bold text-espresso transition-colors hover:bg-flame-ink hover:text-white"
         >
           Find something to cook
         </Link>
@@ -67,7 +67,7 @@ export function CookingHistoryList({
                   {s.status === "abandoned" && " · didn’t finish"}
                 </p>
                 {active ? (
-                  <p className="mt-1 inline-flex items-center gap-1 text-sm font-bold text-flame">
+                  <p className="mt-1 inline-flex items-center gap-1 text-sm font-bold text-flame-ink">
                     <Flame className="h-4 w-4" /> In progress · step{" "}
                     {s.current_step}
                   </p>

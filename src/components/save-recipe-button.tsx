@@ -38,7 +38,7 @@ export function SaveRecipeButton({
       className={cn(
         "flex h-9 w-9 items-center justify-center rounded-full transition-colors",
         saved
-          ? "bg-flame text-white hover:bg-flame-dark"
+          ? "bg-flame text-espresso hover:bg-flame-ink hover:text-white"
           : "bg-card/80 text-espresso-light ring-1 ring-oat hover:text-espresso",
       )}
     >

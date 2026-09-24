@@ -96,7 +96,7 @@ export function CookStepNavigation({
           </Button>
         )}
       </div>
-      {error && <p className="text-xs font-bold text-flame">{error}</p>}
+      {error && <p className="text-xs font-bold text-flame-ink">{error}</p>}
     </nav>
   );
 }

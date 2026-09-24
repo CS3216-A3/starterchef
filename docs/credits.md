@@ -62,17 +62,17 @@ so we never under-charge.
 
 At S$1.28 per USD:
 
-| Plan         | Price      | Credits    | Our cost | Revenue  | Gross margin   |
-| ------------ | ---------- | ---------- | -------- | -------- | -------------- |
-| Free Starter | Free       | 1,000 once | $0.10    | —        | — (trial cost) |
-| Plus         | S$4.90/mo  | 2,500/mo   | $0.25    | US$3.83  | 93.5%          |
-| Plus annual  | S$39.90/yr | 30,000/yr  | $3.00    | US$31.17 | 90.4%          |
-| Top-up Small | S$2.90     | 1,000      | $0.10    | US$2.27  | 95.6%          |
-| Top-up Large | S$7.90     | 3,000      | $0.30    | US$6.17  | 95.1%          |
+| Plan             | Price      | Credits   | Our cost | Revenue  | Gross margin    |
+| ---------------- | ---------- | --------- | -------- | -------- | --------------- |
+| Free Starter     | Free       | 100/mo    | $0.01/mo | —        | — (acquisition) |
+| StarterChef Plus | S$4.90/mo  | 1,500/mo  | $0.15    | US$3.83  | 96.1%           |
+| Plus annual      | S$39.90/yr | 18,000/yr | $1.80    | US$31.17 | 94.2%           |
+| Top-up Small     | S$2.90     | 500       | $0.05    | US$2.27  | 97.8%           |
+| Top-up Large     | S$7.90     | 1,500     | $0.15    | US$6.17  | 97.6%           |
 
-The ladder is sound: a Plus credit (S$0.00196, or S$0.00133 annual) is cheaper
-than a Large top-up credit (S$0.00263), which is cheaper than a Small one
-(S$0.00290). Subscribing is always the best value, and the annual plan is a 32%
+The ladder is sound: a Plus credit (S$0.00327, or S$0.00222 annual) is cheaper
+than a Large top-up credit (S$0.00527), which is cheaper than a Small one
+(S$0.00580). Subscribing is always the best value, and the annual plan is a 32%
 discount on twelve monthly payments. Every paid tier is asserted to hold
 positive margin in `tests/credits.test.ts`.
 
@@ -81,23 +81,23 @@ positive margin in `tests/credits.test.ts`.
 A representative cook — one suggestion run, four assistant questions, one camera
 checkpoint, one recap — is **29 credits** (`CREDITS_PER_TYPICAL_COOK`).
 
-- 1,000 free credits ≈ 34 cooks.
-- 2,500 Plus credits ≈ 86 cooks per month.
+- 100 free credits ≈ 3 AI-assisted cooks per month.
+- 1,500 Plus credits ≈ 51 cooks per month.
 
 ## Open questions for the team
 
 Three things this model surfaces that are product calls, not frontend ones:
 
-1. **The allocations are generous for text and vision.** Nobody cooks 86 times a
-   month, so for a normal user credits will never bind. That's fine if credits
-   are meant as a safety valve against abuse rather than a meter, but it does
-   mean the free tier alone (≈34 cooks) may cover a casual user indefinitely and
-   soften the reason to upgrade. Worth Angel's view on whether the free grant
-   should be smaller.
+1. **The free tier now binds quickly, which is the point.** At ~3 AI-assisted
+   cooks a month, Free Starter is a genuine taste of the AI rather than an
+   indefinite allowance — the upgrade pressure comes from the features that
+   are Plus-only (voice, photo checkpoints, personalised versions, cooking
+   history) as much as from the credit cap. Worth watching in launch metrics
+   whether 100/mo converts or just frustrates.
 
 2. **Live voice is the real constraint, and it conflicts with the pitch.** At
-   120 credits/minute, a Plus user gets about 21 minutes of native-audio voice a
-   month — roughly one cooking session — while "cook hands-free" is a headline
+   120 credits/minute, a Plus user gets about 12 minutes of native-audio voice a
+   month — less than one cooking session — while "cook hands-free" is a headline
    feature. The fix already exists in the codebase: the `web-speech` voice
    provider does browser STT → `/api/ai/assistant` → browser TTS, so it only
    costs the 3-credit assistant call. **Recommendation:** make `web-speech` the

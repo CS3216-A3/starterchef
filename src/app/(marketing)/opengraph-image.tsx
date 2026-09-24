@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "nodejs";
-export const alt = "StarterChef — Good food starts with what you have";
+export const alt = "StarterChef — Your start to great cooking";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -58,8 +58,8 @@ export default function OpengraphImage() {
             maxWidth: 980,
           }}
         >
-          Good food starts with&nbsp;
-          <span style={{ color: "#C2540A" }}>what you have.</span>
+          Your start to&nbsp;
+          <span style={{ color: "#C2540A" }}>great cooking.</span>
         </div>
         <div
           style={{

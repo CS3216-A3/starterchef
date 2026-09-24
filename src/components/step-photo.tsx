@@ -63,7 +63,9 @@ export function StepPhoto({
           <X className="h-3.5 w-3.5" strokeWidth={2.5} />
         </button>
       </span>
-      {error && <p className="mt-1 text-xs font-bold text-flame">{error}</p>}
+      {error && (
+        <p className="mt-1 text-xs font-bold text-flame-ink">{error}</p>
+      )}
     </span>
   );
 }

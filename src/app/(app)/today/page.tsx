@@ -123,7 +123,7 @@ export default async function TodayPage({
             <h2 className="text-xl font-extrabold">Your recipes</h2>
             <Link
               href="/recipes/import"
-              className="inline-flex items-center gap-1 text-sm font-bold text-flame hover:text-flame-dark"
+              className="inline-flex items-center gap-1 text-sm font-bold text-flame-ink hover:text-espresso"
             >
               <Plus className="h-4 w-4" /> Import recipe
             </Link>
@@ -139,7 +139,10 @@ export default async function TodayPage({
           ) : filteredMine.length === 0 ? (
             <p className="text-sm font-semibold text-espresso-light">
               None of your recipes match the current filters.{" "}
-              <Link href="/today" className="font-bold text-flame underline">
+              <Link
+                href="/today"
+                className="font-bold text-flame-ink underline"
+              >
                 Reset filters
               </Link>
             </p>
@@ -175,7 +178,7 @@ export default async function TodayPage({
                   Nothing matches those filters.{" "}
                   <Link
                     href="/today"
-                    className="font-bold text-flame underline"
+                    className="font-bold text-flame-ink underline"
                   >
                     Reset filters
                   </Link>

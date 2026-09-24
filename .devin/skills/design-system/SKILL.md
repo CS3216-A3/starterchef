@@ -12,17 +12,18 @@ colors (`gray-*`, `slate-*`, `blue-*`) in components.
 
 ## Tokens
 
-| Token                      | Value | Role                                     |
-| -------------------------- | ----- | ---------------------------------------- |
-| `cream` `#FAF7F2`          | 60%   | Page background, open space              |
-| `oat` `#F3E5D2`            | 30%   | Panels, summary cards, selected sections |
-| `oat-dark` `#E9D7BF`       | —     | Oat hover/active                         |
-| `card` `#FFFDFA`           | —     | Raised surfaces                          |
-| `flame` `#C2540A`          | 10%   | Logo, primary actions, active indicators |
-| `flame-dark` `#A34405`     | —     | Primary hover                            |
-| `flame-soft` `#FDE9D3`     | —     | Accent tint fills                        |
-| `espresso` `#493326`       | —     | Text, icons, nav                         |
-| `espresso-light` `#8A6F5C` | —     | Secondary text, muted labels             |
+| Token                      | Value | Role                                               |
+| -------------------------- | ----- | -------------------------------------------------- |
+| `cream` `#FAF7F2`          | 60%   | Page background, open space                        |
+| `oat` `#F3E5D2`            | 30%   | Panels, summary cards, selected sections           |
+| `oat-dark` `#E9D7BF`       | —     | Oat hover/active                                   |
+| `card` `#FFFDFA`           | —     | Raised surfaces                                    |
+| `flame` `#F58220`          | 10%   | Logo, primary surfaces, icons                      |
+| `flame-ink` `#A34405`      | —     | Flame-coloured text; dark hover for flame surfaces |
+| `flame-dark` `#D96E12`     | —     | Decorative deep-orange (pressed states)            |
+| `flame-soft` `#FDE9D3`     | —     | Accent tint fills                                  |
+| `espresso` `#493326`       | —     | Text, icons, nav                                   |
+| `espresso-light` `#8A6F5C` | —     | Secondary text, muted labels                       |
 
 ## Conventions
 
@@ -35,6 +36,8 @@ colors (`gray-*`, `slate-*`, `blue-*`) in components.
 - Mobile-first: the cook screen is used one-handed with dirty hands — tap
   targets ≥ 40px, key actions reachable at bottom of screen.
 - Voice/camera UI gets `flame` accent; nothing else should compete with it.
-- `flame` and `flame-dark` are tuned to clear 4.5:1 contrast against white —
-  don't lighten them back toward the original `#F58220` logo hue, that shade
-  fails WCAG AA as button/pill background or as text on `cream`.
+- `flame` (`#F58220`) is the brand orange but only ~2.6:1 against white — pair
+  `bg-flame` surfaces with `text-espresso`, never `text-white`. For
+  flame-coloured text on light surfaces use `text-flame-ink` (~5:1 on
+  cream/oat); `flame` itself is for icons and fills only. Dark hover on a
+  flame surface: `hover:bg-flame-ink hover:text-white`.

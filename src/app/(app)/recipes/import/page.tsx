@@ -294,7 +294,7 @@ export default function ImportRecipePage() {
                 accept="image/*"
                 onChange={handlePhotoFile}
                 disabled={uploadProgress !== null}
-                className="rounded-2xl border-2 border-dashed border-espresso/20 bg-card p-4 text-sm font-semibold file:mr-4 file:rounded-full file:bg-flame file:px-4 file:py-2 file:text-white"
+                className="rounded-2xl border-2 border-dashed border-espresso/20 bg-card p-4 text-sm font-semibold file:mr-4 file:rounded-full file:bg-flame file:px-4 file:py-2 file:text-espresso"
                 required
               />
               {uploadProgress !== null && (
@@ -374,7 +374,7 @@ export default function ImportRecipePage() {
           {error && (
             <p
               role="alert"
-              className="rounded-2xl bg-oat p-3 text-sm font-bold text-flame"
+              className="rounded-2xl bg-oat p-3 text-sm font-bold text-flame-ink"
             >
               {error}
             </p>
@@ -435,7 +435,7 @@ function SourceButton({
       disabled={disabled}
       className={`flex flex-col items-center gap-2 rounded-2xl p-3 text-xs font-extrabold transition-colors ${
         active && !disabled
-          ? "bg-flame text-white"
+          ? "bg-flame text-espresso"
           : "bg-card text-espresso-light ring-1 ring-oat hover:bg-oat disabled:cursor-not-allowed disabled:opacity-50"
       }`}
     >

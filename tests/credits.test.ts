@@ -59,9 +59,11 @@ describe("plan economics", () => {
     expect(plus.annualPriceSgd).toBeLessThan(plus.priceSgd * 12);
   });
 
-  it("gives the free grant enough credits to be a real trial", () => {
+  it("gives the free tier enough credits for a few AI-assisted cooks a month", () => {
     const free = PLANS.find((p) => p.id === "free")!;
-    expect(approxCooks(free.credits)).toBeGreaterThanOrEqual(10);
+    expect(free.recurring).toBe(true);
+    expect(approxCooks(free.credits)).toBeGreaterThanOrEqual(3);
+    expect(approxCooks(free.credits)).toBeLessThan(10);
   });
 
   it("covers roughly a cook a day on Plus", () => {

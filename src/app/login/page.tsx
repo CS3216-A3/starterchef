@@ -14,7 +14,7 @@ export default function LoginPage() {
         <LoginForm />
       </Suspense>
       <p className="max-w-xs text-center text-sm font-semibold text-espresso-light">
-        Your first step to cooking with what you have.
+        Your start to great cooking.
       </p>
     </main>
   );

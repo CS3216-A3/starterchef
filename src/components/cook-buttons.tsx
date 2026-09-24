@@ -60,7 +60,7 @@ export function StartCookingButton({
         {pending ? "Starting…" : label}
       </Button>
       {error && (
-        <p role="alert" className="mt-2 text-sm text-flame">
+        <p role="alert" className="mt-2 text-sm text-flame-ink">
           {error}
         </p>
       )}

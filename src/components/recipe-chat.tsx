@@ -86,7 +86,7 @@ export function RecipeChat({ recipeId }: { recipeId: string }) {
       {error && (
         <p
           role="alert"
-          className="rounded-xl bg-oat p-3 text-sm font-bold text-flame"
+          className="rounded-xl bg-oat p-3 text-sm font-bold text-flame-ink"
         >
           {error}
         </p>
