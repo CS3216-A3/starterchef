@@ -2,14 +2,12 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { getActiveSession, logSessionEvent } from "@/lib/session-events";
 import { createClient } from "@/lib/supabase/server";
 import { slugify } from "@/lib/slug";
 import type { ImportedRecipe } from "@/lib/ai/schemas/import";
 import { safeActionFailure } from "@/lib/action-result";
 import {
   createRecipeSchema,
-  feedbackSchema,
   updateRecipeSchema,
   uuidSchema,
 } from "@/lib/validation/actions";
@@ -18,6 +16,7 @@ import {
   KITCHEN_IMAGE_MAX_BYTES,
 } from "@/lib/image-upload";
 import { privateMediaReference } from "@/lib/private-media";
+import { recipeSafetyFailure } from "@/lib/validation/recipe-safety";
 
 /** Save or unsave a catalogue recipe for the current user. */
 export async function toggleSavedRecipe(recipeId: string, save: boolean) {
@@ -80,6 +79,19 @@ export async function createUserRecipe(input: CreateRecipeInput) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in" };
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("dietary_restrictions,allergies")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (profileError || !profile)
+    return { error: "Could not check recipe safety" };
+  if (recipeSafetyFailure(input, profile))
+    return {
+      error:
+        "This recipe conflicts with your dietary settings or contains an unsafe instruction",
+    };
 
   const baseSlug = slugify(input.title);
   let slug = baseSlug;
@@ -174,6 +186,39 @@ export async function updateUserRecipe(input: UpdateRecipeInput) {
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in" };
 
+  const [
+    { data: existing, error: existingError },
+    { data: profile, error: profileError },
+  ] = await Promise.all([
+    supabase
+      .from("recipes")
+      .select("ingredients,steps")
+      .eq("id", input.id)
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("dietary_restrictions,allergies")
+      .eq("id", user.id)
+      .maybeSingle(),
+  ]);
+  if (existingError || !existing) return { error: "Recipe not found" };
+  if (profileError || !profile)
+    return { error: "Could not check recipe safety" };
+  if (
+    recipeSafetyFailure(
+      {
+        ingredients: input.ingredients ?? existing.ingredients,
+        steps: input.steps ?? existing.steps,
+      },
+      profile,
+    )
+  )
+    return {
+      error:
+        "This edit conflicts with your dietary settings or contains an unsafe instruction",
+    };
+
   const update: Record<string, unknown> = {};
   if (input.title !== undefined) update.title = input.title;
   if (input.description !== undefined) update.description = input.description;
@@ -205,118 +250,6 @@ export async function updateUserRecipe(input: UpdateRecipeInput) {
 
   revalidatePath("/recipes");
   revalidatePath("/today");
-  revalidatePath(`/cook/${input.id}`);
-  return { ok: true };
-}
-
-export interface RecipeFeedbackInput {
-  recipeId: string;
-  rating?: number;
-  substitutionsMade?: string[];
-  equipmentAdjusted?: string[];
-  scaledServings?: number;
-  wouldCookAgain?: boolean;
-  notes: string;
-}
-
-/** Save feedback after cooking and optionally create a personalised version. */
-export async function saveRecipeFeedback(
-  input: RecipeFeedbackInput,
-  options?: { createPersonalizedCopy?: ImportedRecipe },
-) {
-  const parsed = feedbackSchema.safeParse(input);
-  if (!parsed.success) return { error: "Check your feedback and try again" };
-  input = parsed.data;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in" };
-
-  // Attach the active cooking session so the recap can fold insights back
-  // into this row's `learned` jsonb.
-  const session = await getActiveSession(supabase, user.id);
-
-  const feedbackRow = {
-    user_id: user.id,
-    recipe_id: input.recipeId,
-    session_id: session?.id ?? null,
-    rating: input.rating,
-    substitutions_made: input.substitutionsMade,
-    equipment_adjusted: input.equipmentAdjusted,
-    scaled_servings: input.scaledServings,
-    would_cook_again: input.wouldCookAgain,
-    notes: input.notes,
-  };
-  let feedbackError: unknown = null;
-  if (session?.id) {
-    // Some deployed databases predate the unique session index required by
-    // PostgREST upsert. Find and update explicitly so retries work on either
-    // schema version and do not create duplicate feedback rows.
-    const { data: existing, error: lookupError } = await supabase
-      .from("recipe_feedback")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("session_id", session.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (lookupError) {
-      feedbackError = lookupError;
-    } else if (existing) {
-      const { error } = await supabase
-        .from("recipe_feedback")
-        .update(feedbackRow)
-        .eq("id", existing.id)
-        .eq("user_id", user.id);
-      feedbackError = error;
-    } else {
-      const { error } = await supabase
-        .from("recipe_feedback")
-        .insert(feedbackRow);
-      feedbackError = error;
-    }
-  } else {
-    const { error } = await supabase
-      .from("recipe_feedback")
-      .insert(feedbackRow);
-    feedbackError = error;
-  }
-
-  if (feedbackError)
-    return safeActionFailure("save your feedback", feedbackError);
-
-  await logSessionEvent(supabase, {
-    userId: user.id,
-    sessionId: session?.id,
-    kind: "feedback",
-    payload: {
-      rating: input.rating,
-      wouldCookAgain: input.wouldCookAgain,
-      notes: input.notes || undefined,
-      substitutionsMade: input.substitutionsMade,
-    },
-  });
-
-  if (options?.createPersonalizedCopy) {
-    const personalized = {
-      ...options.createPersonalizedCopy,
-      source: "personalized",
-    };
-    const result = await createUserRecipe({
-      ...personalized,
-      parentRecipeId: input.recipeId,
-    });
-    if ("error" in result) return result;
-    return {
-      ok: true,
-      personalizedRecipeId: result.id,
-      personalizedSlug: result.slug,
-    };
-  }
-
-  revalidatePath("/recipes");
   return { ok: true };
 }
 

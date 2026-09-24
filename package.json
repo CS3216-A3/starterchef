@@ -16,6 +16,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "eval": "tsx evals/run.ts",
+    "eval:photo": "tsx --conditions=react-server evals/photo-recipe.ts",
     "prepare": "husky"
   },
   "lint-staged": {
@@ -48,6 +49,7 @@
     "recipe-scrapers": "^3.0.0",
     "server-only": "^0.0.1",
     "tailwind-merge": "^3.7.0",
+    "undici": "7.29.1",
     "workflow": "^4.8.9",
     "zod": "^4.6.5"
   },

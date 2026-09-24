@@ -9,6 +9,7 @@ import { deflateSync } from "node:zlib";
 import { measuredGenerate, safeAiFailureCode } from "../src/lib/ai/instrument";
 import { getModel } from "../src/lib/ai/model";
 import { renderPrompt } from "../src/lib/ai/prompts";
+import { assistantReplySchema } from "../src/lib/ai/schemas/assistant";
 import { kitchenScanSchema } from "../src/lib/ai/schemas/kitchen-scan";
 
 try {
@@ -113,6 +114,33 @@ async function scanProbe() {
   }
 }
 
+async function assistantProbe() {
+  try {
+    await measuredGenerate("ai-key-smoke-assistant", {
+      model: getModel("assistant"),
+      schema: assistantReplySchema,
+      system: renderPrompt("cooking-assistant", {
+        recipeTitle: "Test rice",
+        stepTitle: "Cook the rice",
+        memory: "- Nothing recorded yet",
+        dietaryRestrictions: "none",
+        allergies: "none",
+        pantry: "none",
+        adjustments: "[]",
+      }),
+      prompt: "Can I use a rice cooker?",
+    });
+    return { ok: true, code: "OK" };
+  } catch (error) {
+    return {
+      ok: false,
+      code: safeAiFailureCode(error),
+      status: errorStatus(error),
+      errorType: error instanceof Error ? error.constructor.name : "Unknown",
+    };
+  }
+}
+
 function crc32(bytes: Uint8Array) {
   let crc = 0xffffffff;
   for (const byte of bytes) {
@@ -165,6 +193,13 @@ async function main() {
         JSON.stringify({ provider, model, probe: "kitchen-scan", ...scan }),
       );
       if (!scan.ok) process.exitCode = 1;
+    }
+    if (process.argv.includes("--assistant")) {
+      const assistant = await assistantProbe();
+      console.info(
+        JSON.stringify({ provider, model, probe: "assistant", ...assistant }),
+      );
+      if (!assistant.ok) process.exitCode = 1;
     }
   } catch {
     console.error(

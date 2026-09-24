@@ -94,9 +94,9 @@ export default async function TodayPage({
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <section className="flex flex-col gap-4">
-          {activeRecipe?.slug && (
+          {session?.id && (
             <Link
-              href={`/cook/${activeRecipe.slug}?step=${session?.current_step ?? 1}`}
+              href={`/cook/${session.id}`}
               className="flex items-center justify-between rounded-3xl border-2 border-flame bg-flame-soft p-5 transition-colors hover:bg-[#fcd9b8]"
             >
               <span className="flex items-center gap-3">
@@ -108,7 +108,7 @@ export default async function TodayPage({
                     Already cooking
                   </span>
                   <span className="block text-xs font-semibold text-espresso-light">
-                    Continue {activeRecipe.title ?? "your recipe"} from step{" "}
+                    Continue {activeRecipe?.title ?? "your recipe"} from step{" "}
                     {session?.current_step ?? 1}
                   </span>
                 </span>

@@ -12,6 +12,7 @@ const bodySchema = z.object({
     stepIndex: z.number().int().min(1),
     title: z.string().trim().min(1).max(120),
     detail: z.string().trim().min(1).max(1000),
+    replacementInstruction: z.string().trim().min(1).max(1000),
   }),
 });
 export const POST = withProtectedRoute(async (context) => {

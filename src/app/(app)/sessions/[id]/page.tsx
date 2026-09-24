@@ -118,6 +118,10 @@ export default async function SessionPage({
 
 function EventRow({ event }: { event: SessionEventRow }) {
   const p = event.payload;
+  const verdict =
+    typeof p.verdict === "object" && p.verdict !== null
+      ? (p.verdict as { looksRight?: boolean; feedback?: string; tip?: string })
+      : p;
 
   const base =
     "flex gap-3 rounded-2xl bg-card p-3 ring-1 ring-oat text-sm font-semibold";
@@ -169,10 +173,10 @@ function EventRow({ event }: { event: SessionEventRow }) {
             <Camera className="h-4 w-4 text-flame" />
             Camera checkpoint
             {event.step_index ? ` (step ${event.step_index})` : ""}
-            {p.looksRight === true && (
+            {verdict.looksRight === true && (
               <span className="text-green-700">✓ looked right</span>
             )}
-            {p.looksRight === false && (
+            {verdict.looksRight === false && (
               <span className="text-flame">needed a fix</span>
             )}
             {time}
@@ -187,9 +191,11 @@ function EventRow({ event }: { event: SessionEventRow }) {
               />
             </span>
           )}
-          <span>{String(p.feedback ?? "")}</span>
-          {p.tip ? (
-            <span className="font-bold text-flame">Try: {String(p.tip)}</span>
+          <span>{String(verdict.feedback ?? "")}</span>
+          {verdict.tip ? (
+            <span className="font-bold text-flame">
+              Try: {String(verdict.tip)}
+            </span>
           ) : null}
         </li>
       );

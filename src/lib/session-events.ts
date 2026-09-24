@@ -32,30 +32,16 @@ export async function logSessionEvent(
 ) {
   if (!input.sessionId) return;
   await supabase
-    .from("session_events")
-    .insert({
-      session_id: input.sessionId,
-      user_id: input.userId,
-      step_index: input.stepIndex ?? null,
-      kind: input.kind,
-      payload: input.payload ?? {},
+    .rpc("append_cooking_event", {
+      p_session_id: input.sessionId,
+      p_step_index: input.stepIndex ?? null,
+      p_kind: input.kind,
+      p_payload: input.payload ?? {},
+      p_expires_at: null,
     })
     .then(({ error }) => {
       if (error) console.warn("session_events insert failed:", error.message);
     });
-}
-
-/** The user's active in-progress session, if any. */
-export async function getActiveSession(supabase: Db, userId: string) {
-  const { data } = await supabase
-    .from("cooking_sessions")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("status", "in_progress")
-    .order("started_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return (data as { id: string } | null) ?? null;
 }
 
 /** Full event timeline for one session (recap + review page). */
@@ -137,9 +123,11 @@ export async function getCookingMemory(
     kind: string;
     payload: SessionEventPayload;
   }[]) {
-    if (e.kind === "photo_check" && e.payload.looksRight === false) {
+    const verdict = e.payload.verdict as
+      { looksRight?: boolean | null; feedback?: string } | undefined;
+    if (e.kind === "photo_check" && verdict?.looksRight === false) {
       facts.push(
-        `A progress photo needed a fix: ${e.payload.feedback ?? "unspecified issue"}`,
+        `A progress photo needed a fix: ${verdict.feedback ?? "unspecified issue"}`,
       );
     } else if (e.kind === "feedback" && e.payload.notes) {
       facts.push(`Their own note after cooking: "${e.payload.notes}"`);
@@ -158,6 +146,7 @@ export async function getCookingMemory(
     equipment_adjusted: string[];
     notes: string;
   }[]) {
+    if (f.notes) facts.push(`Their own note after cooking: "${f.notes}"`);
     for (const s of f.substitutions_made ?? []) {
       facts.push(`They have substituted: ${s}`);
     }
