@@ -49,11 +49,26 @@ export function FinishForm({ recipe }: { recipe: RecipeRow }) {
         return;
       }
 
+      trackEvent("feedback_submitted", {
+        recipe_id: recipe.id,
+        rating,
+        personalized_copy: savePersonalized,
+      });
+
+      const completion = await completeCookingSession().catch(() => null);
+
+      if (!completion || ("error" in completion && completion.error)) {
+        setError(
+          "Your feedback was saved, but we could not finish the session.",
+        );
+        return;
+      }
+
       trackEvent("cooking_session_completed", {
         recipe_id: recipe.id,
         rating,
       });
-      await completeCookingSession().catch(() => undefined);
+
       router.push("/today");
     });
   }

@@ -25,12 +25,17 @@ export function StartCookingButton({
 
   function handleClick() {
     startTransition(async () => {
-      trackEvent("cooking_session_started", { recipe_slug: slug });
-      await startCookingSession(slug).catch(() => undefined);
+      const result = await startCookingSession(slug).catch(() => null);
+
+      if (result && "ok" in result && result.ok) {
+        trackEvent("cooking_session_started", {
+          recipe_slug: slug,
+        });
+      }
+
       router.push(`/cook/${slug}`);
     });
   }
-
   return (
     <Button
       variant={primary ? "primary" : "outline"}

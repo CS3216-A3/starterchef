@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/button";
 import { getApiErrorMessage } from "@/lib/client-api-error";
 import type { KitchenScanCandidate } from "@/lib/types";
+import { trackEvent } from "@/lib/posthog/events";
 
 type ScanState =
   | { status: "idle" }
@@ -150,9 +151,16 @@ export function ScanKitchenButton() {
           await getApiErrorMessage(res, "Could not add detected items"),
         );
       const body = (await res.json()) as { items?: unknown[] };
+      const added = body.items?.length ?? accepted.length;
+
+      trackEvent("kitchen_items_saved", {
+        source: "scan",
+        item_count: added,
+      });
+
       setState({
         status: "saved",
-        added: body.items?.length ?? accepted.length,
+        added,
       });
       window.sessionStorage.removeItem("starterchef:kitchen-scan-key");
       idempotencyKeyRef.current = null;
