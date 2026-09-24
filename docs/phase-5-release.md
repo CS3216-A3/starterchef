@@ -2,8 +2,9 @@
 
 ## Schema and media order
 
-1. Run `npx.cmd supabase db push --dry-run`. Apply `0033` with
-   `npx.cmd supabase db push --yes` to the linked test project.
+1. Run `npx.cmd supabase db push --dry-run`. Apply `0033` and the additive
+   review fixes in `0034` with `npx.cmd supabase db push --yes` to the linked
+   test project.
 2. Run `npx.cmd tsx scripts/migrate-public-media.ts --dry-run`. The script
    inventories `recipe-images` without writing.
 3. Run `npx.cmd tsx scripts/migrate-public-media.ts --resume`. Each object is
@@ -11,13 +12,14 @@
    `recipe-catalogue`, checked by size and SHA-256, and referenced from the
    database before its public source is removed. Repeating `--resume` is safe.
 4. Require `npx.cmd tsx scripts/migrate-public-media.ts --audit` to report
-   `publicUserObjects: 0`. Verify the preview and private-image access before
-   applying `0034`. The bucket's `public` flag must be set to false; a read
-   policy change alone does not protect old public URLs.
+   both `publicUserObjects: 0` and `catalogueObjects: 0`. Verify the preview and
+   private-image access before applying the planned `0035` bucket lockdown.
+   The bucket's `public` flag must be set to false; a read policy change alone
+   does not protect old public URLs.
 5. Generate database types from the final linked schema with
    `npx.cmd supabase gen types typescript --linked` and review the diff.
 
-`0034` also revokes the old browser-callable adjustment RPC after the new
+`0035` also revokes the old browser-callable adjustment RPC after the new
 server-only adjustment route is deployed. Do not apply it to a project still
 serving the old route.
 

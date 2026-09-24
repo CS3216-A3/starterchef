@@ -375,7 +375,7 @@ keys.
 The current migration order and release commands are in
 [`phase-5-release.md`](phase-5-release.md). This section records planning
 history; migration names and command examples below are superseded by the
-runbook's `0033`/`0034` sequence.
+runbook's `0033`/`0034`/planned `0035` sequence.
 
 ### Migration `0023_ai_telemetry_and_capability_routing.sql`
 

@@ -193,7 +193,7 @@ async function main() {
     }),
   );
   if (mode === "audit") {
-    if (users.length) process.exitCode = 1;
+    if (objects.length) process.exitCode = 1;
     return;
   }
   if (mode === "dry-run") return;

@@ -5,7 +5,8 @@ the local process or a private OS temp file; do not commit them or place them
 in GitHub Actions secrets. `scripts/bootstrap-security-users.ts` creates two
 accounts and prints only the private credential-file path.
 
-Run after migration `0033_cooking_assistance_and_telemetry.sql`:
+Run after migrations `0033_cooking_assistance_and_telemetry.sql` and
+`0034_phase5_review_fixes.sql`:
 
 ```powershell
 npm.cmd run test:security:integration
@@ -26,6 +27,7 @@ Run the suite locally until a separate test project and explicit secret
 provisioning are approved.
 
 After the public-media command reports zero user objects, verify the deployed
-preview against the same project. Then apply `0034_recipe_images_private.sql`.
+preview against the same project. Then apply the planned
+`0035_recipe_images_private.sql`.
 Its precondition rejects any remaining object in `recipe-images` before making
 the bucket private.

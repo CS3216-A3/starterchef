@@ -31,6 +31,7 @@ export function validRetentionPath(
         "i",
       ).test(path)
     );
+  if (validRetentionPath("input", owner, path)) return true;
   return new RegExp(
     `^${owner}/checkpoints/${uuid}/${uuid}\\.(jpg|png|webp)$`,
     "i",

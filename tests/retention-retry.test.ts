@@ -92,5 +92,12 @@ describe("retention retries", () => {
     expect(
       validRetentionPath("event", owner, `${owner}/recipes/active.jpg`),
     ).toBe(false);
+    expect(
+      validRetentionPath(
+        "event",
+        owner,
+        `${owner}/7f6a849c-a905-4c5a-aeae-e5f768ea6426.jpg`,
+      ),
+    ).toBe(true);
   });
 });

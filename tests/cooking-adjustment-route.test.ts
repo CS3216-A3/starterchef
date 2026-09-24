@@ -112,13 +112,18 @@ describe("confirmed cooking adjustments", () => {
   });
 
   it("rejects unsafe instructions before the privileged RPC", async () => {
-    const response = await POST(
-      request({
-        proposal: { ...proposal, replacementInstruction: "Eat raw chicken." },
-        expectedVersion: 4,
-      }),
-    );
-    expect(response.status).toBe(400);
+    for (const replacementInstruction of [
+      "Eat raw chicken.",
+      "Leave raw chicken on the counter for three hours.",
+    ]) {
+      const response = await POST(
+        request({
+          proposal: { ...proposal, replacementInstruction },
+          expectedVersion: 4,
+        }),
+      );
+      expect(response.status).toBe(400);
+    }
     expect(mocks.adminRpc).not.toHaveBeenCalled();
   });
 });

@@ -27,5 +27,18 @@ describe("deterministic recipe safety", () => {
         null,
       ),
     ).toBe("UNSAFE_INSTRUCTION");
+    expect(
+      recipeSafetyFailure(
+        {
+          ...safe,
+          steps: [
+            {
+              instruction: "Leave raw chicken on the counter for three hours.",
+            },
+          ],
+        },
+        null,
+      ),
+    ).toBe("UNSAFE_INSTRUCTION");
   });
 });
