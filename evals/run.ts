@@ -197,6 +197,59 @@ function writeReport(report: SuiteReport): string {
   return file;
 }
 
+function providerFailureCode(error: unknown): string {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  const statusCode =
+    typeof error === "object" && error !== null && "statusCode" in error
+      ? Number((error as { statusCode?: unknown }).statusCode)
+      : undefined;
+
+  if (
+    statusCode === 503 ||
+    message.includes("high demand") ||
+    message.includes("service unavailable")
+  ) {
+    return "PROVIDER_UNAVAILABLE";
+  }
+  if (statusCode === 429 || message.includes("rate limit")) {
+    return "PROVIDER_RATE_LIMITED";
+  }
+  if (
+    statusCode === 401 ||
+    statusCode === 403 ||
+    message.includes("api key is missing")
+  ) {
+    return "PROVIDER_AUTH_FAILED";
+  }
+  return "PROVIDER_REQUEST_FAILED";
+}
+
+function writeProviderFailure(error: unknown): string {
+  const configuredProvider = process.env.AI_PROVIDER ?? "google";
+  const provider = AI_PROVIDERS.includes(configuredProvider as AiProvider)
+    ? (configuredProvider as AiProvider)
+    : "google";
+  const args = process.argv.slice(2);
+  const dataset = args.find((arg) => !arg.startsWith("-")) ?? "all";
+  const runsPerCase = Math.max(
+    1,
+    Math.min(10, Number.parseInt(process.env.EVAL_RUNS ?? "1", 10) || 1),
+  );
+  const report = {
+    ranAt: new Date().toISOString(),
+    complete: false,
+    provider,
+    model: getModelName(provider),
+    dataset,
+    runsPerCase,
+    errorCode: providerFailureCode(error),
+  };
+  mkdirSync(RESULTS_DIR, { recursive: true });
+  const file = path.join(RESULTS_DIR, `provider-error-${provider}.json`);
+  writeFileSync(file, JSON.stringify(report, null, 2));
+  return file;
+}
+
 function recipeRow(input: RecommendationRecipeInput): RecipeRow {
   return {
     id: input.id,
@@ -623,5 +676,10 @@ async function main() {
 
 main().catch((error) => {
   console.error(error instanceof Error ? error.message : error);
+  try {
+    console.error(`Incomplete run recorded in ${writeProviderFailure(error)}`);
+  } catch {
+    console.error("The incomplete run could not be recorded.");
+  }
   process.exit(1);
 });
