@@ -5,6 +5,8 @@ import {
   sessionIdFromPath,
 } from "@/lib/cooking-session-api";
 import { protectedError, withProtectedRoute } from "@/lib/protected-route";
+import { start } from "workflow/api";
+import { sessionRecapWorkflow } from "../../../../../../workflows/session-recap";
 
 const bodySchema = z.object({ expectedVersion: z.number().int().positive() });
 export const POST = withProtectedRoute(async (context) => {
@@ -26,6 +28,16 @@ export const POST = withProtectedRoute(async (context) => {
     { p_session_id: id, p_expected_version: parsed.data.expectedVersion },
   );
   if (error || !data) return rpcError(context, error);
+  if (
+    !(data as { conflict?: boolean }).conflict &&
+    known.data.status === "in_progress"
+  ) {
+    try {
+      await start(sessionRecapWorkflow, [id]);
+    } catch {
+      /* recap is optional */
+    }
+  }
   return Response.json(data, {
     status: (data as { conflict?: boolean }).conflict ? 409 : 200,
   });

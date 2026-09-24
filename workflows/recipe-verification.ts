@@ -10,11 +10,23 @@ import {
 import { renderPrompt } from "@/lib/ai/prompts";
 import { importedRecipeSchema } from "@/lib/ai/schemas/import";
 import {
+  photoRecipeResultSchema,
+  photoSourceAssessmentSchema,
+  type PhotoRecipeResult,
+  type PhotoSourceAssessment,
+} from "@/lib/ai/schemas/photo-recipe";
+import {
   adjudicationSchema,
   independentVerificationSchema,
 } from "@/lib/ai/schemas/recipe-verification";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadRecipeWebSource } from "@/lib/recipe-web-source";
+import { recipeSafetyFailure } from "@/lib/validation/recipe-safety";
+import {
+  applyPhotoCompleteness,
+  photoRecipeCompletenessFindings,
+  requirePhotoClarification,
+} from "@/lib/validation/photo-recipe";
 
 type Draft = {
   id: string;
@@ -25,9 +37,14 @@ type Draft = {
   canonical_recipe: unknown;
   verification: Record<string, unknown>;
   retry_count: number;
+  workflow_attempt_id: string;
+  tailoring_source: unknown;
+  tailoring_intent: string | null;
 };
 
 type RecipeVerificationRouting = "single" | "cross-provider";
+
+const SOURCE_UNREADABLE_MESSAGE = "Recipe source could not be read";
 
 /**
  * Single-provider verification is the safe operational default: it keeps a
@@ -63,35 +80,55 @@ function hasCredential(provider: AiProvider) {
     : Boolean(process.env.GOOGLE_GENERATIVE_AI_API_KEY);
 }
 
-export async function recipeVerificationWorkflow(draftId: string) {
+export async function recipeVerificationWorkflow(
+  draftId: string,
+  attemptId: string,
+) {
   "use workflow";
+  let claimed = false;
   try {
-    await claimDraft(draftId);
-    await acquireOrGenerateRecipe(draftId);
-    await deterministicGuard(draftId, "before_verification");
-    await verifyRecipe(draftId, "initial");
-    await adjudicate(draftId);
-    await deterministicGuard(draftId, "after_adjudication");
-    const finalVerdict = await verifyRecipe(draftId, "final");
+    await claimDraft(draftId, attemptId);
+    claimed = true;
+    const acquired = await acquireOrGenerateRecipe(draftId, attemptId);
+    if (acquired === "awaiting_user_input") return;
+    await deterministicGuard(draftId, "before_verification", attemptId);
+    await verifyRecipe(draftId, "initial", attemptId);
+    await adjudicate(draftId, attemptId);
+    await deterministicGuard(draftId, "after_adjudication", attemptId);
+    const finalVerdict = await verifyRecipe(draftId, "final", attemptId);
     if (finalVerdict === "revise") {
-      await adjudicate(draftId);
-      await deterministicGuard(draftId, "after_final_revision");
-      const revisedFinalVerdict = await verifyRecipe(draftId, "final");
+      if (!(await finalRevisionAvailable(draftId, attemptId))) {
+        await failUnresolvedFinalRevision(draftId, attemptId);
+        throw new FatalError("Final verifier requested a second revision");
+      }
+      await adjudicate(draftId, attemptId);
+      await deterministicGuard(draftId, "after_final_revision", attemptId);
+      const revisedFinalVerdict = await verifyRecipe(
+        draftId,
+        "final",
+        attemptId,
+      );
       if (revisedFinalVerdict !== "pass") {
-        await failUnresolvedFinalRevision(draftId);
+        await failUnresolvedFinalRevision(draftId, attemptId);
         throw new FatalError("Final recipe revision did not pass verification");
       }
     }
-    await finalizeDraft(draftId);
+    await finalizeDraft(draftId, attemptId);
   } catch (error) {
-    await recordWorkflowFailure(
-      draftId,
-      error instanceof Error ? error.message : "Workflow failed",
-    );
+    if (claimed) {
+      await recordWorkflowFailure(
+        draftId,
+        error instanceof Error ? error.message : "Workflow failed",
+        attemptId,
+      );
+    }
+    // State has been persisted safely, but a failed Workflow must remain
+    // visible to Vercel observability instead of being reported as success.
+    throw error;
   }
 }
 
-async function claimDraft(draftId: string) {
+async function claimDraft(draftId: string, attemptId: string) {
   "use step";
   logWorkflowEvent("recipe_workflow_step_started", draftId, {
     stage: "acquiring_source",
@@ -99,10 +136,16 @@ async function claimDraft(draftId: string) {
   const admin = createAdminClient();
   const { data } = await admin
     .from("recipe_drafts")
-    .select("id,status,kind")
+    .select("id,status,kind,workflow_attempt_id")
     .eq("id", draftId)
     .maybeSingle();
   if (!data) throw new FatalError("Draft not found");
+  // `queued` is the worker lease. A duplicate Vercel delivery must stop here
+  // before it can make a model call or overwrite the active attempt.
+  if (data.status !== "queued" || data.workflow_attempt_id !== attemptId)
+    throw new FatalError(
+      "Draft has already been claimed by a workflow attempt",
+    );
   if (
     ["accepted", "rejected", "blocked", "failed_permanent"].includes(
       data.status,
@@ -149,34 +192,47 @@ async function claimDraft(draftId: string) {
         },
         updated_at: new Date().toISOString(),
       })
-      .eq("id", draftId);
+      .eq("id", draftId)
+      .eq("workflow_attempt_id", attemptId);
     throw new FatalError("Recipe verification provider is not configured");
   }
-  await admin
+  const { data: claimed } = await admin
     .from("recipe_drafts")
     .update({
       status: "acquiring_source",
       failure_code: null,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", draftId);
+    .eq("id", draftId)
+    .eq("status", "queued")
+    .eq("workflow_attempt_id", attemptId)
+    .select("id")
+    .maybeSingle();
+  if (!claimed)
+    throw new FatalError(
+      "Draft has already been claimed by a workflow attempt",
+    );
 }
 
-async function acquireOrGenerateRecipe(draftId: string) {
+async function acquireOrGenerateRecipe(
+  draftId: string,
+  attemptId: string,
+): Promise<"ready" | "awaiting_user_input"> {
   "use step";
   logWorkflowEvent("recipe_workflow_step_started", draftId, {
     stage: "extracting_or_generating",
   });
   const admin = createAdminClient();
-  const draft = await loadDraft(admin, draftId);
-  if (draft.canonical_recipe) return;
+  const draft = await loadDraft(admin, draftId, attemptId);
+  if (draft.canonical_recipe) return "ready";
   await admin
     .from("recipe_drafts")
     .update({
       status: "extracting_or_generating",
       updated_at: new Date().toISOString(),
     })
-    .eq("id", draftId);
+    .eq("id", draftId)
+    .eq("workflow_attempt_id", attemptId);
   const [{ data: profile }, { data: pantry }] = await Promise.all([
     admin
       .from("profiles")
@@ -188,50 +244,128 @@ async function acquireOrGenerateRecipe(draftId: string) {
       .select("kind,name,quantity")
       .eq("user_id", draft.user_id),
   ]);
-  const context = JSON.stringify({
+  const trustedContext = {
     request: draft.request,
     profile,
     pantry: pantry ?? [],
-  });
+  };
+  const context = JSON.stringify(trustedContext);
   const args = {
     schema: importedRecipeSchema,
     temperature: 0.3,
   };
   const generationProvider = providerForStage("generation");
   let recipe: unknown;
-  if (draft.kind === "photo") {
-    if (!draft.input_id) throw new FatalError("Photo draft has no input");
-    const { data: input } = await admin
-      .from("recipe_inputs")
-      .select("object_path,mime_type")
-      .eq("id", draft.input_id)
-      .eq("user_id", draft.user_id)
-      .maybeSingle();
-    if (!input) throw new FatalError("Recipe input not found");
-    const download = await admin.storage
-      .from("recipe-inputs")
-      .download(input.object_path);
-    if (download.error) throw new Error("Private recipe input is unavailable");
-    const bytes = new Uint8Array(await download.data.arrayBuffer());
+  let verification = draft.verification ?? {};
+  if (draft.tailoring_source && draft.tailoring_intent) {
+    const base = importedRecipeSchema.safeParse(draft.tailoring_source);
+    if (!base.success) throw new FatalError("Tailoring source is invalid");
     recipe = (
-      await measuredGenerate("recipe-photo-extraction", {
+      await measuredGenerate("recipe-tailoring", {
         ...args,
-        system: renderPrompt("import-recipe", {}),
         model: getModel(generationProvider),
+        system: renderPrompt("recipe-tailor", {}),
+        prompt: JSON.stringify({
+          ...trustedContext,
+          sourceRecipe: base.data,
+          tailoringIntent: draft.tailoring_intent,
+        }),
+      })
+    ).object;
+  } else if (draft.kind === "photo") {
+    const photo = await loadPhoto(admin, draft);
+    let assessment = photoSourceAssessmentSchema.safeParse(
+      verification.sourceAssessment,
+    ).data;
+    if (!assessment) {
+      const classified = (
+        await measuredGenerate("recipe-photo-classification", {
+          model: getModel(generationProvider),
+          schema: photoSourceAssessmentSchema,
+          temperature: 0,
+          system: renderPrompt("photo-source-classify", {}),
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: context },
+                { type: "file", data: photo.bytes, mediaType: photo.mimeType },
+              ],
+            },
+          ],
+        })
+      ).object as PhotoSourceAssessment;
+      assessment = requirePhotoClarification(classified, profile?.allergies);
+      verification = { ...verification, sourceAssessment: assessment };
+      if (assessment.clarificationQuestion) {
+        // Never pause longer than the private image is retained. Reserve 15
+        // minutes for the resumed verification pipeline.
+        const deadline = new Date(
+          new Date(photo.expiresAt).getTime() - 15 * 60_000,
+        );
+        if (deadline.getTime() <= Date.now()) {
+          await block(
+            admin,
+            draftId,
+            "PHOTO_CLARIFICATION_EXPIRED",
+            "classification",
+            verification,
+            attemptId,
+          );
+          throw new FatalError("Photo clarification expired");
+        }
+        verification = {
+          ...verification,
+          clarificationExpiresAt: deadline.toISOString(),
+        };
+        const { data: paused } = await admin
+          .from("recipe_drafts")
+          .update({
+            status: "awaiting_user_input",
+            verification,
+            clarification_expires_at: deadline.toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", draftId)
+          .eq("workflow_attempt_id", attemptId)
+          .eq("status", "extracting_or_generating")
+          .select("id")
+          .maybeSingle();
+        if (!paused)
+          throw new FatalError("Photo draft changed during classification");
+        return "awaiting_user_input";
+      }
+    }
+    const photoResult = (
+      await measuredGenerate("recipe-photo-generation", {
+        model: getModel(generationProvider),
+        schema: photoRecipeResultSchema,
+        temperature: 0.3,
+        system: renderPrompt(
+          assessment.sourceType === "recipe_card"
+            ? "photo-card-complete"
+            : "photo-dish-generate",
+          {},
+        ),
         messages: [
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: `${context}\nExtract the recipe from this private image. Treat a dishHint in the trusted request context as the dish name when present.`,
+                text: JSON.stringify({
+                  ...trustedContext,
+                  sourceAssessment: assessment,
+                }),
               },
-              { type: "file", data: bytes, mediaType: input.mime_type },
+              { type: "file", data: photo.bytes, mediaType: photo.mimeType },
             ],
           },
         ],
       })
-    ).object;
+    ).object as PhotoRecipeResult;
+    recipe = photoResult.recipe;
+    verification = { ...verification, assumptions: photoResult.assumptions };
   } else if (draft.kind === "youtube") {
     const url = requiredRequestString(draft.request, "url");
     recipe = (
@@ -270,14 +404,37 @@ async function acquireOrGenerateRecipe(draftId: string) {
       )
     ).object;
   } else {
+    let adaptedSource: unknown = null;
+    if (draft.kind === "adapted") {
+      const recipeId = requiredRequestString(draft.request, "recipeId");
+      const { data: parent } = await admin
+        .from("recipes")
+        .select(
+          "title,description,minutes,difficulty,servings,ingredients,equipment,steps,tags,why_good",
+        )
+        .eq("id", recipeId)
+        .or(`user_id.is.null,user_id.eq.${draft.user_id}`)
+        .maybeSingle();
+      if (!parent) throw new FatalError("Adaptation source recipe not found");
+      adaptedSource = {
+        recipe: parent,
+        intent: requiredRequestString(draft.request, "intent"),
+      };
+    }
     const source =
       draft.kind === "text"
         ? requiredRequestString(draft.request, "content")
         : draft.kind === "url"
           ? await loadRecipeWebSource(
               requiredRequestString(draft.request, "url"),
-            )
-          : context;
+            ).catch(() => {
+              // Blocked, missing, or non-recipe pages won't succeed on a
+              // workflow retry; tag them so the UI can suggest the Text tab.
+              throw new FatalError(SOURCE_UNREADABLE_MESSAGE);
+            })
+          : draft.kind === "adapted"
+            ? JSON.stringify({ ...trustedContext, adaptation: adaptedSource })
+            : context;
     recipe = (
       await measuredGenerate("recipe-generation", {
         ...args,
@@ -301,10 +458,37 @@ async function acquireOrGenerateRecipe(draftId: string) {
     .from("recipe_drafts")
     .update({
       canonical_recipe: canonicalRecipe,
+      verification,
       status: "verifying",
       updated_at: new Date().toISOString(),
     })
-    .eq("id", draftId);
+    .eq("id", draftId)
+    .eq("workflow_attempt_id", attemptId);
+  return "ready";
+}
+
+async function loadPhoto(
+  admin: ReturnType<typeof createAdminClient>,
+  draft: Draft,
+) {
+  if (!draft.input_id) throw new FatalError("Photo draft has no input");
+  const { data: input } = await admin
+    .from("recipe_inputs")
+    .select("object_path,mime_type,expires_at")
+    .eq("id", draft.input_id)
+    .eq("user_id", draft.user_id)
+    .maybeSingle();
+  if (!input || new Date(input.expires_at).getTime() <= Date.now())
+    throw new FatalError("Private recipe input has expired");
+  const download = await admin.storage
+    .from("recipe-inputs")
+    .download(input.object_path);
+  if (download.error) throw new Error("Private recipe input is unavailable");
+  return {
+    bytes: new Uint8Array(await download.data.arrayBuffer()),
+    mimeType: input.mime_type,
+    expiresAt: input.expires_at,
+  };
 }
 
 function requiredRequestString(request: Record<string, unknown>, key: string) {
@@ -314,13 +498,17 @@ function requiredRequestString(request: Record<string, unknown>, key: string) {
   return value;
 }
 
-async function deterministicGuard(draftId: string, phase: string) {
+async function deterministicGuard(
+  draftId: string,
+  phase: string,
+  attemptId: string,
+) {
   "use step";
   logWorkflowEvent("recipe_workflow_step_started", draftId, {
     stage: `deterministic_guard_${phase}`,
   });
   const admin = createAdminClient();
-  const draft = await loadDraft(admin, draftId);
+  const draft = await loadDraft(admin, draftId, attemptId);
   const recipe = importedRecipeSchema.safeParse(draft.canonical_recipe);
   if (
     !recipe.success ||
@@ -328,7 +516,14 @@ async function deterministicGuard(draftId: string, phase: string) {
     recipe.data.servings > 24 ||
     recipe.data.steps.length > 30
   ) {
-    await block(admin, draftId, "DETERMINISTIC_RECIPE_INVALID", phase);
+    await block(
+      admin,
+      draftId,
+      "DETERMINISTIC_RECIPE_INVALID",
+      phase,
+      undefined,
+      attemptId,
+    );
     throw new FatalError("Invalid recipe");
   }
   const { data: profile } = await admin
@@ -336,30 +531,17 @@ async function deterministicGuard(draftId: string, phase: string) {
     .select("dietary_restrictions,allergies")
     .eq("id", draft.user_id)
     .maybeSingle();
-  const words = [
-    ...(profile?.dietary_restrictions ?? []),
-    ...(profile?.allergies ?? []),
-  ]
-    .map((value) => value.toLowerCase())
-    .filter(Boolean);
-  const text = recipe.data.ingredients.join(" ").toLowerCase();
-  if (words.some((word) => text.includes(word))) {
-    await block(admin, draftId, "DIET_OR_ALLERGEN_CONFLICT", phase);
-    throw new FatalError("Diet or allergen conflict");
-  }
-  const unsafe =
-    /(eat raw chicken|undercook poultry|leave.*room temperature.*overnight)/i.test(
-      recipe.data.steps.map((step) => step.instruction).join(" "),
-    );
-  if (unsafe) {
-    await block(admin, draftId, "UNSAFE_INSTRUCTION", phase);
-    throw new FatalError("Unsafe instruction");
+  const safetyFailure = recipeSafetyFailure(recipe.data, profile);
+  if (safetyFailure) {
+    await block(admin, draftId, safetyFailure, phase, undefined, attemptId);
+    throw new FatalError("Recipe failed deterministic safety validation");
   }
 }
 
 async function verifyRecipe(
   draftId: string,
   stage: "initial" | "final",
+  attemptId: string,
 ): Promise<"pass" | "revise" | "block"> {
   "use step";
   const verificationProvider = providerForStage("verification");
@@ -367,17 +549,62 @@ async function verifyRecipe(
     stage: `${verificationProvider}_${stage}_verification`,
   });
   const admin = createAdminClient();
-  const draft = await loadDraft(admin, draftId);
+  const draft = await loadDraft(admin, draftId, attemptId);
+  const [{ data: profile }, parsedRecipe] = await Promise.all([
+    admin
+      .from("profiles")
+      .select("dietary_restrictions,allergies")
+      .eq("id", draft.user_id)
+      .maybeSingle(),
+    Promise.resolve(importedRecipeSchema.safeParse(draft.canonical_recipe)),
+  ]);
+  const assessment = photoSourceAssessmentSchema.safeParse(
+    draft.verification?.sourceAssessment,
+  ).data;
+  const completenessFindings = parsedRecipe.success
+    ? photoRecipeCompletenessFindings(parsedRecipe.data, assessment?.sourceType)
+    : [];
+  const prompt = JSON.stringify({
+    recipe: draft.canonical_recipe,
+    stage,
+    profile,
+    request: draft.kind === "photo" ? draft.request : null,
+    sourceAssessment: assessment ?? null,
+    assumptions: draft.verification?.assumptions ?? [],
+    completenessFindings,
+  });
+  const photo = draft.kind === "photo" ? await loadPhoto(admin, draft) : null;
   const result = await measuredGenerate(`recipe-${stage}-verification`, {
     model: getModel(verificationProvider),
     schema: independentVerificationSchema,
     temperature: 0,
     system: renderPrompt("recipe-verify", {}),
-    prompt: JSON.stringify({ recipe: draft.canonical_recipe, stage }),
+    ...(photo
+      ? {
+          messages: [
+            {
+              role: "user" as const,
+              content: [
+                { type: "text" as const, text: prompt },
+                {
+                  type: "file" as const,
+                  data: photo.bytes,
+                  mediaType: photo.mimeType,
+                },
+              ],
+            },
+          ],
+        }
+      : { prompt }),
   });
+  const report = independentVerificationSchema.parse(result.object);
+  const effectiveReport =
+    draft.kind === "photo"
+      ? applyPhotoCompleteness(report, completenessFindings)
+      : report;
   const verification = {
     ...(draft.verification ?? {}),
-    [`verification_${stage}`]: result.object,
+    [`verification_${stage}`]: effectiveReport,
   };
   await admin
     .from("recipe_drafts")
@@ -386,30 +613,38 @@ async function verifyRecipe(
       status: "adjudicating",
       updated_at: new Date().toISOString(),
     })
-    .eq("id", draftId);
-  const verdict = (result.object as { verdict: "pass" | "revise" | "block" })
-    .verdict;
-  if (stage === "final" && verdict === "block") {
+    .eq("id", draftId)
+    .eq("workflow_attempt_id", attemptId);
+  const verdict = effectiveReport.verdict;
+  if (verdict === "block") {
     await block(
       admin,
       draftId,
-      "FINAL_INDEPENDENT_VERIFIER_FAILED",
+      stage === "initial"
+        ? "INITIAL_INDEPENDENT_VERIFIER_BLOCKED"
+        : "FINAL_INDEPENDENT_VERIFIER_FAILED",
       stage,
       verification,
+      attemptId,
     );
-    throw new FatalError("Final independent verification failed");
+    throw new FatalError(`${stage} independent verification failed`);
   }
   return verdict;
 }
 
-async function adjudicate(draftId: string) {
+async function adjudicate(draftId: string, attemptId: string) {
   "use step";
   const adjudicationProvider = providerForStage("adjudication");
   logWorkflowEvent("recipe_workflow_step_started", draftId, {
     stage: `${adjudicationProvider}_adjudication`,
   });
   const admin = createAdminClient();
-  const draft = await loadDraft(admin, draftId);
+  const draft = await loadDraft(admin, draftId, attemptId);
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("dietary_restrictions,allergies")
+    .eq("id", draft.user_id)
+    .maybeSingle();
   const decision = await measuredGenerate("recipe-adjudication", {
     model: getModel(adjudicationProvider),
     schema: adjudicationSchema,
@@ -418,6 +653,8 @@ async function adjudicate(draftId: string) {
     prompt: JSON.stringify({
       recipe: draft.canonical_recipe,
       verification: draft.verification,
+      profile,
+      request: draft.kind === "photo" ? draft.request : null,
     }),
   });
   const verification = {
@@ -435,6 +672,7 @@ async function adjudicate(draftId: string) {
       "ADJUDICATION_BLOCKED",
       "adjudication",
       verification,
+      attemptId,
     );
     throw new FatalError("Recipe blocked");
   }
@@ -446,6 +684,7 @@ async function adjudicate(draftId: string) {
         "REVISION_LIMIT_REACHED",
         "adjudication",
         verification,
+        attemptId,
       );
       throw new FatalError("Revision limit reached");
     }
@@ -457,6 +696,7 @@ async function adjudicate(draftId: string) {
         "INVALID_REVISION",
         "adjudication",
         verification,
+        attemptId,
       );
       throw new FatalError("Invalid revision");
     }
@@ -469,7 +709,8 @@ async function adjudicate(draftId: string) {
         status: "verifying",
         updated_at: new Date().toISOString(),
       })
-      .eq("id", draftId);
+      .eq("id", draftId)
+      .eq("workflow_attempt_id", attemptId);
     return;
   }
   await admin
@@ -479,20 +720,62 @@ async function adjudicate(draftId: string) {
       status: "verifying",
       updated_at: new Date().toISOString(),
     })
-    .eq("id", draftId);
+    .eq("id", draftId)
+    .eq("workflow_attempt_id", attemptId);
 }
 
-async function finalizeDraft(draftId: string) {
+async function finalizeDraft(draftId: string, attemptId: string) {
   "use step";
   logWorkflowEvent("recipe_workflow_step_started", draftId, {
     stage: "finalizing",
   });
   const admin = createAdminClient();
-  const draft = await loadDraft(admin, draftId);
+  const draft = await loadDraft(admin, draftId, attemptId);
   const final = (draft.verification?.verification_final ??
     draft.verification?.gemini_final) as { verdict?: string } | undefined;
+  const parsedRecipe = importedRecipeSchema.safeParse(draft.canonical_recipe);
+  const assessment = photoSourceAssessmentSchema.safeParse(
+    draft.verification?.sourceAssessment,
+  ).data;
+  const completenessFindings =
+    draft.kind === "photo" && parsedRecipe.success
+      ? photoRecipeCompletenessFindings(
+          parsedRecipe.data,
+          assessment?.sourceType,
+        )
+      : [];
+  if (completenessFindings.length) {
+    await block(
+      admin,
+      draftId,
+      "PHOTO_RECIPE_INCOMPLETE",
+      "final",
+      {
+        ...draft.verification,
+        photoCompleteness: {
+          summary:
+            "The generated recipe still needs corrections before it can be saved.",
+          verdict: "block",
+          findings: completenessFindings.map((message) => ({
+            severity: "critical",
+            category: "instruction",
+            message,
+          })),
+        },
+      },
+      attemptId,
+    );
+    throw new FatalError("Photo recipe failed final completeness checks");
+  }
   if (final?.verdict !== "pass") {
-    await block(admin, draftId, "FINAL_INDEPENDENT_VERIFIER_FAILED", "final");
+    await block(
+      admin,
+      draftId,
+      "FINAL_INDEPENDENT_VERIFIER_FAILED",
+      "final",
+      undefined,
+      attemptId,
+    );
     throw new FatalError("Missing passing final verifier");
   }
   await admin
@@ -503,34 +786,55 @@ async function finalizeDraft(draftId: string) {
       verification: { ...draft.verification, verdict: "pass" },
       updated_at: new Date().toISOString(),
     })
-    .eq("id", draftId);
+    .eq("id", draftId)
+    .eq("workflow_attempt_id", attemptId);
 }
 
-async function failUnresolvedFinalRevision(draftId: string) {
+async function failUnresolvedFinalRevision(draftId: string, attemptId: string) {
   "use step";
   const admin = createAdminClient();
-  const draft = await loadDraft(admin, draftId);
+  const draft = await loadDraft(admin, draftId, attemptId);
   await block(
     admin,
     draftId,
     "FINAL_REVISION_UNRESOLVED",
     "final_revision",
     draft.verification,
+    attemptId,
   );
+}
+
+async function finalRevisionAvailable(draftId: string, attemptId: string) {
+  "use step";
+  const admin = createAdminClient();
+  const draft = await loadDraft(admin, draftId, attemptId);
+  return draft.retry_count < 1;
 }
 
 async function loadDraft(
   admin: ReturnType<typeof createAdminClient>,
   draftId: string,
+  attemptId: string,
 ): Promise<Draft> {
   const { data } = await admin
     .from("recipe_drafts")
     .select(
-      "id,user_id,kind,request,input_id,canonical_recipe,verification,retry_count",
+      "id,user_id,kind,request,input_id,canonical_recipe,verification,retry_count,workflow_attempt_id,status,tailoring_source,tailoring_intent",
     )
     .eq("id", draftId)
     .maybeSingle();
   if (!data) throw new FatalError("Draft not found");
+  if (
+    data.workflow_attempt_id !== attemptId ||
+    [
+      "accepted",
+      "rejected",
+      "blocked",
+      "failed_permanent",
+      "awaiting_user_input",
+    ].includes(data.status)
+  )
+    throw new FatalError("Workflow attempt is no longer current");
   return data as Draft;
 }
 
@@ -555,6 +859,7 @@ async function block(
   code: string,
   stage: string,
   verification?: Record<string, unknown>,
+  attemptId?: string,
 ) {
   await admin
     .from("recipe_drafts")
@@ -564,23 +869,37 @@ async function block(
       verification: verification ?? { stage },
       updated_at: new Date().toISOString(),
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq(
+      "workflow_attempt_id",
+      attemptId ?? "00000000-0000-0000-0000-000000000000",
+    );
 }
 
-async function recordWorkflowFailure(draftId: string, message: string) {
+async function recordWorkflowFailure(
+  draftId: string,
+  message: string,
+  attemptId: string,
+) {
   "use step";
   const admin = createAdminClient();
   const { data: draft } = await admin
     .from("recipe_drafts")
-    .select("status,failure_code,verification")
+    .select("status,failure_code,verification,workflow_attempt_id")
     .eq("id", draftId)
     .maybeSingle();
   // Deterministic guards already wrote a terminal safety verdict.
   if (
     !draft ||
-    ["accepted", "rejected", "blocked", "failed_permanent"].includes(
-      draft.status,
-    )
+    draft.workflow_attempt_id !== attemptId ||
+    [
+      "accepted",
+      "rejected",
+      "blocked",
+      "failed_permanent",
+      "awaiting_user_acceptance",
+      "awaiting_user_input",
+    ].includes(draft.status)
   )
     return;
   if (
@@ -593,9 +912,26 @@ async function recordWorkflowFailure(draftId: string, message: string) {
     ].includes(draft.failure_code ?? "")
   )
     return;
-  const temporary = /high demand|rate limit|temporar|unavailable|retry/i.test(
-    message,
-  );
+  if (message === "Private recipe input has expired") {
+    await admin
+      .from("recipe_drafts")
+      .update({
+        status: "blocked",
+        failure_code: "PHOTO_INPUT_EXPIRED",
+        verification: {
+          ...((draft.verification as Record<string, unknown>) ?? {}),
+          summary: "The private photo expired before verification finished.",
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", draftId)
+      .eq("workflow_attempt_id", attemptId);
+    return;
+  }
+  const sourceUnreadable = message === SOURCE_UNREADABLE_MESSAGE;
+  const temporary =
+    !sourceUnreadable &&
+    /high demand|rate limit|temporar|unavailable|retry/i.test(message);
   logWorkflowEvent("recipe_workflow_failed", draftId, {
     failureCategory: workflowFailureCategory(message),
   });
@@ -603,18 +939,23 @@ async function recordWorkflowFailure(draftId: string, message: string) {
     .from("recipe_drafts")
     .update({
       status: "failed_retryable",
-      failure_code: temporary
-        ? "PROVIDER_TEMPORARILY_UNAVAILABLE"
-        : "WORKFLOW_FAILED",
+      failure_code: sourceUnreadable
+        ? "SOURCE_UNREADABLE"
+        : temporary
+          ? "PROVIDER_TEMPORARILY_UNAVAILABLE"
+          : "WORKFLOW_FAILED",
       verification: {
         ...((draft.verification as Record<string, unknown>) ?? {}),
-        summary: temporary
-          ? "The AI provider is temporarily busy. You can retry this review without uploading the recipe again."
-          : "Recipe verification could not finish. You can retry this review.",
+        summary: sourceUnreadable
+          ? "We couldn't read a recipe from that link."
+          : temporary
+            ? "The AI provider is temporarily busy. You can retry this review without uploading the recipe again."
+            : "Recipe verification could not finish. You can retry this review.",
       },
       updated_at: new Date().toISOString(),
     })
-    .eq("id", draftId);
+    .eq("id", draftId)
+    .eq("workflow_attempt_id", attemptId);
 }
 
 /** Logs opaque IDs and safe failure categories only: never prompts, source

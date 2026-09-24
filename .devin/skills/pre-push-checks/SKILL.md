@@ -24,8 +24,10 @@ on things they don't check:
 4. `npm test`
 5. **`npm run build`** — required. Never skip; it is what CI/Vercel run.
 6. If a migration changed: `supabase db push` (see `/supabase-migration`).
-7. Commit, then `git push`.
-8. Confirm CI:
+7. **Self-review the diff** with `/code-review` (section 1); fix findings
+   and re-run the steps above.
+8. Commit, then `git push`.
+9. Confirm CI:
 
    ```bash
    gh run list --limit 1          # latest run + status
@@ -36,6 +38,9 @@ on things they don't check:
    Vercel deployments appear as commit checks; the GitHub Actions `CI`
    workflow runs `npm ci`, lint, typecheck, test, and build on every push
    to `main` and every PR.
+
+10. On PRs, once Copilot's review lands, triage it with `/code-review`
+    (section 2): fix valid comments, reply on every thread.
 
 ## If CI/Vercel fails
 

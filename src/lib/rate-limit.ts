@@ -88,7 +88,7 @@ export function createRateLimitResponse(result: RateLimitResult): NextResponse {
     {
       error: {
         code: "RATE_LIMITED",
-        message: "Daily AI credit limit reached",
+        message: "You've used today's AI credits — they reset at midnight UTC.",
         details: {
           limit: result.limit,
           remaining: result.remaining,

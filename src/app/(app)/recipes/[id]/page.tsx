@@ -121,12 +121,7 @@ export default async function RecipeOverviewPage({
         )}
       </div>
 
-      <StartCookingButton
-        recipeId={recipe.id}
-        slug={recipe.slug}
-        primary
-        label="Start cooking"
-      />
+      <StartCookingButton recipeId={recipe.id} primary label="Start cooking" />
 
       {/* Ingredients */}
       <section className="flex flex-col gap-2">
@@ -134,9 +129,9 @@ export default async function RecipeOverviewPage({
           Ingredients
         </h2>
         <ul className="flex flex-wrap gap-2">
-          {recipe.ingredients.map((ing) => (
+          {recipe.ingredients.map((ing, index) => (
             <li
-              key={ing}
+              key={`${index}:${ing}`}
               className="rounded-full bg-card px-3 py-1.5 text-sm font-bold ring-1 ring-oat"
             >
               {ing}
@@ -151,9 +146,9 @@ export default async function RecipeOverviewPage({
             Equipment
           </h2>
           <ul className="flex flex-wrap gap-2">
-            {recipe.equipment.map((item) => (
+            {recipe.equipment.map((item, index) => (
               <li
-                key={item}
+                key={`${index}:${item}`}
                 className="rounded-full bg-oat px-3 py-1.5 text-sm font-bold"
               >
                 {item}
@@ -263,7 +258,7 @@ export default async function RecipeOverviewPage({
         </section>
       )}
 
-      <RecipeChat recipe={recipe} isOwner={isOwner} />
+      <RecipeChat recipeId={recipe.id} />
 
       {isOwner && (
         <DeleteRecipeButton recipeId={recipe.id} recipeTitle={recipe.title} />

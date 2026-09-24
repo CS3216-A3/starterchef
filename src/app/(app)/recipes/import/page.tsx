@@ -1,14 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { FileImage, Link2, Sparkles, Type, Video } from "lucide-react";
 import { getApiErrorMessage } from "@/lib/client-api-error";
+import { loadActiveRecipeDraft } from "@/lib/active-recipe-draft";
 import { Button } from "@/components/button";
 import { RecipeDraftProgress } from "@/components/recipe-draft-progress";
-import { createUserRecipe } from "@/app/(app)/recipes/actions";
-import type { ImportedRecipe } from "@/lib/ai/schemas/import";
 
 type Source = "text" | "url" | "photo" | "video";
 
@@ -16,40 +13,65 @@ interface ImportState {
   source: Source;
   text: string;
   url: string;
-  photoDataUrl: string;
   photoInputId: string;
+  dishHint: string;
   videoUrl: string;
-  videoDataUrl: string;
 }
 
+const EMPTY_SOURCE_FIELDS: Omit<ImportState, "source"> = {
+  text: "",
+  url: "",
+  photoInputId: "",
+  dishHint: "",
+  videoUrl: "",
+};
+
 export default function ImportRecipePage() {
-  const router = useRouter();
   const [state, setState] = useState<ImportState>({
     source: "text",
-    text: "",
-    url: "",
-    photoDataUrl: "",
-    photoInputId: "",
-    videoUrl: "",
-    videoDataUrl: "",
+    ...EMPTY_SOURCE_FIELDS,
   });
   const [loading, setLoading] = useState(false);
-  const [draft, setDraft] = useState<
-    (ImportedRecipe & { imageUrl?: string }) | null
-  >(null);
   const [error, setError] = useState<string | null>(null);
   const [reviewDraftId, setReviewDraftId] = useState<string | null>(null);
+  const [resumedDraft, setResumedDraft] = useState(false);
+  const [checkingActive, setCheckingActive] = useState(true);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   // A durable draft can outlive a browser refresh. Keep the opaque ID in the
   // URL so "check back later" is an actual usable path, while the API still
   // performs the ownership check before revealing any review state.
   useEffect(() => {
-    const timer = window.setTimeout(() => {
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
       const draftId = new URLSearchParams(window.location.search).get("draft");
-      if (draftId) setReviewDraftId(draftId);
+      if (draftId) {
+        setReviewDraftId(draftId);
+        setCheckingActive(false);
+        return;
+      }
+      try {
+        const active = await loadActiveRecipeDraft();
+        if (cancelled) return;
+        if (active) {
+          setReviewDraftId(active.draftId);
+          setResumedDraft(true);
+        }
+      } catch (cause) {
+        if (!cancelled)
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : "Could not find your active review",
+          );
+      } finally {
+        if (!cancelled) setCheckingActive(false);
+      }
     }, 0);
-    return () => window.clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -63,7 +85,6 @@ export default function ImportRecipePage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    setDraft(null);
 
     try {
       const draftRequest = buildDraftRequest(state);
@@ -84,37 +105,41 @@ export default function ImportRecipePage() {
         }),
       });
       if (!queued.ok) {
+        if (queued.status === 409) {
+          try {
+            const active = await loadActiveRecipeDraft();
+            if (active) {
+              setReviewDraftId(active.draftId);
+              setResumedDraft(true);
+              return;
+            }
+          } catch {
+            // Keep the original conflict message if discovery is unavailable.
+          }
+        }
         setError(
           await getApiErrorMessage(queued, "Could not queue recipe review"),
         );
         return;
       }
-      const body = (await queued.json()) as { draftId?: string };
+      const body = (await queued.json()) as {
+        draftId?: string;
+        resumedDraft?: boolean;
+      };
       if (!body.draftId)
         setError("Recipe review was queued but could not be opened.");
-      else setReviewDraftId(body.draftId);
+      else {
+        if (body.resumedDraft)
+          setError(
+            "You already have a recipe under review — accept or reject it, then start a new one.",
+          );
+        setReviewDraftId(body.draftId);
+      }
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
-  }
-
-  async function handleSave() {
-    if (!draft) return;
-    setLoading(true);
-    const result = await createUserRecipe({
-      ...draft,
-      source: sourceLabel(state.source),
-      sourceUrl: state.url || state.videoUrl || undefined,
-      imageUrl: draft.imageUrl,
-    });
-    if (result.error) {
-      setError(result.error);
-      setLoading(false);
-      return;
-    }
-    router.push(`/recipes`);
   }
 
   async function handlePhotoFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -124,7 +149,6 @@ export default function ImportRecipePage() {
     setState((current) => ({
       ...current,
       photoInputId: "",
-      photoDataUrl: "",
     }));
     const form = new FormData();
     form.set("image", file);
@@ -136,7 +160,6 @@ export default function ImportRecipePage() {
       setState((current) => ({
         ...current,
         photoInputId: inputId,
-        photoDataUrl: "",
       }));
     } catch (cause) {
       setError(
@@ -149,12 +172,6 @@ export default function ImportRecipePage() {
     }
   }
 
-  function handleVideoFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setError("Video imports are not available until a source is approved.");
-  }
-
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
       <div>
@@ -162,8 +179,8 @@ export default function ImportRecipePage() {
           Import a recipe
         </h1>
         <p className="mt-1 font-semibold text-espresso-light">
-          Paste text, a link, a photo of a recipe card, or a YouTube cooking
-          video.
+          Paste text, a link, a photo of a recipe card or finished dish, or a
+          YouTube cooking video.
         </p>
       </div>
 
@@ -194,9 +211,37 @@ export default function ImportRecipePage() {
         />
       </div>
 
-      {reviewDraftId ? (
-        <RecipeDraftProgress draftId={reviewDraftId} />
-      ) : !draft ? (
+      {checkingActive ? (
+        <p className="text-sm font-semibold text-espresso-light" role="status">
+          Checking for an existing recipe review…
+        </p>
+      ) : reviewDraftId ? (
+        <>
+          {resumedDraft && (
+            <p className="rounded-2xl bg-oat p-4 text-sm font-semibold text-espresso">
+              You already have a recipe review underway. Finish or cancel it
+              before starting another import.
+            </p>
+          )}
+          <RecipeDraftProgress
+            draftId={reviewDraftId}
+            onStartOver={(source) => {
+              const url = new URL(window.location.href);
+              url.searchParams.delete("draft");
+              window.history.replaceState(null, "", url);
+              setReviewDraftId(null);
+              setResumedDraft(false);
+              setError(null);
+              // Start fresh: never resubmit the old source or a consumed
+              // photo input by accident.
+              setState((s) => ({
+                source: source ?? s.source,
+                ...EMPTY_SOURCE_FIELDS,
+              }));
+            }}
+          />
+        </>
+      ) : (
         <form onSubmit={handleExtract} className="flex flex-col gap-4">
           {state.source === "text" && (
             <textarea
@@ -228,6 +273,22 @@ export default function ImportRecipePage() {
 
           {state.source === "photo" && (
             <div className="flex flex-col gap-4">
+              <label className="flex flex-col gap-2 text-sm font-extrabold">
+                Dish name (optional)
+                <input
+                  type="text"
+                  value={state.dishHint}
+                  onChange={(event) =>
+                    setState((current) => ({
+                      ...current,
+                      dishHint: event.target.value,
+                    }))
+                  }
+                  maxLength={120}
+                  placeholder="e.g. chicken curry with rice"
+                  className="rounded-2xl border-2 border-espresso/10 bg-card p-3 text-sm font-semibold outline-none focus:border-flame"
+                />
+              </label>
               <input
                 type="file"
                 accept="image/*"
@@ -263,18 +324,8 @@ export default function ImportRecipePage() {
               )}
               {state.photoInputId && uploadProgress === null && (
                 <p className="text-sm font-bold text-espresso-light">
-                  Recipe image uploaded. You can now extract it.
+                  Photo uploaded. You can now build a recipe.
                 </p>
-              )}
-              {state.photoDataUrl && (
-                <Image
-                  src={state.photoDataUrl}
-                  alt="Recipe preview"
-                  width={400}
-                  height={256}
-                  unoptimized
-                  className="max-h-64 rounded-2xl object-contain"
-                />
               )}
             </div>
           )}
@@ -290,11 +341,7 @@ export default function ImportRecipePage() {
                   type="url"
                   value={state.videoUrl}
                   onChange={(e) =>
-                    setState((s) => ({
-                      ...s,
-                      videoUrl: e.target.value,
-                      videoDataUrl: "",
-                    }))
+                    setState((s) => ({ ...s, videoUrl: e.target.value }))
                   }
                   placeholder="https://www.youtube.com/watch?v=…"
                   className="rounded-2xl border-2 border-espresso/10 bg-card p-4 text-sm font-semibold outline-none focus:border-flame"
@@ -304,34 +351,9 @@ export default function ImportRecipePage() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-3 text-xs font-extrabold text-espresso-light uppercase">
-                <span className="h-px flex-1 bg-oat" />
-                or
-                <span className="h-px flex-1 bg-oat" />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-extrabold">
-                  Upload a saved video (TikTok, Instagram, …)
-                </label>
-                <input
-                  type="file"
-                  accept="video/*"
-                  onChange={handleVideoFile}
-                  className="rounded-2xl border-2 border-dashed border-espresso/20 bg-card p-4 text-sm font-semibold file:mr-4 file:rounded-full file:bg-flame file:px-4 file:py-2 file:text-white"
-                />
-                {state.videoDataUrl && (
-                  <video
-                    src={state.videoDataUrl}
-                    controls
-                    className="max-h-64 rounded-2xl"
-                  />
-                )}
-                <p className="text-xs font-semibold text-espresso-light">
-                  TikTok and Instagram links can&apos;t be read directly. Save
-                  the video to your device and upload it here (max 20 MB).
-                </p>
-              </div>
+              <p className="text-xs font-semibold text-espresso-light">
+                Only public YouTube links are supported for video import.
+              </p>
             </div>
           )}
 
@@ -345,86 +367,19 @@ export default function ImportRecipePage() {
             }
             size="lg"
           >
-            {loading ? "Reading recipe…" : "Extract recipe"}
+            {loading ? "Building recipe…" : "Build recipe"}
             {!loading && <Sparkles className="h-4 w-4" />}
           </Button>
 
           {error && (
-            <p className="rounded-2xl bg-red-50 p-3 text-sm font-bold text-red-700">
+            <p
+              role="alert"
+              className="rounded-2xl bg-oat p-3 text-sm font-bold text-flame"
+            >
               {error}
             </p>
           )}
         </form>
-      ) : (
-        <div className="flex flex-col gap-6 rounded-3xl bg-card p-6 shadow-sm ring-1 ring-oat">
-          {draft.imageUrl && (
-            <div className="relative aspect-[16/9] overflow-hidden rounded-2xl">
-              <Image
-                src={draft.imageUrl}
-                alt={draft.title}
-                fill
-                unoptimized
-                className="object-cover"
-              />
-            </div>
-          )}
-          <div>
-            <h2 className="text-xl font-extrabold">{draft.title}</h2>
-            <p className="text-sm font-semibold text-espresso-light">
-              {draft.minutes} min · {draft.difficulty} · Serves {draft.servings}
-            </p>
-          </div>
-
-          <section>
-            <h3 className="text-xs font-extrabold tracking-wide text-espresso-light uppercase">
-              Ingredients
-            </h3>
-            <ul className="mt-2 grid gap-1 text-sm font-semibold">
-              {draft.ingredients.map((ing) => (
-                <li key={ing}>{ing}</li>
-              ))}
-            </ul>
-          </section>
-
-          <section>
-            <h3 className="text-xs font-extrabold tracking-wide text-espresso-light uppercase">
-              Steps
-            </h3>
-            <ol className="mt-2 flex flex-col gap-3">
-              {draft.steps.map((step) => (
-                <li key={step.index} className="text-sm font-semibold">
-                  <span className="font-extrabold text-flame">
-                    {step.index}.
-                  </span>{" "}
-                  {step.title}
-                  <p className="mt-1 font-semibold text-espresso-light">
-                    {step.instruction}
-                  </p>
-                </li>
-              ))}
-            </ol>
-          </section>
-
-          <div className="flex gap-3">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => setDraft(null)}
-              disabled={loading}
-            >
-              Try again
-            </Button>
-            <Button className="flex-1" onClick={handleSave} disabled={loading}>
-              {loading ? "Saving…" : "Save to my recipes"}
-            </Button>
-          </div>
-
-          {error && (
-            <p className="rounded-2xl bg-red-50 p-3 text-sm font-bold text-red-700">
-              {error}
-            </p>
-          )}
-        </div>
       )}
     </div>
   );
@@ -495,7 +450,7 @@ function buildDraftRequest(
 ):
   | { kind: "text"; content: string }
   | { kind: "url" | "youtube"; url: string }
-  | { kind: "photo"; inputId: string }
+  | { kind: "photo"; inputId: string; dishHint?: string }
   | null {
   switch (state.source) {
     case "text":
@@ -504,24 +459,17 @@ function buildDraftRequest(
       return state.url.trim() ? { kind: "url", url: state.url } : null;
     case "photo":
       return state.photoInputId
-        ? { kind: "photo", inputId: state.photoInputId }
+        ? {
+            kind: "photo",
+            inputId: state.photoInputId,
+            ...(state.dishHint.trim()
+              ? { dishHint: state.dishHint.trim() }
+              : {}),
+          }
         : null;
     case "video":
       return state.videoUrl.trim()
         ? { kind: "youtube", url: state.videoUrl }
         : null;
-  }
-}
-
-function sourceLabel(source: Source): string {
-  switch (source) {
-    case "text":
-      return "pasted-text";
-    case "url":
-      return "url";
-    case "photo":
-      return "photo";
-    case "video":
-      return "youtube";
   }
 }

@@ -4,6 +4,9 @@ Current context:
 
 - Recipe: {{recipeTitle}}
 - Step: {{stepTitle}}
+- Current instruction: {{stepInstruction}}
+- Recipe ingredients: {{recipeIngredients}}
+- Recipe equipment: {{recipeEquipment}}
 
 What past sessions taught us about this cook:
 {{memory}}
@@ -28,7 +31,7 @@ Available actions the UI can apply:
 
 - `set-timer` (with `timerSeconds`) — when the user asks to set, start or change a timer, e.g. "give me 3 minutes" or "make it 90 seconds".
 - `goto-step` (with `stepIndex`, 1-based) — when the user asks to move to a different step, e.g. "skip to step 4" or "go back a step" (compute the target from the current step).
-- `substitute-ingredient` / `adjust-step` — when the answer proposes a concrete change.
+- `substitute-ingredient` / `adjust-step` — when the answer proposes a concrete change. Set `detail` to describe the exact change and `replacementInstruction` to the complete, self-contained instruction that should replace the current step after confirmation. Keep all necessary food-safety and doneness guidance. If you cannot write a safe complete replacement, give advice but set `action` to `none`.
 - `repeat-step` — when the user asks you to repeat or simplify the current step.
 - `needs-human` — when the situation is unsafe and the user should stop before continuing.
 - `none` — for plain questions with no UI action.

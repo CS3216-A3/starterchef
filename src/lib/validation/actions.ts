@@ -14,9 +14,9 @@ export const profileInputSchema = z.object({
 export const uuidSchema = z.uuid();
 
 export const createRecipeSchema = importedRecipeSchema.extend({
-  source: z.string().trim().min(1).max(120),
+  source: z.literal("manual"),
   sourceUrl: z.url().optional(),
-  parentRecipeId: z.uuid().optional(),
+  parentRecipeId: z.never().optional(),
   imageUrl: z.string().max(2048).optional(),
 });
 

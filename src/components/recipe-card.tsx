@@ -3,6 +3,7 @@ import Link from "next/link";
 import { SaveRecipeButton } from "@/components/save-recipe-button";
 import { StartCookingButton } from "@/components/cook-buttons";
 import { RecipeImage } from "@/components/recipe-image";
+import { RecipePreviewButton } from "@/components/recipe-preview";
 import type { RecipeCardModel } from "@/lib/recipe-view";
 
 export function RecipeCard({
@@ -60,18 +61,26 @@ export function RecipeCard({
           <Sparkles className="h-3.5 w-3.5" /> {recipe.whyGood}
         </p>
         <div className="mt-auto flex gap-2 pt-2">
-          <Link href={href} className="flex-1">
-            <button
-              type="button"
-              className="w-full rounded-xl border-2 border-espresso/10 px-3 py-2 text-sm font-bold text-espresso transition-colors hover:border-flame/50"
-            >
-              View recipe
-            </button>
-          </Link>
+          <div className="flex-1">
+            <RecipePreviewButton
+              recipe={{
+                id: recipe.id,
+                slug: recipe.slug,
+                title: recipe.title,
+                minutes: recipe.minutes,
+                difficultyLabel: recipe.difficultyLabel,
+                servings: recipe.servings,
+                whyGood: recipe.whyGood,
+                iconName: recipe.iconName,
+                imageUrl: recipe.imageUrl,
+                ingredients: recipe.ingredients,
+                steps: recipe.steps,
+              }}
+            />
+          </div>
           <div className="flex-1">
             <StartCookingButton
               recipeId={recipe.id}
-              slug={recipe.slug}
               primary={recipe.primaryCta}
               label="Let's cook"
             />

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { start } from "workflow/api";
 import { protectedError, withProtectedRoute } from "@/lib/protected-route";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -44,12 +45,14 @@ export const POST = withProtectedRoute(
       );
 
     const admin = createAdminClient();
+    const attemptId = randomUUID();
     const { data: restarted, error } = await admin
       .from("recipe_drafts")
       .update({
         status: "queued",
         failure_code: null,
         restart_count: owned.restart_count + 1,
+        workflow_attempt_id: attemptId,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
@@ -60,9 +63,11 @@ export const POST = withProtectedRoute(
     if (error)
       return protectedError(
         { requestId },
-        500,
-        "INTERNAL_ERROR",
-        "Could not restart recipe review",
+        error.code === "23505" ? 409 : 500,
+        error.code === "23505" ? "CONFLICT" : "INTERNAL_ERROR",
+        error.code === "23505"
+          ? "Finish or reject your active recipe draft before restarting this one"
+          : "Could not restart recipe review",
       );
     if (!restarted)
       return protectedError(
@@ -72,14 +77,15 @@ export const POST = withProtectedRoute(
         "This recipe review changed; refresh and try again",
       );
     try {
-      const run = await start(recipeVerificationWorkflow, [id]);
+      const run = await start(recipeVerificationWorkflow, [id, attemptId]);
       await admin
         .from("recipe_drafts")
         .update({
           workflow_run_id: run.runId,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", id);
+        .eq("id", id)
+        .eq("workflow_attempt_id", attemptId);
       return Response.json(
         {
           draftId: id,
@@ -96,7 +102,8 @@ export const POST = withProtectedRoute(
           failure_code: "WORKFLOW_START_FAILED",
           updated_at: new Date().toISOString(),
         })
-        .eq("id", id);
+        .eq("id", id)
+        .eq("workflow_attempt_id", attemptId);
       return protectedError(
         { requestId },
         503,

@@ -1,7 +1,7 @@
 import "server-only";
 
-/** Temporary debugging policy: accept every web URL. Keep non-web schemes
- * out so this endpoint cannot fetch local files or browser-only protocols. */
+/** Public HTTP(S) sources are intentionally permissive in Phase 3. Network
+ * safety is enforced again immediately before every server fetch. */
 export const RECIPE_SOURCE_ALLOWLIST_VERSION = 2;
 
 export function isAllowedRecipeUrl(raw: string) {
