@@ -38,6 +38,8 @@ type Draft = {
   verification: Record<string, unknown>;
   retry_count: number;
   workflow_attempt_id: string;
+  tailoring_source: unknown;
+  tailoring_intent: string | null;
 };
 
 type RecipeVerificationRouting = "single" | "cross-provider";
@@ -253,7 +255,22 @@ async function acquireOrGenerateRecipe(
   const generationProvider = providerForStage("generation");
   let recipe: unknown;
   let verification = draft.verification ?? {};
-  if (draft.kind === "photo") {
+  if (draft.tailoring_source && draft.tailoring_intent) {
+    const base = importedRecipeSchema.safeParse(draft.tailoring_source);
+    if (!base.success) throw new FatalError("Tailoring source is invalid");
+    recipe = (
+      await measuredGenerate("recipe-tailoring", {
+        ...args,
+        model: getModel(generationProvider),
+        system: renderPrompt("recipe-tailor", {}),
+        prompt: JSON.stringify({
+          ...trustedContext,
+          sourceRecipe: base.data,
+          tailoringIntent: draft.tailoring_intent,
+        }),
+      })
+    ).object;
+  } else if (draft.kind === "photo") {
     const photo = await loadPhoto(admin, draft);
     let assessment = photoSourceAssessmentSchema.safeParse(
       verification.sourceAssessment,
@@ -796,7 +813,7 @@ async function loadDraft(
   const { data } = await admin
     .from("recipe_drafts")
     .select(
-      "id,user_id,kind,request,input_id,canonical_recipe,verification,retry_count,workflow_attempt_id,status",
+      "id,user_id,kind,request,input_id,canonical_recipe,verification,retry_count,workflow_attempt_id,status,tailoring_source,tailoring_intent",
     )
     .eq("id", draftId)
     .maybeSingle();

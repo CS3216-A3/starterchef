@@ -176,4 +176,38 @@ describe("recipe workflow revision ceiling", () => {
       failure_code: "INITIAL_INDEPENDENT_VERIFIER_BLOCKED",
     });
   });
+
+  it("generates a tailored candidate and requires a new final verifier pass", async () => {
+    mocks.draft.canonical_recipe = null;
+    mocks.draft.tailoring_source = recipe;
+    mocks.draft.tailoring_intent = "Use a rice cooker for the rice";
+    mocks.measuredGenerate
+      .mockResolvedValueOnce({ object: recipe })
+      .mockResolvedValueOnce({
+        object: { verdict: "pass", summary: "Complete", findings: [] },
+      })
+      .mockResolvedValueOnce({
+        object: {
+          verdict: "pass",
+          summary: "No revision needed",
+          findings: [],
+          revisedRecipe: null,
+        },
+      })
+      .mockResolvedValueOnce({
+        object: { verdict: "pass", summary: "Safe to cook", findings: [] },
+      });
+
+    await recipeVerificationWorkflow(draftId, attemptId);
+    expect(mocks.measuredGenerate.mock.calls.map(([name]) => name)).toEqual([
+      "recipe-tailoring",
+      "recipe-initial-verification",
+      "recipe-adjudication",
+      "recipe-final-verification",
+    ]);
+    expect(mocks.draft).toMatchObject({
+      status: "awaiting_user_acceptance",
+      retry_count: 0,
+    });
+  });
 });

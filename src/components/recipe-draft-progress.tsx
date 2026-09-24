@@ -50,6 +50,7 @@ type DraftResponse = {
   status: DraftStatus;
   failureCode: string | null;
   restartCount?: number;
+  tailorCount?: number;
   acceptedRecipeId: string | null;
   recipe: DraftRecipe | null;
   updatedAt: string;
@@ -102,6 +103,7 @@ export function RecipeDraftProgress({
   const [error, setError] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
   const [clarification, setClarification] = useState("");
+  const [tailoringIntent, setTailoringIntent] = useState("");
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [now, setNow] = useState(() => Date.now());
 
@@ -227,6 +229,43 @@ export function RecipeDraftProgress({
           : "Could not resume recipe review",
       );
       setRefreshNonce((value) => value + 1);
+    } finally {
+      setActing(false);
+    }
+  }
+
+  async function submitTailoring() {
+    const intent = tailoringIntent.trim();
+    if (!intent) return;
+    setActing(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/recipe-drafts/${draftId}/tailor`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ intent, idempotencyKey: crypto.randomUUID() }),
+      });
+      if (!response.ok)
+        throw new Error(
+          await getApiErrorMessage(response, "Could not tailor recipe"),
+        );
+      setDraft((current) =>
+        current
+          ? {
+              ...current,
+              status: "queued",
+              recipe: null,
+              review: null,
+              tailorCount: (current.tailorCount ?? 0) + 1,
+            }
+          : current,
+      );
+      setTailoringIntent("");
+      setRefreshNonce((value) => value + 1);
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Could not tailor recipe",
+      );
     } finally {
       setActing(false);
     }
@@ -410,6 +449,58 @@ export function RecipeDraftProgress({
             </div>
           )}
           <DraftRecipePreview recipe={draft.recipe} />
+          {(draft.tailorCount ?? 0) < 2 && (
+            <div className="flex flex-col gap-3 rounded-2xl bg-oat p-4">
+              <div>
+                <h3 className="font-extrabold">Tailor before saving</h3>
+                <p className="text-sm font-semibold text-espresso-light">
+                  Request a change to this generated recipe. We’ll create a new
+                  version and verify it again before you can accept it.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  "Make it less spicy",
+                  "Use fewer pans",
+                  "Make it vegetarian",
+                  "Simplify the steps",
+                ].map((idea) => (
+                  <Button
+                    key={idea}
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setTailoringIntent(idea)}
+                  >
+                    {idea}
+                  </Button>
+                ))}
+              </div>
+              <label
+                className="text-sm font-extrabold"
+                htmlFor="tailoring-intent"
+              >
+                What would you change?
+              </label>
+              <textarea
+                id="tailoring-intent"
+                value={tailoringIntent}
+                onChange={(event) => setTailoringIntent(event.target.value)}
+                maxLength={1000}
+                rows={3}
+                placeholder="e.g. use my rice cooker instead of a pot"
+                className="rounded-xl border-2 border-espresso/10 bg-card p-3 text-sm font-semibold outline-none focus:border-flame"
+              />
+              <Button
+                disabled={acting || !tailoringIntent.trim()}
+                onClick={() => void submitTailoring()}
+              >
+                {acting ? "Rechecking…" : "Revise and verify again"}
+              </Button>
+              <p className="text-xs font-semibold text-espresso-light">
+                Up to two tailored revisions; each uses six AI credits.
+              </p>
+            </div>
+          )}
         </>
       )}
 
