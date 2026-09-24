@@ -402,8 +402,8 @@ export function RecipeDraftProgress({
               </p>
               {draft.review.assumptions?.length ? (
                 <ul className="mt-2 list-disc pl-5">
-                  {draft.review.assumptions.map((assumption) => (
-                    <li key={assumption}>{assumption}</li>
+                  {draft.review.assumptions.map((assumption, index) => (
+                    <li key={`${index}:${assumption}`}>{assumption}</li>
                   ))}
                 </ul>
               ) : null}
@@ -523,8 +523,8 @@ function DraftRecipePreview({ recipe }: { recipe: DraftRecipe }) {
           Ingredients
         </h4>
         <ul className="mt-2 grid gap-1 text-sm font-semibold sm:grid-cols-2">
-          {recipe.ingredients.map((ingredient) => (
-            <li key={ingredient}>{ingredient}</li>
+          {recipe.ingredients.map((ingredient, index) => (
+            <li key={`${index}:${ingredient}`}>{ingredient}</li>
           ))}
         </ul>
       </section>
