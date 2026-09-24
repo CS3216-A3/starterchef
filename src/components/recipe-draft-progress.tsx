@@ -73,8 +73,7 @@ const STAGES: { statuses: DraftStatus[]; label: string; detail: string }[] = [
   {
     statuses: ["verifying"],
     label: "Safety check",
-    detail:
-      "Weâ€™re checking ingredients, timings, allergens, and instructions.",
+    detail: "We’re checking ingredients, timings, allergens, and instructions.",
   },
   {
     statuses: ["adjudicating"],
@@ -97,7 +96,9 @@ export function RecipeDraftProgress({
   onStartOver,
 }: {
   draftId: string;
-  onStartOver?: () => void;
+  /** Leave this review and return to the import form, optionally switching
+   *  to another source tab (e.g. Text after a link couldn't be read). */
+  onStartOver?: (source?: "text") => void;
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState<DraftResponse | null>(null);
@@ -160,6 +161,8 @@ export function RecipeDraftProgress({
       if (action === "accept") {
         const { recipeId } = (await response.json()) as { recipeId: string };
         router.push(`/recipes/${recipeId}`);
+      } else if (onStartOver) {
+        onStartOver();
       } else {
         router.push("/recipes");
       }
@@ -285,6 +288,11 @@ export function RecipeDraftProgress({
     ["blocked", "failed_permanent", "failed_retryable", "rejected"].includes(
       draft.status,
     );
+  const canRetry =
+    draft?.status === "failed_retryable" && (draft.restartCount ?? 0) < 2;
+  // The page itself couldn't be fetched or parsed (usually the site blocks
+  // scraping) — retrying won't help, pasting the text will.
+  const linkUnreadable = failure && draft.failureCode === "SOURCE_UNREADABLE";
   const secondsSinceUpdate = draft
     ? Math.max(
         0,
@@ -317,7 +325,7 @@ export function RecipeDraftProgress({
         </h2>
         <p className="mt-1 text-sm font-semibold text-espresso-light">
           {failure
-            ? failureMessage(draft.status, draft.failureCode, draft.kind)
+            ? failureMessage(draft.status, draft.failureCode)
             : draft
               ? STAGES[Math.max(stage, 0)]?.detail
               : "Connecting to your recipe review…"}
@@ -361,7 +369,7 @@ export function RecipeDraftProgress({
           Why this review was blocked
         </h3>
       )}
-      {selectedReview?.summary && (
+      {selectedReview?.summary && !linkUnreadable && (
         <p className="rounded-2xl bg-oat p-3 text-sm font-semibold text-espresso-light">
           {selectedReview.summary}
         </p>
@@ -568,21 +576,37 @@ export function RecipeDraftProgress({
             : "You can start a new recipe review with a clearer source."}
         </div>
       )}
-      {draft?.status === "blocked" && onStartOver && (
-        <Button className="w-full" onClick={onStartOver}>
-          Try another recipe
-        </Button>
+      {failure && (
+        <div className="flex flex-col gap-2">
+          {linkUnreadable && onStartOver && (
+            <Button className="w-full" onClick={() => onStartOver("text")}>
+              Paste the recipe text instead
+            </Button>
+          )}
+          {canRetry && (
+            <Button
+              variant={linkUnreadable ? "outline" : "primary"}
+              className="w-full"
+              onClick={() => void restart()}
+              disabled={acting}
+            >
+              {acting ? "Restarting…" : "Retry review"}
+            </Button>
+          )}
+          {onStartOver && (
+            <Button
+              variant={linkUnreadable || canRetry ? "ghost" : "primary"}
+              className="w-full"
+              onClick={() => onStartOver()}
+              disabled={acting}
+            >
+              {canRetry
+                ? "Never mind, try another recipe"
+                : "Try another recipe"}
+            </Button>
+          )}
+        </div>
       )}
-      {draft?.status === "failed_retryable" &&
-        (draft.restartCount ?? 0) < 2 && (
-          <Button
-            className="w-full"
-            onClick={() => void restart()}
-            disabled={acting}
-          >
-            {acting ? "Restartingâ€¦" : "Retry review"}
-          </Button>
-        )}
       {error && (
         <p className="rounded-2xl bg-flame-soft p-3 text-sm font-bold text-espresso">
           {error}
@@ -672,16 +696,12 @@ function isTerminal(status: DraftStatus) {
   ].includes(status);
 }
 
-function failureMessage(
-  status: DraftStatus,
-  code: string | null,
-  kind?: DraftResponse["kind"],
-) {
+function failureMessage(status: DraftStatus, code: string | null) {
   if (code === "PHOTO_CLARIFICATION_EXPIRED" || code === "PHOTO_INPUT_EXPIRED")
     return "The private photo expired before this review could finish. Upload it again to start a new recipe.";
   if (code === "PROVIDER_TEMPORARILY_UNAVAILABLE")
     return "The AI provider is temporarily busy. You can retry this review without uploading the recipe again.";
-  if (kind === "url")
+  if (code === "SOURCE_UNREADABLE")
     return "We couldn't read that link — many recipe sites block automated access. Open the recipe in your browser, copy the text, and paste it into the Text tab instead.";
   if (status === "failed_retryable")
     return "The verification service had a temporary problem. Start a new review in a moment.";
