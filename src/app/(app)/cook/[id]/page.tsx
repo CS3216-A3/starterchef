@@ -24,7 +24,7 @@ export default async function CookPage({
     getRecipeBySlug(id),
     getActiveCookingSession(),
   ]);
-  if (!recipe || recipe.steps.length === 0) notFound();
+  if (!recipe || (recipe.steps ?? []).length === 0) notFound();
 
   const recipeTitle = recipe.title;
   // Checkpoint photos taken in this session live on the session snapshot for
@@ -36,7 +36,7 @@ export default async function CookPage({
       .filter((s) => s.photoUrl)
       .map((s) => [s.index, s.photoUrl] as const),
   );
-  const steps = recipe.steps.map((s) =>
+  const steps = (recipe.steps ?? []).map((s) =>
     sessionPhotos.has(s.index)
       ? { ...s, photoUrl: sessionPhotos.get(s.index) }
       : s,
@@ -51,6 +51,9 @@ export default async function CookPage({
   // No ?step → mise en place: the cook gathers ingredients and equipment
   // before the first instruction, instead of being dropped into step 1.
   if (!step) {
+    // Seeded/imported rows can have nulls despite the string[] type.
+    const allIngredients = recipe.ingredients ?? [];
+    const allEquipment = recipe.equipment ?? [];
     return (
       <div className="mx-auto flex max-w-lg flex-col gap-6">
         <BackButton />
@@ -86,7 +89,7 @@ export default async function CookPage({
             Ingredients
           </h2>
           <ul className="flex flex-wrap gap-2">
-            {recipe.ingredients.map((item) => (
+            {allIngredients.map((item) => (
               <li
                 key={item}
                 className="rounded-full bg-oat px-3 py-1.5 text-sm font-bold"
@@ -97,13 +100,13 @@ export default async function CookPage({
           </ul>
         </section>
 
-        {recipe.equipment.length > 0 ? (
+        {allEquipment.length > 0 ? (
           <section className="flex flex-col gap-2 rounded-3xl bg-card p-4 shadow-sm ring-1 ring-oat">
             <h2 className="text-xs font-extrabold tracking-wide text-espresso-light uppercase">
               Equipment
             </h2>
             <ul className="flex flex-wrap gap-2">
-              {recipe.equipment.map((item) => (
+              {allEquipment.map((item) => (
                 <li
                   key={item}
                   className="rounded-full bg-oat px-3 py-1.5 text-sm font-bold"
@@ -192,13 +195,13 @@ export default async function CookPage({
         ) : null}
       </section>
 
-      {current.ingredients.length > 0 ? (
+      {(current.ingredients ?? []).length > 0 ? (
         <section className="rounded-3xl bg-oat p-4">
           <h3 className="mb-2 text-xs font-extrabold tracking-wide text-espresso-light uppercase">
             For this step
           </h3>
           <ul className="flex flex-wrap gap-2">
-            {current.ingredients.map((item) => (
+            {(current.ingredients ?? []).map((item) => (
               <li
                 key={item}
                 className="rounded-full bg-card px-3 py-1.5 text-sm font-bold"
