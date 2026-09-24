@@ -5,6 +5,8 @@ import {
   sessionIdFromPath,
 } from "@/lib/cooking-session-api";
 import { protectedError, withProtectedRoute } from "@/lib/protected-route";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { cookingAdjustmentFailure } from "@/lib/validation/recipe-safety";
 
 const bodySchema = z.object({
   expectedVersion: z.number().int().positive(),
@@ -29,18 +31,53 @@ export const POST = withProtectedRoute(async (context) => {
     );
   const known = await ownedSession(context, id);
   if (known.error) return known.error;
+  if (known.data.status !== "in_progress")
+    return protectedError(
+      context,
+      409,
+      "CONFLICT",
+      "Cooking session is no longer active",
+    );
   const steps =
     (known.data.recipe as { steps?: unknown[] } | null)?.steps ?? [];
-  if (parsed.data.proposal.stepIndex > steps.length)
+  if (
+    parsed.data.proposal.stepIndex !== known.data.current_step ||
+    parsed.data.proposal.stepIndex > steps.length
+  )
     return protectedError(
       context,
       400,
       "INVALID_REQUEST",
       "Adjustment does not match this recipe",
     );
-  const { data, error } = await context.supabase.rpc(
-    "append_cooking_adjustment",
+  const { data: profile, error: profileError } = await context.supabase
+    .from("profiles")
+    .select("dietary_restrictions,allergies")
+    .eq("id", context.user.id)
+    .maybeSingle();
+  if (profileError || !profile)
+    return protectedError(
+      context,
+      500,
+      "INTERNAL_ERROR",
+      "Could not check food safety",
+    );
+  if (
+    cookingAdjustmentFailure(
+      parsed.data.proposal.replacementInstruction,
+      profile,
+    )
+  )
+    return protectedError(
+      context,
+      400,
+      "INVALID_REQUEST",
+      "This adjustment may be unsafe for your dietary profile",
+    );
+  const { data, error } = await createAdminClient().rpc(
+    "apply_cooking_adjustment_service",
     {
+      p_user_id: context.user.id,
       p_session_id: id,
       p_adjustment: parsed.data.proposal,
       p_expected_version: parsed.data.expectedVersion,

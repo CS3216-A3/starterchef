@@ -26,3 +26,50 @@ export function recipeSafetyFailure(
     return "UNSAFE_INSTRUCTION";
   return null;
 }
+
+/** Reject obvious hazards in a proposed replacement before a privileged RPC
+ * can alter the active snapshot. The database repeats this minimum guard. */
+export function cookingAdjustmentFailure(
+  instruction: string,
+  profile: {
+    dietary_restrictions?: string[] | null;
+    allergies?: string[] | null;
+  } | null,
+): "DIET_OR_ALLERGEN_CONFLICT" | "UNSAFE_INSTRUCTION" | null {
+  if (
+    /(eat raw (chicken|poultry)|undercook (chicken|poultry)|leave.{0,80}room temperature.{0,80}overnight|serve (chicken|poultry).{0,30}(raw|pink))/i.test(
+      instruction,
+    )
+  )
+    return "UNSAFE_INSTRUCTION";
+  const lower = instruction.toLowerCase();
+  const has = (word: string) =>
+    new RegExp(
+      `\\b${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
+      "i",
+    ).test(lower);
+  if (profile?.allergies?.some((item) => item.trim() && has(item.trim())))
+    return "DIET_OR_ALLERGEN_CONFLICT";
+  const diets = new Set(
+    profile?.dietary_restrictions?.map((item) => item.toLowerCase()) ?? [],
+  );
+  if (
+    (diets.has("vegan") &&
+      [
+        "chicken",
+        "beef",
+        "pork",
+        "fish",
+        "shrimp",
+        "milk",
+        "butter",
+        "cheese",
+        "egg",
+        "honey",
+      ].some(has)) ||
+    (diets.has("vegetarian") &&
+      ["chicken", "beef", "pork", "fish", "shrimp"].some(has))
+  )
+    return "DIET_OR_ALLERGEN_CONFLICT";
+  return null;
+}

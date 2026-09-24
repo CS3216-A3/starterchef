@@ -10,6 +10,9 @@ vi.mock("@/lib/protected-route", () => ({
     message: string,
   ) => Response.json({ error: { code, message } }, { status }),
 }));
+vi.mock("@/lib/session-events", () => ({
+  getCookingMemory: async () => ["Uses a small saucepan"],
+}));
 
 import { POST } from "@/app/api/ai/realtime-sessions/route";
 
@@ -26,26 +29,44 @@ function context(
     error: null,
   }));
   const supabase = {
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          eq: () => ({
-            maybeSingle: async () => ({
-              data: {
-                status: "in_progress",
-                current_step: 1,
-                recipe: {
-                  title: "Trusted soup",
-                  steps: [
-                    { index: 1, title: "Simmer", instruction: "Cook gently" },
-                  ],
-                },
-              },
-            }),
-          }),
+    from: (table: string) => {
+      const query = {
+        select: () => query,
+        eq: () => query,
+        maybeSingle: async () => ({
+          data:
+            table === "profiles"
+              ? { dietary_restrictions: ["vegetarian"], allergies: ["peanut"] }
+              : table === "realtime_attempts"
+                ? {
+                    expires_at: new Date(
+                      Date.now() + 15 * 60_000,
+                    ).toISOString(),
+                  }
+                : {
+                    status: "in_progress",
+                    current_step: 1,
+                    recipe: {
+                      title: "Trusted soup",
+                      ingredients: ["tomato"],
+                      steps: [
+                        {
+                          index: 1,
+                          title: "Simmer",
+                          instruction: "Cook gently",
+                        },
+                      ],
+                    },
+                  },
+          error: null,
         }),
-      }),
-    }),
+        limit: async () => ({
+          data: [{ kind: "ingredient", name: "tomato", quantity: "2" }],
+          error: null,
+        }),
+      };
+      return query;
+    },
     rpc,
   };
   return {
@@ -92,6 +113,8 @@ describe("realtime credential contract", () => {
     expect(url).toBe("https://api.openai.com/v1/realtime/client_secrets");
     const configuration = JSON.parse(String(request.body));
     expect(configuration.session.instructions).toContain("Trusted soup");
+    expect(configuration.session.instructions).toContain("vegetarian");
+    expect(configuration.session.instructions).toContain("tomato");
     expect(configuration.session.tools[0].name).toBe("propose_cooking_action");
     expect(request.headers).toMatchObject({
       "OpenAI-Safety-Identifier": expect.any(String),

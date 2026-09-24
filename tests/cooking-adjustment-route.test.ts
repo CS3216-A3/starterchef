@@ -3,16 +3,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
   from: vi.fn(),
-  rpc: vi.fn(),
+  adminRpc: vi.fn(),
   query: { select: vi.fn(), eq: vi.fn(), maybeSingle: vi.fn() },
+  profileQuery: { select: vi.fn(), eq: vi.fn(), maybeSingle: vi.fn() },
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
     auth: { getUser: mocks.getUser },
     from: mocks.from,
-    rpc: mocks.rpc,
   })),
+}));
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: () => ({ rpc: mocks.adminRpc }),
 }));
 
 import { POST } from "@/app/api/cooking-sessions/[id]/adjustments/route";
@@ -39,14 +42,26 @@ describe("confirmed cooking adjustments", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getUser.mockResolvedValue({ data: { user: { id: "owner" } } });
-    mocks.from.mockReturnValue(mocks.query);
+    mocks.from.mockImplementation((table: string) =>
+      table === "profiles" ? mocks.profileQuery : mocks.query,
+    );
     mocks.query.select.mockReturnValue(mocks.query);
     mocks.query.eq.mockReturnValue(mocks.query);
-    mocks.query.maybeSingle.mockResolvedValue({
-      data: { recipe: { steps: [{ index: 1, instruction: "Boil rice." }] } },
+    mocks.profileQuery.select.mockReturnValue(mocks.profileQuery);
+    mocks.profileQuery.eq.mockReturnValue(mocks.profileQuery);
+    mocks.profileQuery.maybeSingle.mockResolvedValue({
+      data: { dietary_restrictions: [], allergies: [] },
       error: null,
     });
-    mocks.rpc.mockResolvedValue({
+    mocks.query.maybeSingle.mockResolvedValue({
+      data: {
+        status: "in_progress",
+        current_step: 1,
+        recipe: { steps: [{ index: 1, instruction: "Boil rice." }] },
+      },
+      error: null,
+    });
+    mocks.adminRpc.mockResolvedValue({
       data: { conflict: false, session: { version: 5 } },
       error: null,
     });
@@ -56,11 +71,15 @@ describe("confirmed cooking adjustments", () => {
     const response = await POST(request({ proposal, expectedVersion: 4 }));
     expect(response.status).toBe(200);
     expect(mocks.query.eq).toHaveBeenCalledWith("user_id", "owner");
-    expect(mocks.rpc).toHaveBeenCalledWith("append_cooking_adjustment", {
-      p_session_id: sessionId,
-      p_adjustment: proposal,
-      p_expected_version: 4,
-    });
+    expect(mocks.adminRpc).toHaveBeenCalledWith(
+      "apply_cooking_adjustment_service",
+      {
+        p_user_id: "owner",
+        p_session_id: sessionId,
+        p_adjustment: proposal,
+        p_expected_version: 4,
+      },
+    );
   });
 
   it("rejects vague proposals before calling the RPC", async () => {
@@ -73,22 +92,33 @@ describe("confirmed cooking adjustments", () => {
       request({ proposal: vague, expectedVersion: 4 }),
     );
     expect(response.status).toBe(400);
-    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.adminRpc).not.toHaveBeenCalled();
   });
 
   it("does not let another user mutate the session", async () => {
     mocks.query.maybeSingle.mockResolvedValue({ data: null, error: null });
     const response = await POST(request({ proposal, expectedVersion: 4 }));
     expect(response.status).toBe(404);
-    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.adminRpc).not.toHaveBeenCalled();
   });
 
   it("returns a version conflict without claiming the change applied", async () => {
-    mocks.rpc.mockResolvedValue({
+    mocks.adminRpc.mockResolvedValue({
       data: { conflict: true, session: { version: 5 } },
       error: null,
     });
     const response = await POST(request({ proposal, expectedVersion: 4 }));
     expect(response.status).toBe(409);
+  });
+
+  it("rejects unsafe instructions before the privileged RPC", async () => {
+    const response = await POST(
+      request({
+        proposal: { ...proposal, replacementInstruction: "Eat raw chicken." },
+        expectedVersion: 4,
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(mocks.adminRpc).not.toHaveBeenCalled();
   });
 });

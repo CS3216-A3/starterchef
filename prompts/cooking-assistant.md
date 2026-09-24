@@ -7,6 +7,8 @@ Current context:
 - Current instruction: {{stepInstruction}}
 - Recipe ingredients: {{recipeIngredients}}
 - Recipe equipment: {{recipeEquipment}}
+- Pantry now: {{pantry}}
+- Confirmed session adjustments: {{adjustments}}
 
 What past sessions taught us about this cook:
 {{memory}}

@@ -90,8 +90,9 @@ const configured =
     const direct = await a
       .from("cooking_sessions")
       .update({ current_step: 1 })
-      .eq("id", sessionId);
-    expect(direct.error).not.toBeNull();
+      .eq("id", sessionId)
+      .select("id");
+    expect(direct.error || (direct.data?.length ?? 0) === 0).toBeTruthy();
     const progress = await a.rpc("update_cooking_session_progress", {
       p_session_id: sessionId,
       p_step: 1,

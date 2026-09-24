@@ -55,9 +55,11 @@ export async function connectGeminiLive(
   const model = config.model;
   if (typeof token !== "string" || typeof model !== "string")
     throw new Error("Invalid Gemini voice credential");
-  const socket = new WebSocket(
-    `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=${encodeURIComponent(token)}`,
-  );
+  const socketUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=${encodeURIComponent(token)}`;
+  let socket: WebSocket | null = null;
+  let resumeHandle: string | null = null;
+  let reconnects = 0;
+  const deadline = Date.parse(String(config.sessionDeadlineAt));
   let microphone: MediaStream | null = null;
   let context: AudioContext | null = null;
   let source: MediaStreamAudioSourceNode | null = null;
@@ -84,16 +86,12 @@ export async function connectGeminiLive(
     });
     playback.clear();
     void context?.close();
-    socket.close();
+    socket?.close();
+    socket = null;
+    resumeHandle = null;
     setTranscript(undefined);
   };
   try {
-    socket.onclose = () => {
-      if (!closed) {
-        cleanup();
-        onClosed?.();
-      }
-    };
     await new Promise<void>((resolve, reject) => {
       const timeout = window.setTimeout(
         () => reject(new Error("Gemini voice connection timed out")),
@@ -107,135 +105,179 @@ export async function connectGeminiLive(
         },
         { once: true },
       );
-      socket.onopen = () => {
-        if (signal?.aborted) {
-          window.clearTimeout(timeout);
-          reject(new Error("Voice stopped"));
-          return;
-        }
-        socket.send(
-          JSON.stringify({
-            setup: {
-              model: `models/${model}`,
-              responseModalities: ["AUDIO"],
-              inputAudioTranscription: {},
-              outputAudioTranscription: {},
-              tools: [
-                {
-                  functionDeclarations: [
-                    {
-                      name: "propose_cooking_action",
-                      description: VOICE_PROPOSAL_DESCRIPTION,
-                      parameters: VOICE_PROPOSAL_PARAMETERS,
-                    },
-                  ],
-                },
-              ],
-            },
-          }),
-        );
-      };
-      socket.onerror = () => {
-        window.clearTimeout(timeout);
-        cleanup();
-        onClosed?.();
-        reject(new Error("Gemini voice connection failed"));
-      };
-      socket.onmessage = (event) => {
-        let data: {
-          setupComplete?: unknown;
-          toolCall?: {
-            functionCalls?: { id?: string; name?: string; args?: unknown }[];
-          };
-          serverContent?: {
-            inputTranscription?: { text?: string };
-            outputTranscription?: { text?: string };
-            turnComplete?: boolean;
-            modelTurn?: {
-              parts?: { inlineData?: { data?: string; mimeType?: string } }[];
-            };
-          };
+      const openSocket = (resuming: boolean) => {
+        const connection = new WebSocket(socketUrl);
+        socket = connection;
+        connection.onclose = () => {
+          if (closed || socket !== connection) return;
+          if (
+            resumeHandle &&
+            reconnects < 2 &&
+            Number.isFinite(deadline) &&
+            Date.now() < deadline
+          ) {
+            reconnects += 1;
+            setState({ status: "connecting" });
+            openSocket(true);
+          } else {
+            cleanup();
+            onClosed?.();
+            reject(new Error("Gemini voice connection closed"));
+          }
         };
-        try {
-          data = JSON.parse(event.data);
-        } catch {
-          return;
-        }
-        if (data.setupComplete) {
-          window.clearTimeout(timeout);
+        connection.onopen = () => {
           if (signal?.aborted) {
+            window.clearTimeout(timeout);
             reject(new Error("Voice stopped"));
             return;
           }
-          void (markConnected?.() ?? Promise.resolve())
-            .then(() => {
-              if (signal?.aborted) throw new Error("Voice stopped");
-              metricsRef.current.connectedAt = performance.now();
-              setState({ status: "listening" });
-              resolve();
-            })
-            .catch(reject);
-        }
-        if (data.toolCall?.functionCalls?.length) {
-          const functionResponses = data.toolCall.functionCalls.map((call) => {
-            const action =
-              call.name === "propose_cooking_action"
-                ? voiceActionSchema.safeParse(call.args)
-                : null;
-            if (action?.success) onAction?.(normalizeVoiceAction(action.data));
-            return {
-              id: call.id,
-              name: call.name,
-              response: {
-                result: action?.success
-                  ? "shown_for_user_confirmation"
-                  : "invalid_proposal",
+          connection.send(
+            JSON.stringify({
+              setup: {
+                model: `models/${model}`,
+                responseModalities: ["AUDIO"],
+                sessionResumption: resumeHandle ? { handle: resumeHandle } : {},
+                contextWindowCompression: { slidingWindow: {} },
+                inputAudioTranscription: {},
+                outputAudioTranscription: {},
+                tools: [
+                  {
+                    functionDeclarations: [
+                      {
+                        name: "propose_cooking_action",
+                        description: VOICE_PROPOSAL_DESCRIPTION,
+                        parameters: VOICE_PROPOSAL_PARAMETERS,
+                      },
+                    ],
+                  },
+                ],
               },
+            }),
+          );
+        };
+        connection.onerror = () => {
+          if (resuming) return;
+          window.clearTimeout(timeout);
+          cleanup();
+          onClosed?.();
+          reject(new Error("Gemini voice connection failed"));
+        };
+        connection.onmessage = (event) => {
+          let data: {
+            setupComplete?: unknown;
+            sessionResumptionUpdate?: {
+              resumable?: boolean;
+              newHandle?: string;
             };
-          });
-          socket.send(JSON.stringify({ toolResponse: { functionResponses } }));
-        }
-        const content = data.serverContent;
-        if (content?.inputTranscription?.text) {
-          setTranscript(content.inputTranscription.text);
-          setState({ status: "processing" });
-        }
-        if (content?.outputTranscription?.text) {
-          setTranscript(content.outputTranscription.text);
-          setState({
-            status: "speaking",
-            transcript: content.outputTranscription.text,
-          });
-        }
-        if (content?.turnComplete) setState({ status: "listening" });
-        for (const part of content?.modelTurn?.parts ?? []) {
-          const encoded = part.inlineData?.data;
-          if (!encoded || !context) continue;
-          const binary = atob(encoded);
-          const samples = new Float32Array(Math.floor(binary.length / 2));
-          for (let index = 0; index < samples.length; index += 1) {
-            const value =
-              binary.charCodeAt(index * 2) |
-              (binary.charCodeAt(index * 2 + 1) << 8);
-            samples[index] = (value > 32767 ? value - 65536 : value) / 32768;
-          }
-          const buffer = context.createBuffer(1, samples.length, 24_000);
-          buffer.copyToChannel(samples, 0);
-          const node = context.createBufferSource();
-          node.buffer = buffer;
-          node.connect(context.destination);
-          node.onended = () => {
-            playback.delete(node);
-            node.disconnect();
+            goAway?: { timeLeft?: string };
+            toolCall?: {
+              functionCalls?: { id?: string; name?: string; args?: unknown }[];
+            };
+            serverContent?: {
+              inputTranscription?: { text?: string };
+              outputTranscription?: { text?: string };
+              turnComplete?: boolean;
+              modelTurn?: {
+                parts?: { inlineData?: { data?: string; mimeType?: string } }[];
+              };
+            };
           };
-          nextPlayback = Math.max(nextPlayback, context.currentTime);
-          node.start(nextPlayback);
-          nextPlayback += buffer.duration;
-          playback.add(node);
-          metricsRef.current.firstResponseAt ??= performance.now();
-          setState({ status: "speaking" });
-        }
+          try {
+            data = JSON.parse(event.data);
+          } catch {
+            return;
+          }
+          if (
+            data.sessionResumptionUpdate?.resumable &&
+            data.sessionResumptionUpdate.newHandle
+          )
+            resumeHandle = data.sessionResumptionUpdate.newHandle;
+          if (data.setupComplete) {
+            window.clearTimeout(timeout);
+            if (signal?.aborted) {
+              reject(new Error("Voice stopped"));
+              return;
+            }
+            void (
+              resuming
+                ? Promise.resolve()
+                : (markConnected?.() ?? Promise.resolve())
+            )
+              .then(() => {
+                if (signal?.aborted) throw new Error("Voice stopped");
+                metricsRef.current.connectedAt = performance.now();
+                setState({ status: "listening" });
+                resolve();
+              })
+              .catch(reject);
+          }
+          if (data.toolCall?.functionCalls?.length) {
+            const functionResponses = data.toolCall.functionCalls.map(
+              (call) => {
+                const action =
+                  call.name === "propose_cooking_action"
+                    ? voiceActionSchema.safeParse(call.args)
+                    : null;
+                if (action?.success)
+                  onAction?.(normalizeVoiceAction(action.data));
+                return {
+                  id: call.id,
+                  name: call.name,
+                  response: {
+                    result: action?.success
+                      ? "shown_for_user_confirmation"
+                      : "invalid_proposal",
+                  },
+                };
+              },
+            );
+            connection.send(
+              JSON.stringify({ toolResponse: { functionResponses } }),
+            );
+          }
+          const content = data.serverContent;
+          if (content?.inputTranscription?.text) {
+            setTranscript(content.inputTranscription.text);
+            setState({ status: "processing" });
+          }
+          if (content?.outputTranscription?.text) {
+            setTranscript(content.outputTranscription.text);
+            setState({
+              status: "speaking",
+              transcript: content.outputTranscription.text,
+            });
+          }
+          if (content?.turnComplete) setState({ status: "listening" });
+          for (const part of content?.modelTurn?.parts ?? []) {
+            const encoded = part.inlineData?.data;
+            if (!encoded || !context) continue;
+            const binary = atob(encoded);
+            const samples = new Float32Array(Math.floor(binary.length / 2));
+            for (let index = 0; index < samples.length; index += 1) {
+              const value =
+                binary.charCodeAt(index * 2) |
+                (binary.charCodeAt(index * 2 + 1) << 8);
+              samples[index] = (value > 32767 ? value - 65536 : value) / 32768;
+            }
+            const buffer = context.createBuffer(1, samples.length, 24_000);
+            buffer.copyToChannel(samples, 0);
+            const node = context.createBufferSource();
+            node.buffer = buffer;
+            node.connect(context.destination);
+            node.onended = () => {
+              playback.delete(node);
+              node.disconnect();
+            };
+            nextPlayback = Math.max(nextPlayback, context.currentTime);
+            node.start(nextPlayback);
+            nextPlayback += buffer.duration;
+            playback.add(node);
+            metricsRef.current.firstResponseAt ??= performance.now();
+            setState({ status: "speaking" });
+          }
+        };
       };
+      openSocket(false);
     });
     microphone = await navigator.mediaDevices.getUserMedia({ audio: true });
     if (signal?.aborted) throw new Error("Voice stopped");
@@ -245,7 +287,7 @@ export async function connectGeminiLive(
     silence = context.createGain();
     silence.gain.value = 0;
     processor.onaudioprocess = (event) => {
-      if (socket.readyState !== WebSocket.OPEN) return;
+      if (socket?.readyState !== WebSocket.OPEN) return;
       const pcm = encodePcm(
         event.inputBuffer.getChannelData(0),
         event.inputBuffer.sampleRate,
