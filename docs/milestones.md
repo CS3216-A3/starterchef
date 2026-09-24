@@ -17,6 +17,11 @@ retrofitted at submission time. Full writeup goes in
 | Recipe import & personalisation               | `src/app/(app)/recipes/import/`, `src/app/(app)/recipes/[id]/edit/`, `src/app/api/ai/import-recipe/`, `supabase/migrations/0007_user_recipes.sql`, `src/components/cook-buttons.tsx` feedback flow                  |
 | Loop engineering                              | this file, `AGENTS.md`, `.devin/skills/`, CI, tests                                                                                                                                                                 |
 
+## M17–M20 launch deliverables
+
+- [M17 AI-specific UI and M18 landing-page evidence](m17-m18-evidence.md)
+- [M20 Product Hunt submission copy and gallery](product-hunt/README.md)
+
 ## Model comparison
 
 ### Text + vision candidates

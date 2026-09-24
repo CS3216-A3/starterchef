@@ -11,7 +11,12 @@ type ScanState =
   | { status: "idle" }
   | { status: "preview" }
   | { status: "scanning" }
-  | { status: "done"; scanId: string; candidates: KitchenScanCandidate[] }
+  | {
+      status: "done";
+      scanId: string;
+      candidates: KitchenScanCandidate[];
+      error?: string;
+    }
   | { status: "saving" }
   | { status: "saved"; added: number }
   | { status: "error"; message: string };
@@ -154,11 +159,7 @@ export function ScanKitchenButton() {
         quantity: candidate.quantity,
         expiresOn: candidate.expiresOn,
       }));
-    if (accepted.length === 0)
-      return setState({
-        status: "error",
-        message: "Select at least one item to add.",
-      });
+    if (accepted.length === 0) return;
     setState({ status: "saving" });
     try {
       const res = await fetch(`/api/kitchen-scans/${scanId}/apply`, {
@@ -187,8 +188,10 @@ export function ScanKitchenButton() {
       window.location.reload();
     } catch (error) {
       setState({
-        status: "error",
-        message:
+        status: "done",
+        scanId,
+        candidates,
+        error:
           error instanceof Error
             ? error.message
             : "Could not add detected items",
@@ -242,43 +245,69 @@ export function ScanKitchenButton() {
 
       {state.status === "done" && (
         <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-oat">
-          <p className="mb-2 text-sm font-bold">
+          <p className="mb-2 text-sm font-bold" role="status">
             We found {state.candidates.length} possible items
             {state.candidates.some((item) => item.confidence === "low")
               ? ` — ${state.candidates.filter((item) => item.confidence === "low").length} to check`
               : ""}
             . Select what to add.
           </p>
-          <ul className="mb-3 flex flex-wrap gap-1 text-sm font-semibold text-espresso-light">
+          {state.candidates.some((item) => item.confidence === "low") && (
+            <p className="mb-3 text-sm font-semibold text-espresso-light">
+              AI can misidentify items. Anything marked “Check this item” is
+              left unchecked. Review its name and amount before selecting it.
+            </p>
+          )}
+          {state.candidates.length === 0 && (
+            <p className="mb-3 text-sm font-semibold text-espresso-light">
+              No items detected. Try a clearer photo with better lighting, or
+              add your items manually.
+            </p>
+          )}
+          <ul className="mb-3 flex flex-col gap-2 text-sm font-semibold text-espresso-light">
             {state.candidates.map((item) => (
               <li
                 key={item.id}
-                className={`flex items-center gap-2 rounded-xl px-2 py-1 ${
+                className={`flex flex-wrap items-center gap-2 rounded-xl p-3 ${
                   item.confidence === "low" ? "bg-flame-soft" : "bg-oat"
                 }`}
               >
                 {item.confidence === "low" && (
-                  <CircleAlert
-                    className="h-3.5 w-3.5 shrink-0 text-flame"
-                    aria-label="Low confidence — check before adding"
-                  />
+                  <span
+                    id={`confidence-${item.id}`}
+                    className="flex w-full items-center gap-1.5 text-xs font-extrabold text-flame"
+                  >
+                    <CircleAlert
+                      className="h-4 w-4 shrink-0"
+                      aria-hidden="true"
+                    />
+                    Check this item · low AI confidence
+                  </span>
                 )}
-                <input
-                  aria-label={`Select ${item.name}`}
-                  type="checkbox"
-                  checked={selected.has(item.id)}
-                  onChange={() =>
-                    setSelected((current) => {
-                      const next = new Set(current);
-                      if (next.has(item.id)) next.delete(item.id);
-                      else next.add(item.id);
-                      return next;
-                    })
-                  }
-                />
+                <label className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg focus-within:ring-2 focus-within:ring-flame">
+                  <input
+                    aria-label={`Select ${item.name}`}
+                    aria-describedby={
+                      item.confidence === "low"
+                        ? `confidence-${item.id}`
+                        : undefined
+                    }
+                    type="checkbox"
+                    className="h-5 w-5 accent-flame"
+                    checked={selected.has(item.id)}
+                    onChange={() =>
+                      setSelected((current) => {
+                        const next = new Set(current);
+                        if (next.has(item.id)) next.delete(item.id);
+                        else next.add(item.id);
+                        return next;
+                      })
+                    }
+                  />
+                </label>
                 <input
                   aria-label={`${item.name} name`}
-                  className="min-w-0 bg-transparent font-semibold"
+                  className="h-10 min-w-0 flex-1 basis-28 rounded-lg bg-transparent px-1 font-semibold focus:outline-flame"
                   value={item.name}
                   onChange={(event) =>
                     setState((current) =>
@@ -298,7 +327,7 @@ export function ScanKitchenButton() {
                 {item.kind === "ingredient" ? (
                   <input
                     aria-label={`${item.name} quantity`}
-                    className="w-16 bg-transparent text-xs"
+                    className="h-10 w-20 rounded-lg bg-transparent px-1 text-xs focus:outline-flame"
                     placeholder="amount"
                     value={item.quantity ?? ""}
                     onChange={(event) =>
@@ -323,7 +352,7 @@ export function ScanKitchenButton() {
                 {item.kind === "ingredient" ? (
                   <input
                     aria-label={`${item.name} expiry`}
-                    className="w-28 bg-transparent text-xs"
+                    className="h-10 w-32 rounded-lg bg-transparent px-1 text-xs focus:outline-flame"
                     type="date"
                     value={item.expiresOn ?? ""}
                     onChange={(event) =>
@@ -349,14 +378,29 @@ export function ScanKitchenButton() {
             ))}
           </ul>
           <p className="mb-3 text-xs font-semibold text-espresso-light">
-            Existing items won&apos;t be removed. These will be merged in.
+            {selected.size} selected. Only selected items will be added.
+            Existing items won&apos;t be removed.
           </p>
+          {state.error && (
+            <p role="alert" className="mb-3 text-sm font-bold text-flame">
+              {state.error}
+            </p>
+          )}
           <Button
             type="button"
             className="w-full"
+            disabled={selected.size === 0}
             onClick={() => addToKitchen(state.scanId, state.candidates)}
           >
             Add to my kitchen
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="mt-2 w-full"
+            onClick={() => setState({ status: "idle" })}
+          >
+            Discard scan
           </Button>
         </div>
       )}

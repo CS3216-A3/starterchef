@@ -20,10 +20,18 @@ import {
   ScanDemo,
 } from "@/components/landing-demo";
 import { Reveal } from "@/components/reveal";
-import { PLANS, TOP_UPS, approxCooks, type TopUp } from "@/lib/credits";
+import {
+  CORE_FEATURES,
+  FEATURE_ROWS,
+  PLANS,
+  TOP_UPS,
+  approxCooks,
+  type TopUp,
+} from "@/lib/credits";
 
 export const metadata: Metadata = {
   title: "StarterChef · Your start to great cooking",
+  alternates: { canonical: "/" },
 };
 
 const howItWorks = [
@@ -59,26 +67,6 @@ const howItWorks = [
   },
 ];
 
-type CellValue = string | true | false;
-
-const planRows: { label: string; free: CellValue; plus: CellValue }[] = [
-  { label: "AI credits", free: "100 / month", plus: "1,500 / month" },
-  {
-    label: "Kitchen profile, recipe book, manual entry & timers",
-    free: true,
-    plus: true,
-  },
-  { label: "Kitchen scanning", free: "Limited", plus: "More scans" },
-  { label: "Recipe imports", free: "Limited", plus: "More imports" },
-  { label: "AI recommendations", free: "Limited", plus: "Expanded" },
-  { label: "Cooking assistance", free: "Limited", plus: "Full access" },
-  { label: "Voice cooking assistance", free: false, plus: true },
-  { label: "Photo checkpoints", free: false, plus: true },
-  { label: "Personalised recipe versions", free: false, plus: true },
-  { label: "Cooking history & cross-session memory", free: false, plus: true },
-  { label: "Priority AI processing", free: false, plus: true },
-];
-
 const topUpCopy: Record<TopUp["id"], string> = {
   small: "Occasional extra AI help.",
   large: "Better value for frequent video imports and live voice.",
@@ -86,11 +74,11 @@ const topUpCopy: Record<TopUp["id"], string> = {
 
 const sgd = (amount: number) => `S$${amount.toFixed(2)}`;
 
-function PlanCell({ value }: { value: CellValue }) {
-  if (value === true) {
+function PlanCell({ value }: { value: string }) {
+  if (value === "✓") {
     return <Check className="mx-auto h-4 w-4 text-flame" strokeWidth={2.5} />;
   }
-  if (value === false) {
+  if (value === "—") {
     return (
       <Minus
         className="mx-auto h-4 w-4 text-espresso-light/50"
@@ -203,15 +191,36 @@ export default function LandingPage() {
                         </span>
                       )}
                       <span className="mt-1 block text-xs font-semibold text-espresso-light">
-                        ≈ {approxCooks(plan.credits)} AI-assisted cooks
-                        {plan.recurring ? " / month" : ""}
+                        ≈ {approxCooks(plan.credits)} AI-assisted cooks / month
                       </span>
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {planRows.map((row) => (
+                <tr className="border-b border-oat">
+                  <td className="p-4 text-xs font-bold sm:p-5 sm:text-sm">
+                    AI credits
+                  </td>
+                  <td className="p-4 text-center sm:p-5">
+                    <PlanCell value="100 / month" />
+                  </td>
+                  <td className="bg-flame-soft/50 p-4 text-center sm:p-5">
+                    <PlanCell value="1,500 / month" />
+                  </td>
+                </tr>
+                <tr className="border-b border-oat">
+                  <td className="p-4 text-xs font-bold sm:p-5 sm:text-sm">
+                    Core features
+                  </td>
+                  <td
+                    colSpan={2}
+                    className="p-4 text-center text-xs font-semibold text-espresso-light sm:p-5"
+                  >
+                    {CORE_FEATURES.join(" · ")}
+                  </td>
+                </tr>
+                {FEATURE_ROWS.map((row) => (
                   <tr
                     key={row.label}
                     className="border-b border-oat last:border-0"
@@ -248,6 +257,11 @@ export default function LandingPage() {
             </table>
           </div>
         </Reveal>
+
+        <p className="mt-4 text-center text-xs font-semibold text-espresso-light">
+          Credit use varies by action. Top-ups add credits; they do not unlock
+          Plus-only features.
+        </p>
 
         <Reveal>
           <h3 className="mt-8 mb-4 text-center text-sm font-extrabold tracking-wide text-espresso-light uppercase">
