@@ -23,6 +23,10 @@ export function StartCookingButton({
   const [error, setError] = useState<string | null>(null);
 
   function handleClick() {
+    trackEvent("recipe_selected", {
+      recipe_id: recipeId,
+      source: "cook_button",
+    });
     setError(null);
     startTransition(async () => {
       try {
@@ -44,7 +48,6 @@ export function StartCookingButton({
       }
     });
   }
-
   return (
     <div className="w-full">
       <Button

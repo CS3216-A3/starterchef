@@ -68,6 +68,10 @@ export function FinishForm({
           );
           return;
         }
+        trackEvent("feedback_submitted", {
+          session_id: sessionId,
+          rating,
+        });
         trackEvent("cooking_session_completed", {
           session_id: sessionId,
           rating,

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getApiErrorMessage } from "@/lib/client-api-error";
+import { trackEvent } from "@/lib/posthog/events";
 
 type Recommendation = {
   id: string;
@@ -51,7 +52,19 @@ export function RecommendationPanel({
       const body = (await response.json()) as {
         recommendations?: Recommendation[];
       };
-      setState({ loading: false, items: body.recommendations ?? [] });
+
+      const recommendations = body.recommendations ?? [];
+
+      trackEvent("recommendations_generated", {
+        result_count: recommendations.length,
+        max_minutes: maxMinutes,
+        servings,
+      });
+
+      setState({
+        loading: false,
+        items: recommendations,
+      });
     })().catch(
       () =>
         active &&
@@ -90,6 +103,12 @@ export function RecommendationPanel({
             <li key={item.id} className="rounded-2xl bg-card p-4">
               <Link
                 href={`/recipes/${item.slug}`}
+                onClick={() =>
+                  trackEvent("recipe_selected", {
+                    recipe_id: item.id,
+                    source: "recommendation",
+                  })
+                }
                 className="font-extrabold hover:text-flame"
               >
                 {item.title}

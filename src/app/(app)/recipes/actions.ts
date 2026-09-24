@@ -56,7 +56,21 @@ export interface CreateRecipeInput extends ImportedRecipe {
 
 /** Persist an imported or personalised recipe for the current user. */
 export async function createUserRecipe(input: CreateRecipeInput) {
-  const parsed = createRecipeSchema.safeParse(input);
+  // Catalogue and database recipes omit optional step fields. The AI schema
+  // accepts them as explicit nulls so its structured output remains strict,
+  // so restore those nulls before validating an app-created recipe copy.
+  const normalizedInput = Array.isArray(input?.steps)
+    ? {
+        ...input,
+        steps: input.steps.map((step) => ({
+          ...step,
+          durationSeconds: step.durationSeconds ?? null,
+          tip: step.tip ?? null,
+          photoCheckpoint: step.photoCheckpoint ?? null,
+        })),
+      }
+    : input;
+  const parsed = createRecipeSchema.safeParse(normalizedInput);
   if (!parsed.success)
     return { error: "Check the recipe values and try again" };
   input = parsed.data;
