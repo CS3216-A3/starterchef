@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { saveKitchenItems } from "@/app/(app)/kitchen/actions";
 import type { KitchenVoiceResult } from "@/lib/ai/schemas/kitchen-scan";
+import { trackEvent } from "@/lib/posthog/events";
 import { cn } from "@/lib/utils";
 
 interface SpeechRecognitionLike {
@@ -72,10 +73,20 @@ export function VoiceAddItems() {
             source: "manual",
           })),
         );
-        if ("error" in result && result.error) {
-          setState({ status: "error", message: result.error });
+        if (!("count" in result)) {
+          setState({
+            status: "error",
+            message:
+              "error" in result && result.error
+                ? result.error
+                : "Could not save these items",
+          });
           return;
         }
+        trackEvent("kitchen_items_saved", {
+          source: "voice",
+          item_count: result.count,
+        });
         setState({ status: "idle" });
         router.refresh();
       });
