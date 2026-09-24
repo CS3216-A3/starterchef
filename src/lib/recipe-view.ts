@@ -39,6 +39,8 @@ export interface RecipeCardModel {
   servings: number;
   whyGood: string;
   icon: LucideIcon;
+  /** Raw icon key — serialisable, so it can cross the client boundary. */
+  iconName: string;
   imageTint: string;
   imageUrl: string | null;
 }
@@ -56,6 +58,7 @@ export function toRecipeCardModel(
     servings: recipe.servings,
     whyGood: recipe.why_good,
     icon: iconMap[recipe.icon] ?? CookingPot,
+    iconName: recipe.icon,
     imageTint: recipe.image_tint,
     imageUrl: recipe.image_url,
     primaryCta: opts?.primaryCta ?? false,

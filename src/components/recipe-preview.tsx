@@ -5,16 +5,22 @@ import Link from "next/link";
 import { useState } from "react";
 import { StartCookingButton } from "@/components/cook-buttons";
 import { RecipeImage } from "@/components/recipe-image";
-import type { RecipeCardModel } from "@/lib/recipe-view";
+import { iconMap, type RecipeCardModel } from "@/lib/recipe-view";
+import { CookingPot } from "lucide-react";
+
+/** Serializable subset of the card model — everything that crosses the
+ *  server→client boundary must be plain data (no Lucide components). */
+type RecipePreview = Omit<RecipeCardModel, "icon" | "imageTint">;
 
 /**
  * "View recipe" opens a quick glance popup — the full page stays for the
  * committed cook flow. The modal carries just the card data; "Open full
  * recipe" is the escape hatch for ingredients and steps.
  */
-export function RecipePreviewButton({ recipe }: { recipe: RecipeCardModel }) {
+export function RecipePreviewButton({ recipe }: { recipe: RecipePreview }) {
   const [open, setOpen] = useState(false);
   const href = `/recipes/${recipe.slug}`;
+  const Icon = iconMap[recipe.iconName] ?? CookingPot;
 
   return (
     <>
@@ -42,7 +48,7 @@ export function RecipePreviewButton({ recipe }: { recipe: RecipeCardModel }) {
                 <RecipeImage
                   imageUrl={recipe.imageUrl}
                   title={recipe.title}
-                  icon={recipe.icon}
+                  icon={Icon}
                 />
               </div>
               <button

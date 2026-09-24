@@ -62,7 +62,19 @@ export function RecipeCard({
         </p>
         <div className="mt-auto flex gap-2 pt-2">
           <div className="flex-1">
-            <RecipePreviewButton recipe={recipe} />
+            <RecipePreviewButton
+              recipe={{
+                id: recipe.id,
+                slug: recipe.slug,
+                title: recipe.title,
+                minutes: recipe.minutes,
+                difficultyLabel: recipe.difficultyLabel,
+                servings: recipe.servings,
+                whyGood: recipe.whyGood,
+                iconName: recipe.iconName,
+                imageUrl: recipe.imageUrl,
+              }}
+            />
           </div>
           <div className="flex-1">
             <StartCookingButton
