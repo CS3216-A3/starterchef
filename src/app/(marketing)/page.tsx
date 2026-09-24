@@ -2,7 +2,9 @@ import {
   Camera,
   Check,
   ChefHat,
-  Mic,
+  CookingPot,
+  History,
+  Import,
   Minus,
   ScanLine,
   Sparkles,
@@ -10,7 +12,14 @@ import {
 import Link from "next/link";
 import type { Metadata } from "next";
 import { Button } from "@/components/button";
-import { CookDemo, RecipeMatchDemo, ScanDemo } from "@/components/landing-demo";
+import {
+  CookDemo,
+  HistoryDemo,
+  ImportDemo,
+  RecipeMatchDemo,
+  ScanDemo,
+} from "@/components/landing-demo";
+import { Reveal } from "@/components/reveal";
 import { PLANS, TOP_UPS, approxCooks, type TopUp } from "@/lib/credits";
 
 export const metadata: Metadata = {
@@ -31,10 +40,22 @@ const howItWorks = [
     Demo: RecipeMatchDemo,
   },
   {
-    icon: Mic,
-    title: "Cook hands-free",
-    body: "One step at a time with big tap targets, built-in timers, an assistant that answers mid-recipe questions, and photo checkpoints that confirm you are on track.",
+    icon: Import,
+    title: "Import any recipe",
+    body: "Paste a link, a photo of a recipe card, plain text, or a YouTube video. StarterChef extracts it into a structured recipe you review before it joins your book.",
+    Demo: ImportDemo,
+  },
+  {
+    icon: CookingPot,
+    title: "Cook step by step",
+    body: "Move through one step at a time with big tap targets and built-in timers. Tap the mascot to ask a question by voice, or show your pan for a photo checkpoint.",
     Demo: CookDemo,
+  },
+  {
+    icon: History,
+    title: "Look back on every cook",
+    body: "Each finished session gets a StarterChef recap with what you asked, the photo checkpoints, and what to try next time. Cross-session memory is part of Plus.",
+    Demo: HistoryDemo,
   },
 ];
 
@@ -120,23 +141,22 @@ export default function LandingPage() {
           How it works
         </h2>
         {howItWorks.map(({ icon: Icon, title, body, Demo }, index) => (
-          <div
-            key={title}
-            className="grid items-center gap-6 sm:grid-cols-2 sm:gap-10"
-          >
-            <div className={index % 2 === 1 ? "sm:order-2" : ""}>
-              <span className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-flame-soft">
-                <Icon className="h-5 w-5 text-flame" />
-              </span>
-              <h3 className="mb-2 text-xl font-extrabold">{title}</h3>
-              <p className="max-w-md text-sm leading-relaxed font-semibold text-espresso-light">
-                {body}
-              </p>
+          <Reveal key={title}>
+            <div className="grid items-center gap-6 sm:grid-cols-2 sm:gap-10">
+              <div className={index % 2 === 1 ? "sm:order-2" : ""}>
+                <span className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-flame-soft">
+                  <Icon className="h-5 w-5 text-flame" />
+                </span>
+                <h3 className="mb-2 text-xl font-extrabold">{title}</h3>
+                <p className="max-w-md text-sm leading-relaxed font-semibold text-espresso-light">
+                  {body}
+                </p>
+              </div>
+              <div className={index % 2 === 1 ? "sm:order-1" : ""}>
+                <Demo />
+              </div>
             </div>
-            <div className={index % 2 === 1 ? "sm:order-1" : ""}>
-              <Demo />
-            </div>
-          </div>
+          </Reveal>
         ))}
       </section>
 
@@ -152,104 +172,108 @@ export default function LandingPage() {
           credits. Everything else is free, always.
         </p>
 
-        <div className="overflow-hidden rounded-3xl bg-card shadow-sm ring-1 ring-oat">
-          <table className="w-full table-fixed">
-            <thead>
-              <tr className="border-b border-oat">
-                <th className="w-1/2 p-4 text-left align-bottom sm:p-5">
-                  <span className="text-xs font-extrabold tracking-wide text-espresso-light uppercase">
-                    What you get
-                  </span>
-                </th>
-                {[freePlan, plusPlan].map((plan) => (
-                  <th
-                    key={plan.id}
-                    className={`w-1/4 p-4 align-bottom sm:p-5 ${
-                      plan.id === "plus" ? "bg-flame-soft/50" : ""
-                    }`}
-                  >
-                    <span className="block text-sm font-extrabold sm:text-base">
-                      {plan.name}
-                    </span>
-                    <span className="mt-1 block text-lg font-extrabold text-flame-ink sm:text-xl">
-                      {plan.priceSgd === 0
-                        ? "Free"
-                        : `${sgd(plan.priceSgd)}/mo`}
-                    </span>
-                    {plan.annualPriceSgd && (
-                      <span className="block text-xs font-bold text-espresso-light">
-                        or {sgd(plan.annualPriceSgd)}/year
-                      </span>
-                    )}
-                    <span className="mt-1 block text-xs font-semibold text-espresso-light">
-                      ≈ {approxCooks(plan.credits)} AI-assisted cooks
-                      {plan.recurring ? " / month" : ""}
+        <Reveal>
+          <div className="overflow-hidden rounded-3xl bg-card shadow-sm ring-1 ring-oat">
+            <table className="w-full table-fixed">
+              <thead>
+                <tr className="border-b border-oat">
+                  <th className="w-1/2 p-4 text-left align-bottom sm:p-5">
+                    <span className="text-xs font-extrabold tracking-wide text-espresso-light uppercase">
+                      What you get
                     </span>
                   </th>
+                  {[freePlan, plusPlan].map((plan) => (
+                    <th
+                      key={plan.id}
+                      className={`w-1/4 p-4 align-bottom sm:p-5 ${
+                        plan.id === "plus" ? "bg-flame-soft/50" : ""
+                      }`}
+                    >
+                      <span className="block text-sm font-extrabold sm:text-base">
+                        {plan.name}
+                      </span>
+                      <span className="mt-1 block text-lg font-extrabold text-flame-ink sm:text-xl">
+                        {plan.priceSgd === 0
+                          ? "Free"
+                          : `${sgd(plan.priceSgd)}/mo`}
+                      </span>
+                      {plan.annualPriceSgd && (
+                        <span className="block text-xs font-bold text-espresso-light">
+                          or {sgd(plan.annualPriceSgd)}/year
+                        </span>
+                      )}
+                      <span className="mt-1 block text-xs font-semibold text-espresso-light">
+                        ≈ {approxCooks(plan.credits)} AI-assisted cooks
+                        {plan.recurring ? " / month" : ""}
+                      </span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {planRows.map((row) => (
+                  <tr
+                    key={row.label}
+                    className="border-b border-oat last:border-0"
+                  >
+                    <td className="p-4 text-xs font-bold sm:p-5 sm:text-sm">
+                      {row.label}
+                    </td>
+                    <td className="p-4 text-center sm:p-5">
+                      <PlanCell value={row.free} />
+                    </td>
+                    <td className="bg-flame-soft/50 p-4 text-center sm:p-5">
+                      <PlanCell value={row.plus} />
+                    </td>
+                  </tr>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {planRows.map((row) => (
-                <tr
-                  key={row.label}
-                  className="border-b border-oat last:border-0"
-                >
-                  <td className="p-4 text-xs font-bold sm:p-5 sm:text-sm">
-                    {row.label}
-                  </td>
+                <tr>
+                  <td className="p-4 sm:p-5" />
                   <td className="p-4 text-center sm:p-5">
-                    <PlanCell value={row.free} />
+                    <Link href="/today">
+                      <Button size="sm" variant="outline" className="w-full">
+                        Start free
+                      </Button>
+                    </Link>
                   </td>
                   <td className="bg-flame-soft/50 p-4 text-center sm:p-5">
-                    <PlanCell value={row.plus} />
+                    <Link href="/today">
+                      <Button size="sm" className="w-full">
+                        Go Plus
+                      </Button>
+                    </Link>
                   </td>
                 </tr>
-              ))}
-              <tr>
-                <td className="p-4 sm:p-5" />
-                <td className="p-4 text-center sm:p-5">
-                  <Link href="/today">
-                    <Button size="sm" variant="outline" className="w-full">
-                      Start free
-                    </Button>
-                  </Link>
-                </td>
-                <td className="bg-flame-soft/50 p-4 text-center sm:p-5">
-                  <Link href="/today">
-                    <Button size="sm" className="w-full">
-                      Go Plus
-                    </Button>
-                  </Link>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+              </tbody>
+            </table>
+          </div>
+        </Reveal>
 
-        <h3 className="mt-8 mb-4 text-center text-sm font-extrabold tracking-wide text-espresso-light uppercase">
-          Need more credits? Top up any time
-        </h3>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {TOP_UPS.map((topUp) => (
-            <div
-              key={topUp.id}
-              className="flex items-center justify-between gap-4 rounded-2xl bg-oat p-4"
-            >
-              <div>
-                <p className="text-sm font-extrabold">
-                  {topUp.name} · {topUp.credits.toLocaleString()} credits
-                </p>
-                <p className="text-xs font-semibold text-espresso-light">
-                  {topUpCopy[topUp.id]}
+        <Reveal>
+          <h3 className="mt-8 mb-4 text-center text-sm font-extrabold tracking-wide text-espresso-light uppercase">
+            Need more credits? Top up any time
+          </h3>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {TOP_UPS.map((topUp) => (
+              <div
+                key={topUp.id}
+                className="flex items-center justify-between gap-4 rounded-2xl bg-oat p-4"
+              >
+                <div>
+                  <p className="text-sm font-extrabold">
+                    {topUp.name} · {topUp.credits.toLocaleString()} credits
+                  </p>
+                  <p className="text-xs font-semibold text-espresso-light">
+                    {topUpCopy[topUp.id]}
+                  </p>
+                </div>
+                <p className="shrink-0 text-lg font-extrabold text-flame-ink">
+                  {sgd(topUp.priceSgd)}
                 </p>
               </div>
-              <p className="shrink-0 text-lg font-extrabold text-flame-ink">
-                {sgd(topUp.priceSgd)}
-              </p>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </Reveal>
       </section>
     </>
   );

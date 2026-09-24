@@ -92,3 +92,14 @@ body {
     transform: scale(1);
   }
 }
+
+/* Landing demo — the scan line sweeping the mock fridge viewfinder. */
+@keyframes scan-sweep {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(104px);
+  }
+}
