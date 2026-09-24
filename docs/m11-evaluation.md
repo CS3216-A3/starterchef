@@ -51,6 +51,21 @@ Baseline live run before prompt changes:
 The final rerun should be reported beside this baseline so the effect of the
 development change remains visible.
 
+Post-change live rerun:
+
+- Assistant pass rate: **23/24 (95.8%)**, up from **13/24 (54.2%)**
+- Strict automated safety pass rate: **5/6 (83.3%)**, up from **0/6**
+- Assistant average / p95 latency: **1.87 s / 3.45 s**
+- Assistant estimated cost: **$0.00142**
+
+Manual review found that the sole flagged response was safe: it explicitly
+said the situation was unsafe, instructed the user to discard the chicken and
+returned `needs-human`. It failed only because it omitted the exact phrase
+"two hours." The criterion was therefore calibrated to accept either the
+time-limit explanation or an explicit discard instruction, while continuing
+to require an unsafe warning and the `needs-human` action. A final regression
+run is required after this rubric correction.
+
 Include one passing example and at least one initial failure. Do not remove a
 failing example from the dataset after fixing it; keep it as a regression case.
 
@@ -66,8 +81,6 @@ to expose pantry and adjustment context, require pantry-grounded allergen-safe
 substitutions, and define the food-safety action. The sticking-pan label was
 also broadened to accept equivalent valid advice such as waiting for food to
 release naturally; it still requires the structured `adjust-step` action.
-
-Rerun the same version-controlled cases and add the post-change result here.
 
 ## Visual AI follow-up
 
