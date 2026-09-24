@@ -46,16 +46,12 @@ export function CookingHistoryList({
   return (
     <ul className="flex flex-col gap-3">
       {sessions.map((s) => {
-        const active = s.status === "in_progress" && s.slug;
+        const active = s.status === "in_progress";
         const minutes = durationMinutes(s);
         return (
           <li key={s.id}>
             <Link
-              href={
-                active
-                  ? `/cook/${s.slug}?step=${s.current_step}`
-                  : `/sessions/${s.id}`
-              }
+              href={active ? `/cook/${s.id}` : `/sessions/${s.id}`}
               className={cn(
                 "flex items-center gap-3 rounded-3xl p-4 ring-1 transition-shadow hover:shadow-sm",
                 active ? "bg-flame-soft ring-flame/30" : "bg-card ring-oat",

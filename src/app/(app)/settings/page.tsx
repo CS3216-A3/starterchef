@@ -59,6 +59,9 @@ export default async function SettingsPage() {
             key={label}
             className="flex flex-col gap-1 rounded-3xl bg-card p-4 text-center ring-1 ring-oat"
           >
+            <dt className="order-last text-xs font-bold text-espresso-light">
+              {label}
+            </dt>
             <dd
               className={cn(
                 "text-xl font-extrabold",
@@ -67,9 +70,6 @@ export default async function SettingsPage() {
             >
               {value}
             </dd>
-            <dt className="order-last text-xs font-bold text-espresso-light">
-              {label}
-            </dt>
           </div>
         ))}
       </dl>

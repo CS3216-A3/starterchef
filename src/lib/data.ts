@@ -187,11 +187,10 @@ export interface CookingHistoryEntry {
   started_at: string;
   completed_at: string | null;
   title: string | null;
-  slug: string | null;
 }
 
 /** Recent cooking sessions (newest first) plus the all-time completed count,
- * for the profile page. Only the snapshot's title/slug are selected. */
+ * for the profile page. Only the snapshot's title is selected. */
 export async function getCookingHistory(limit = 20): Promise<{
   sessions: CookingHistoryEntry[];
   completedCount: number;
@@ -202,7 +201,7 @@ export async function getCookingHistory(limit = 20): Promise<{
     supabase
       .from("cooking_sessions")
       .select(
-        "id, status, current_step, summary, started_at, completed_at, title:recipe->>title, slug:recipe->>slug",
+        "id, status, current_step, summary, started_at, completed_at, title:recipe->>title",
       )
       .eq("user_id", user.id)
       .order("started_at", { ascending: false })
