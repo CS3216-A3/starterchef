@@ -16,6 +16,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "eval": "tsx evals/run.ts",
+    "eval:photo": "tsx --conditions=react-server evals/photo-recipe.ts",
     "prepare": "husky"
   },
   "lint-staged": {
