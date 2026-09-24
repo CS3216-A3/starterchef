@@ -249,7 +249,14 @@ export function CookAssist({
         router.refresh();
         return;
       }
-      setLastApplied(route === "adjustments" ? proposal.detail : null);
+      setLastApplied(
+        route === "adjustments"
+          ? `Apply this change throughout the recipe: ${proposal.detail}. For this step use: ${proposal.replacementInstruction}`.slice(
+              0,
+              1000,
+            )
+          : null,
+      );
       setProposal(null);
       router.refresh();
     } catch {
@@ -327,7 +334,12 @@ export function CookAssist({
         return;
       }
       setCheckpointProposal(null);
-      setLastApplied(checkpointProposal.detail);
+      setLastApplied(
+        `Apply this checkpoint change throughout the recipe: ${checkpointProposal.detail}. For this step use: ${checkpointProposal.replacementInstruction}`.slice(
+          0,
+          1000,
+        ),
+      );
       router.refresh();
     } catch {
       setChangeError("Could not connect. Please try again.");
