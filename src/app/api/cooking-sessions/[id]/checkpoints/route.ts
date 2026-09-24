@@ -150,12 +150,14 @@ export const POST = withProtectedRoute(async (context) => {
     ...object,
     checkpointId,
     previewUrl: preview.data?.signedUrl ?? null,
-    proposal: object.tip
-      ? {
-          stepIndex: known.data.current_step,
-          title: "Checkpoint suggestion",
-          detail: object.tip,
-        }
-      : null,
+    proposal:
+      object.tip && `${step.instruction} ${object.tip}`.length <= 1000
+        ? {
+            stepIndex: known.data.current_step,
+            title: "Checkpoint suggestion",
+            detail: object.tip,
+            replacementInstruction: `${step.instruction} ${object.tip}`,
+          }
+        : null,
   });
 });

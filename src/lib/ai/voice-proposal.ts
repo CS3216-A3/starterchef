@@ -11,6 +11,11 @@ export const VOICE_PROPOSAL_PARAMETERS = {
       type: "string",
       description: "Exact proposed change and why; required for an adjustment.",
     },
+    replacementInstruction: {
+      type: "string",
+      description:
+        "Full replacement text for the current cooking step after the change. Required for adjust-step.",
+    },
     timerSeconds: {
       type: "integer",
       description: "Timer duration in seconds for set-timer.",

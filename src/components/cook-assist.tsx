@@ -21,6 +21,7 @@ import type { StepCheck } from "@/lib/ai/schemas/cooking";
 import type { CookingSessionRow } from "@/lib/types";
 import { clientErrorMessage } from "@/lib/client-error";
 import { cn } from "@/lib/utils";
+import { loadActiveRecipeDraft } from "@/lib/active-recipe-draft";
 
 /**
  * All the interactive assists on the cook screen, sharing one camera stream
@@ -32,14 +33,18 @@ import { cn } from "@/lib/utils";
  */
 export function CookAssist({
   sessionId,
+  recipeId,
   stepIndex,
+  currentInstruction,
   totalSteps,
   durationSeconds,
   version,
   timerState,
 }: {
   sessionId: string;
+  recipeId: string | null;
   stepIndex: number;
+  currentInstruction: string;
   totalSteps: number;
   durationSeconds?: number;
   version: number;
@@ -56,15 +61,23 @@ export function CookAssist({
   >(null);
   // The last frame sent to the model — shown to the user so what the AI saw
   // is never a mystery.
-  const [proposal, setProposal] = useState<NonNullable<
-    AssistantReply["action"]
-  > | null>(null);
+  const [proposal, setProposal] = useState<
+    | (NonNullable<AssistantReply["action"]> & {
+        proposedForStep: number;
+        expectedVersion: number;
+      })
+    | null
+  >(null);
   const [checkpointProposal, setCheckpointProposal] = useState<{
     stepIndex: number;
     title: string;
     detail: string;
+    replacementInstruction: string;
+    expectedVersion: number;
   } | null>(null);
   const [changeError, setChangeError] = useState<string | null>(null);
+  const [changePending, setChangePending] = useState(false);
+  const [lastApplied, setLastApplied] = useState<string | null>(null);
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -104,6 +117,7 @@ export function CookAssist({
   async function checkFood() {
     const video = videoRef.current;
     if (!video || video.videoWidth === 0 || !sessionId) return;
+    const requestedVersion = version;
     const canvas = document.createElement("canvas");
     const scale = Math.min(1, 1024 / video.videoWidth);
     canvas.width = Math.round(video.videoWidth * scale);
@@ -134,7 +148,11 @@ export function CookAssist({
       const body = await res.json();
       if (!res.ok) throw new Error(clientErrorMessage(body, "Check failed"));
       setCheck(body as StepCheck & { previewUrl?: string | null });
-      setCheckpointProposal(body.proposal ?? null);
+      setCheckpointProposal(
+        body.proposal
+          ? { ...body.proposal, expectedVersion: requestedVersion }
+          : null,
+      );
     } catch (err) {
       setCameraError(
         err instanceof Error ? err.message : "Something went wrong",
@@ -150,7 +168,8 @@ export function CookAssist({
       if (
         ((action.type === "substitute-ingredient" ||
           action.type === "adjust-step") &&
-          action.detail?.trim()) ||
+          action.detail?.trim() &&
+          action.replacementInstruction?.trim()) ||
         (action.type === "set-timer" &&
           action.timerSeconds &&
           action.timerSeconds <= 86400) ||
@@ -159,18 +178,23 @@ export function CookAssist({
           action.stepIndex >= 1 &&
           action.stepIndex <= totalSteps)
       )
-        setProposal(action);
+        setProposal({
+          ...action,
+          proposedForStep: stepIndex,
+          expectedVersion: version,
+        });
     },
-    [totalSteps],
+    [stepIndex, totalSteps, version],
   );
 
   async function acceptProposal() {
     if (!proposal) return;
+    setChangePending(true);
     setChangeError(null);
     const target =
       proposal.type === "goto-step" && proposal.stepIndex
         ? proposal.stepIndex
-        : stepIndex;
+        : proposal.proposedForStep;
     const route =
       proposal.type === "goto-step"
         ? "progress"
@@ -181,75 +205,135 @@ export function CookAssist({
     const duration = proposal.timerSeconds ?? 0;
     const body =
       route === "progress"
-        ? { currentStep: target, expectedVersion: version }
+        ? { currentStep: target, expectedVersion: proposal.expectedVersion }
         : route === "timer"
           ? {
               timer: {
                 status: "running",
-                stepIndex,
+                stepIndex: proposal.proposedForStep,
                 durationSeconds: duration,
                 startedAt: now.toISOString(),
                 endsAt: new Date(now.getTime() + duration * 1000).toISOString(),
               },
-              expectedVersion: version,
+              expectedVersion: proposal.expectedVersion,
             }
           : {
               proposal: {
-                stepIndex,
+                stepIndex: proposal.proposedForStep,
                 title:
                   proposal.type === "substitute-ingredient"
                     ? "Ingredient substitution"
                     : "Step adjustment",
                 detail: proposal.detail ?? "",
+                replacementInstruction: proposal.replacementInstruction ?? "",
               },
-              expectedVersion: version,
+              expectedVersion: proposal.expectedVersion,
             };
-    const response = await fetch(
-      `/api/cooking-sessions/${sessionId}/${route}`,
-      {
-        method:
-          route === "progress" ? "PATCH" : route === "timer" ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      },
-    );
-    if (!response.ok) {
-      setChangeError(
-        response.status === 409
-          ? "This session changed in another tab. Refreshing the latest state."
-          : "Could not apply that suggestion",
+    try {
+      const response = await fetch(
+        `/api/cooking-sessions/${sessionId}/${route}`,
+        {
+          method:
+            route === "progress" ? "PATCH" : route === "timer" ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
       );
+      if (!response.ok) {
+        if (response.status === 409) setProposal(null);
+        setChangeError(
+          response.status === 409
+            ? "This session changed in another tab. Refreshing the latest state."
+            : "Could not apply that suggestion",
+        );
+        router.refresh();
+        return;
+      }
+      setLastApplied(route === "adjustments" ? proposal.detail : null);
+      setProposal(null);
       router.refresh();
-      return;
+    } catch {
+      setChangeError("Could not connect. Please try again.");
+    } finally {
+      setChangePending(false);
     }
-    setProposal(null);
-    router.refresh();
+  }
+
+  async function saveForFutureSessions() {
+    if (!recipeId || !lastApplied) return;
+    setChangePending(true);
+    setChangeError(null);
+    try {
+      const response = await fetch("/api/recipe-drafts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "adapted",
+          recipeId,
+          intent: lastApplied,
+          idempotencyKey: crypto.randomUUID(),
+        }),
+      });
+      if (response.status === 409) {
+        const active = await loadActiveRecipeDraft();
+        if (active) {
+          router.push(`/recipes/import?draft=${active.draftId}`);
+          return;
+        }
+      }
+      const body = await response.json().catch(() => null);
+      if (!response.ok || typeof body?.draftId !== "string")
+        throw new Error(
+          body?.error?.message ?? "Could not start recipe review",
+        );
+      router.push(`/recipes/import?draft=${body.draftId}`);
+    } catch (cause) {
+      setChangeError(
+        cause instanceof Error ? cause.message : "Could not save this change",
+      );
+    } finally {
+      setChangePending(false);
+    }
   }
 
   async function acceptCheckpointProposal() {
     if (!checkpointProposal) return;
-    const response = await fetch(
-      `/api/cooking-sessions/${sessionId}/adjustments`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          proposal: checkpointProposal,
-          expectedVersion: version,
-        }),
-      },
-    );
-    if (!response.ok) {
-      setChangeError(
-        response.status === 409
-          ? "This session changed in another tab. Refreshing the latest state."
-          : "Could not apply checkpoint suggestion",
+    setChangePending(true);
+    try {
+      const response = await fetch(
+        `/api/cooking-sessions/${sessionId}/adjustments`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            proposal: {
+              stepIndex: checkpointProposal.stepIndex,
+              title: checkpointProposal.title,
+              detail: checkpointProposal.detail,
+              replacementInstruction: checkpointProposal.replacementInstruction,
+            },
+            expectedVersion: checkpointProposal.expectedVersion,
+          }),
+        },
       );
+      if (!response.ok) {
+        if (response.status === 409) setCheckpointProposal(null);
+        setChangeError(
+          response.status === 409
+            ? "This session changed in another tab. Refreshing the latest state."
+            : "Could not apply checkpoint suggestion",
+        );
+        router.refresh();
+        return;
+      }
+      setCheckpointProposal(null);
+      setLastApplied(checkpointProposal.detail);
       router.refresh();
-      return;
+    } catch {
+      setChangeError("Could not connect. Please try again.");
+    } finally {
+      setChangePending(false);
     }
-    setCheckpointProposal(null);
-    router.refresh();
   }
 
   return (
@@ -266,16 +350,32 @@ export function CookAssist({
       {proposal && (
         <div className="rounded-2xl bg-flame-soft p-4 text-sm font-semibold">
           <p className="font-extrabold">
-            Suggested action for step {stepIndex}
+            Suggested action for step {proposal.proposedForStep}
           </p>
           <p>
             {proposal.detail ??
               (proposal.type === "set-timer"
                 ? `Set a ${proposal.timerSeconds ?? 0} second timer`
-                : `Go to step ${proposal.stepIndex ?? stepIndex}`)}
+                : `Go to step ${proposal.stepIndex ?? proposal.proposedForStep}`)}
           </p>
+          {proposal.replacementInstruction && (
+            <div className="mt-3 flex flex-col gap-1 rounded-xl bg-card p-3 text-xs">
+              <p>
+                <span className="font-extrabold">Current step:</span>{" "}
+                {currentInstruction}
+              </p>
+              <p>
+                <span className="font-extrabold">After confirmation:</span>{" "}
+                {proposal.replacementInstruction}
+              </p>
+            </div>
+          )}
           <div className="mt-3 flex gap-2">
-            <Button size="sm" onClick={() => void acceptProposal()}>
+            <Button
+              size="sm"
+              disabled={changePending}
+              onClick={() => void acceptProposal()}
+            >
               Confirm change
             </Button>
             <Button
@@ -289,7 +389,25 @@ export function CookAssist({
         </div>
       )}
       {changeError && (
-        <p className="text-xs font-bold text-flame">{changeError}</p>
+        <p role="alert" className="text-xs font-bold text-flame">
+          {changeError}
+        </p>
+      )}
+      {lastApplied && !proposal && (
+        <div className="rounded-2xl bg-oat p-4 text-sm font-semibold">
+          <p>The change is applied to this cooking session.</p>
+          {recipeId && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-3"
+              disabled={changePending}
+              onClick={() => void saveForFutureSessions()}
+            >
+              Save for future sessions (review first)
+            </Button>
+          )}
+        </div>
       )}
 
       <div className="flex flex-col gap-2">
@@ -371,8 +489,15 @@ export function CookAssist({
             <p>
               Step {checkpointProposal.stepIndex}: {checkpointProposal.detail}
             </p>
+            <p className="mt-1 text-xs">
+              New instruction: {checkpointProposal.replacementInstruction}
+            </p>
             <div className="mt-2 flex gap-2">
-              <Button size="sm" onClick={() => void acceptCheckpointProposal()}>
+              <Button
+                size="sm"
+                disabled={changePending}
+                onClick={() => void acceptCheckpointProposal()}
+              >
                 Accept adjustment
               </Button>
               <Button

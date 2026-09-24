@@ -11,6 +11,8 @@ describe("voice action proposals", () => {
       voiceActionSchema.safeParse({
         type: "adjust-step",
         detail: "Stir for one more minute.",
+        replacementInstruction:
+          "Keep the pan on low heat and stir for one more minute.",
       }).success,
     ).toBe(true);
     expect(
@@ -22,6 +24,12 @@ describe("voice action proposals", () => {
     expect(voiceActionSchema.safeParse({ type: "adjust-step" }).success).toBe(
       false,
     );
+    expect(
+      voiceActionSchema.safeParse({
+        type: "adjust-step",
+        detail: "Stir longer",
+      }).success,
+    ).toBe(false);
     expect(
       voiceActionSchema.safeParse({ type: "set-timer", timerSeconds: 100000 })
         .success,

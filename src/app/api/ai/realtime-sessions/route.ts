@@ -99,7 +99,7 @@ export const POST = withProtectedRoute(async (context) => {
     "You are StarterChef, a concise, safety-conscious cooking assistant.",
     `Recipe: ${recipe.title ?? "Cooking session"}.`,
     `Current step: ${step?.title ?? session.current_step}. ${step?.instruction ?? ""}`,
-    "Offer advice and action proposals only; never claim to change the recipe or session. Use propose_cooking_action for timer, navigation, or step changes, and tell the user approval is required.",
+    "Offer advice and action proposals only; never claim to change the recipe or session. Use propose_cooking_action for timer, navigation, or step changes, and tell the user approval is required. For a step change, include detail and a full replacementInstruction that preserves food-safety guidance.",
     "Keep replies suitable for speech, under three sentences.",
   ].join(" ");
   try {

@@ -4,13 +4,14 @@ export const voiceActionSchema = z
   .object({
     type: z.enum(["adjust-step", "set-timer", "goto-step"]),
     detail: z.string().trim().min(1).max(1000).optional(),
+    replacementInstruction: z.string().trim().min(1).max(1000).optional(),
     timerSeconds: z.number().int().min(1).max(86400).optional(),
     stepIndex: z.number().int().min(1).max(100).optional(),
   })
   .strict()
   .refine((action) =>
     action.type === "adjust-step"
-      ? Boolean(action.detail)
+      ? Boolean(action.detail && action.replacementInstruction)
       : action.type === "set-timer"
         ? Boolean(action.timerSeconds)
         : Boolean(action.stepIndex),
@@ -37,6 +38,7 @@ export const assistantReplySchema = z.object({
         "needs-human",
       ]),
       detail: z.string().nullable(),
+      replacementInstruction: z.string().trim().min(1).max(1000).nullable(),
       timerSeconds: z.number().int().positive().nullable(),
       stepIndex: z
         .number()
@@ -59,6 +61,7 @@ export function normalizeVoiceAction(
   return {
     type: action.type,
     detail: action.detail ?? null,
+    replacementInstruction: action.replacementInstruction ?? null,
     timerSeconds: action.timerSeconds ?? null,
     stepIndex: action.stepIndex ?? null,
   };

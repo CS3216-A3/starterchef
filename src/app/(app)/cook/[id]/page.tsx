@@ -67,7 +67,9 @@ export default async function CookPage({
       </section>
       <CookAssist
         sessionId={session.id}
+        recipeId={session.recipe_id}
         stepIndex={session.current_step}
+        currentInstruction={current.instruction}
         totalSteps={steps.length}
         durationSeconds={current.durationSeconds}
         version={version}

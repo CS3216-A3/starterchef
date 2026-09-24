@@ -133,10 +133,14 @@ const configured =
         stepIndex: 1,
         title: "Technique",
         detail: "Stir gently.",
+        replacementInstruction: "Cook over low heat and stir gently.",
       },
     });
     expect(adjustment.error).toBeNull();
     expect(adjustment.data.session.version).toBe(initialVersion + 3);
+    expect(adjustment.data.session.recipe.steps[0].instruction).toBe(
+      "Cook over low heat and stir gently.",
+    );
     const staleAdjustment = await a.rpc("append_cooking_adjustment", {
       p_session_id: sessionId,
       p_expected_version: initialVersion + 2,
@@ -144,6 +148,7 @@ const configured =
         stepIndex: 1,
         title: "Technique",
         detail: "Stir gently.",
+        replacementInstruction: "Cook over low heat and stir gently.",
       },
     });
     expect(staleAdjustment.data.conflict).toBe(true);

@@ -85,6 +85,7 @@ describe("assistantReplySchema", () => {
       action: {
         type: "set-timer",
         detail: null,
+        replacementInstruction: null,
         timerSeconds: 120,
         stepIndex: null,
       },
@@ -111,6 +112,7 @@ describe("assistantReplySchema", () => {
     ).toEqual({
       type: "set-timer",
       detail: null,
+      replacementInstruction: null,
       timerSeconds: 120,
       stepIndex: null,
     });
