@@ -11,9 +11,11 @@ talk to and show your pan to.
 
 ## Team
 
-| Name  | Matric no. | Contributions |
-| ----- | ---------- | ------------- |
-| Huang Kaijuan Joulene | A0299817E | Created the base app with core features and tech stack. Designed app logo and interactive landing page. |
+| Name                  | Matric no. | Contributions                                                                                                                                                                                                                                          |
+| --------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Huang Kaijuan Joulene | A0299817E  | Created the base app with core features and tech stack. Designed app logo and interactive landing page.                                                                                                                                                |
+| Cedric Tay            | A0307676U  | Implemented AI-specific scan review UX and human-in-the-loop controls. Developed the usage-based credit and pricing model, enhanced landing-page pricing, SEO and accessibility, fixed analytics tracking, and prepared Product Hunt launch materials. |
+
 
 ## Tech stack
 
