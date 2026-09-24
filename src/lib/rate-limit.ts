@@ -86,15 +86,14 @@ export async function checkRateLimit(
 export function createRateLimitResponse(result: RateLimitResult): NextResponse {
   return NextResponse.json(
     {
-      error: {
-        code: "RATE_LIMITED",
-        message: "Daily AI credit limit reached",
-        details: {
-          limit: result.limit,
-          remaining: result.remaining,
-          retryAfter: result.retryAfter,
-          resetAt: result.resetAt,
-        },
+      // Clients read `error` as a display string — keep it flat.
+      error: "You've used today's AI credits — they reset at midnight UTC.",
+      code: "RATE_LIMITED",
+      details: {
+        limit: result.limit,
+        remaining: result.remaining,
+        retryAfter: result.retryAfter,
+        resetAt: result.resetAt,
       },
     },
     {
