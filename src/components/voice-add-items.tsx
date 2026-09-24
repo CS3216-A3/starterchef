@@ -6,7 +6,7 @@ import { useState, useTransition } from "react";
 import { saveKitchenItems } from "@/app/(app)/kitchen/actions";
 import type { KitchenVoiceResult } from "@/lib/ai/schemas/kitchen-scan";
 import { trackEvent } from "@/lib/posthog/events";
-import { cn } from "@/lib/utils";
+import { apiErrorMessage, cn } from "@/lib/utils";
 
 interface SpeechRecognitionLike {
   lang: string;
@@ -54,7 +54,7 @@ export function VoiceAddItems() {
       const body = (await res.json().catch(() => null)) as
         (KitchenVoiceResult & { error?: string }) | null;
       if (!res.ok || !body) {
-        throw new Error(body?.error ?? "Couldn't parse that");
+        throw new Error(apiErrorMessage(body, "Couldn't parse that"));
       }
       if (body.items.length === 0) {
         setState({

@@ -17,7 +17,7 @@ import { StepAskBox } from "@/components/step-assist";
 import { VoiceAssistantButton } from "@/components/voice-assistant-button";
 import type { AssistantReply } from "@/lib/ai/schemas/assistant";
 import type { StepCheck } from "@/lib/ai/schemas/cooking";
-import { cn } from "@/lib/utils";
+import { apiErrorMessage, cn } from "@/lib/utils";
 
 export interface CookContext {
   recipeTitle: string;
@@ -158,7 +158,7 @@ export function CookAssist({
         }),
       });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? "Check failed");
+      if (!res.ok) throw new Error(apiErrorMessage(body, "Check failed"));
       setCheck(body as StepCheck);
     } catch (err) {
       setCameraError(

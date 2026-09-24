@@ -1,6 +1,7 @@
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, Pencil } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BackButton } from "@/components/back-button";
 import { Button } from "@/components/button";
 import { CookAssist } from "@/components/cook-assist";
 import { StepTracker } from "@/components/step-tracker";
@@ -52,15 +53,32 @@ export default async function CookPage({
   if (!step) {
     return (
       <div className="mx-auto flex max-w-lg flex-col gap-6">
+        <BackButton />
         <header className="flex flex-col gap-1">
           <p className="text-xs font-bold tracking-wide text-espresso-light uppercase">
             {recipeTitle}
           </p>
-          <h1 className="text-2xl font-extrabold">Get everything ready</h1>
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="text-2xl font-extrabold">Get everything ready</h1>
+            {recipe.user_id ? (
+              <Link
+                href={`/recipes/${recipe.id}/edit`}
+                aria-label="Edit this recipe"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-card text-espresso-light ring-1 ring-oat transition-colors hover:bg-oat hover:text-espresso"
+              >
+                <Pencil className="h-4 w-4" />
+              </Link>
+            ) : null}
+          </div>
           <p className="text-sm font-semibold text-espresso-light">
             {recipe.minutes} min · {recipe.difficulty} · serves{" "}
             {recipe.servings} · {steps.length} steps
           </p>
+          {recipe.description ? (
+            <p className="text-sm font-semibold text-espresso-light">
+              {recipe.description}
+            </p>
+          ) : null}
         </header>
 
         <section className="flex flex-col gap-2 rounded-3xl bg-card p-4 shadow-sm ring-1 ring-oat">
@@ -96,6 +114,22 @@ export default async function CookPage({
             </ul>
           </section>
         ) : null}
+
+        <section className="flex flex-col gap-2 rounded-3xl bg-card p-4 shadow-sm ring-1 ring-oat">
+          <h2 className="text-xs font-extrabold tracking-wide text-espresso-light uppercase">
+            The plan
+          </h2>
+          <ol className="flex flex-col gap-1.5">
+            {steps.map((s) => (
+              <li key={s.index} className="flex gap-2.5 text-sm font-semibold">
+                <span className="w-5 shrink-0 text-right font-extrabold text-flame">
+                  {s.index}
+                </span>
+                <span className="text-espresso-light">{s.title}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
 
         <Link href={`/cook/${id}?step=1`} className="self-stretch">
           <Button size="md" className="w-full">

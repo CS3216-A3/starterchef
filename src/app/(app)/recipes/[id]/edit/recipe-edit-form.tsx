@@ -12,6 +12,7 @@ import {
 } from "@/app/(app)/recipes/actions";
 import type { AdaptedRecipe } from "@/lib/ai/schemas/recipe";
 import type { RecipeRow } from "@/lib/types";
+import { apiErrorMessage } from "@/lib/utils";
 
 export function RecipeEditForm({ recipe }: { recipe: RecipeRow }) {
   const router = useRouter();
@@ -438,7 +439,7 @@ function AiEditBox({
         body: JSON.stringify({ request: text, recipe }),
       });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? "Edit failed");
+      if (!res.ok) throw new Error(apiErrorMessage(body, "Edit failed"));
       setSuggestion(body as AdaptedRecipe);
       setPrompt("");
     } catch (err) {

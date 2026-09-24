@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { BackButton } from "@/components/back-button";
 import { FinishForm } from "./finish-form";
 import { getRecipeBySlug } from "@/lib/data";
 
@@ -15,6 +16,7 @@ export default async function CookFinishPage({
 
   return (
     <div className="mx-auto flex max-w-lg flex-col gap-6">
+      <BackButton />
       <header className="flex flex-col gap-1">
         <p className="text-xs font-bold tracking-wide text-espresso-light uppercase">
           All done

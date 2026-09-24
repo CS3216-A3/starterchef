@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Send, Sparkles } from "lucide-react";
 import { Button } from "@/components/button";
 import type { AssistantReply } from "@/lib/ai/schemas/assistant";
+import { apiErrorMessage } from "@/lib/utils";
 
 interface StepContext {
   recipeTitle: string;
@@ -77,7 +78,7 @@ export function StepAskBox({
         },
       );
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? "Assistant failed");
+      if (!res.ok) throw new Error(apiErrorMessage(body, "Assistant failed"));
       if (!frame && body.action) onAction?.(body.action);
       setAnswer(frame ? body.feedback : body.answer);
       setQuestion("");
