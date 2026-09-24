@@ -221,13 +221,14 @@ export default function ImportRecipePage() {
           )}
           <RecipeDraftProgress
             draftId={reviewDraftId}
-            onStartOver={() => {
+            onStartOver={(source) => {
               const url = new URL(window.location.href);
               url.searchParams.delete("draft");
               window.history.replaceState(null, "", url);
               setReviewDraftId(null);
               setResumedDraft(false);
               setError(null);
+              if (source) setState((s) => ({ ...s, source }));
             }}
           />
         </>
