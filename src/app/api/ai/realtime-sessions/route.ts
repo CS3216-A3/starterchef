@@ -222,7 +222,7 @@ async function issueCredential(
     throw new Error("gemini_unavailable");
   const expiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
   const response = await fetch(
-    "https://generativelanguage.googleapis.com/v1beta/auth_tokens",
+    "https://generativelanguage.googleapis.com/v1alpha/auth_tokens",
     {
       method: "POST",
       headers: {
@@ -230,26 +230,32 @@ async function issueCredential(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        uses: 3,
+        // Resuming a session can reuse this token even with one new-session
+        // use. Lock the model, instructions, and tools on the server while
+        // leaving sessionResumption.handle available to the browser.
+        uses: 1,
         expireTime: expiresAt,
         newSessionExpireTime: new Date(Date.now() + 60_000).toISOString(),
-        liveConnectConstraints: {
+        fieldMask:
+          "model,generation_config,system_instruction,tools,context_window_compression",
+        bidiGenerateContentSetup: {
           model: `models/${model}`,
-          config: {
+          generationConfig: {
             responseModalities: ["AUDIO"],
-            systemInstruction: { parts: [{ text: instructions }] },
-            tools: [
-              {
-                functionDeclarations: [
-                  {
-                    name: "propose_cooking_action",
-                    description: VOICE_PROPOSAL_DESCRIPTION,
-                    parameters: VOICE_PROPOSAL_PARAMETERS,
-                  },
-                ],
-              },
-            ],
           },
+          systemInstruction: { parts: [{ text: instructions }] },
+          contextWindowCompression: { slidingWindow: {} },
+          tools: [
+            {
+              functionDeclarations: [
+                {
+                  name: "propose_cooking_action",
+                  description: VOICE_PROPOSAL_DESCRIPTION,
+                  parameters: VOICE_PROPOSAL_PARAMETERS,
+                },
+              ],
+            },
+          ],
         },
       }),
       signal: AbortSignal.timeout(10_000),

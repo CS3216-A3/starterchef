@@ -142,6 +142,23 @@ describe("realtime credential contract", () => {
       p_fallback_from: "openai",
     });
     expect(fetcher).toHaveBeenCalledTimes(2);
+    const [tokenUrl, tokenRequest] = fetcher.mock.calls[1] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(tokenUrl).toBe(
+      "https://generativelanguage.googleapis.com/v1alpha/auth_tokens",
+    );
+    const token = JSON.parse(String(tokenRequest.body));
+    expect(token.uses).toBe(1);
+    expect(token.fieldMask).toContain("system_instruction");
+    expect(token.fieldMask).not.toContain("session_resumption");
+    expect(
+      token.bidiGenerateContentSetup.systemInstruction.parts[0].text,
+    ).toContain("Trusted soup");
+    expect(
+      token.bidiGenerateContentSetup.generationConfig.responseModalities,
+    ).toEqual(["AUDIO"]);
   });
 
   it("rejects browser-authored recipe and system context", async () => {

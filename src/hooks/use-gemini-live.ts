@@ -55,7 +55,7 @@ export async function connectGeminiLive(
   const model = config.model;
   if (typeof token !== "string" || typeof model !== "string")
     throw new Error("Invalid Gemini voice credential");
-  const socketUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=${encodeURIComponent(token)}`;
+  const socketUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained?access_token=${encodeURIComponent(token)}`;
   let socket: WebSocket | null = null;
   let resumeHandle: string | null = null;
   let reconnects = 0;
@@ -135,7 +135,7 @@ export async function connectGeminiLive(
             JSON.stringify({
               setup: {
                 model: `models/${model}`,
-                responseModalities: ["AUDIO"],
+                generationConfig: { responseModalities: ["AUDIO"] },
                 sessionResumption: resumeHandle ? { handle: resumeHandle } : {},
                 contextWindowCompression: { slidingWindow: {} },
                 inputAudioTranscription: {},
