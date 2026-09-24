@@ -121,7 +121,12 @@ export default async function RecipeOverviewPage({
         )}
       </div>
 
-      <StartCookingButton slug={recipe.slug} primary label="Start cooking" />
+      <StartCookingButton
+        recipeId={recipe.id}
+        slug={recipe.slug}
+        primary
+        label="Start cooking"
+      />
 
       {/* Ingredients */}
       <section className="flex flex-col gap-2">

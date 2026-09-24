@@ -57,7 +57,21 @@ export interface CreateRecipeInput extends ImportedRecipe {
 
 /** Persist an imported or personalised recipe for the current user. */
 export async function createUserRecipe(input: CreateRecipeInput) {
-  const parsed = createRecipeSchema.safeParse(input);
+  // Catalogue and database recipes omit optional step fields. The AI schema
+  // accepts them as explicit nulls so its structured output remains strict,
+  // so restore those nulls before validating an app-created recipe copy.
+  const normalizedInput = Array.isArray(input?.steps)
+    ? {
+        ...input,
+        steps: input.steps.map((step) => ({
+          ...step,
+          durationSeconds: step.durationSeconds ?? null,
+          tip: step.tip ?? null,
+          photoCheckpoint: step.photoCheckpoint ?? null,
+        })),
+      }
+    : input;
+  const parsed = createRecipeSchema.safeParse(normalizedInput);
   if (!parsed.success)
     return { error: "Check the recipe values and try again" };
   input = parsed.data;
@@ -223,19 +237,22 @@ export async function saveRecipeFeedback(
   // into this row's `learned` jsonb.
   const session = await getActiveSession(supabase, user.id);
 
-  const { error: feedbackError } = await supabase
-    .from("recipe_feedback")
-    .insert({
-      user_id: user.id,
-      recipe_id: input.recipeId,
-      session_id: session?.id ?? null,
-      rating: input.rating,
-      substitutions_made: input.substitutionsMade,
-      equipment_adjusted: input.equipmentAdjusted,
-      scaled_servings: input.scaledServings,
-      would_cook_again: input.wouldCookAgain,
-      notes: input.notes,
-    });
+  const feedbackRow = {
+    user_id: user.id,
+    recipe_id: input.recipeId,
+    session_id: session?.id ?? null,
+    rating: input.rating,
+    substitutions_made: input.substitutionsMade,
+    equipment_adjusted: input.equipmentAdjusted,
+    scaled_servings: input.scaledServings,
+    would_cook_again: input.wouldCookAgain,
+    notes: input.notes,
+  };
+  const { error: feedbackError } = session?.id
+    ? await supabase
+        .from("recipe_feedback")
+        .upsert(feedbackRow, { onConflict: "user_id,session_id" })
+    : await supabase.from("recipe_feedback").insert(feedbackRow);
 
   if (feedbackError)
     return safeActionFailure("save your feedback", feedbackError);

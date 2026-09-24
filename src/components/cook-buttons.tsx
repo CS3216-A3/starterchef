@@ -12,10 +12,12 @@ import { trackEvent } from "@/lib/posthog/events";
  * fails we still navigate so the UI never dead-ends.
  */
 export function StartCookingButton({
+  recipeId,
   slug,
   primary,
   label,
 }: {
+  recipeId: string;
   slug: string;
   primary?: boolean;
   label: string;
@@ -24,6 +26,11 @@ export function StartCookingButton({
   const [pending, startTransition] = useTransition();
 
   function handleClick() {
+    trackEvent("recipe_selected", {
+      recipe_id: recipeId,
+      source: "cook_button",
+    });
+
     startTransition(async () => {
       const result = await startCookingSession(slug).catch(() => null);
 

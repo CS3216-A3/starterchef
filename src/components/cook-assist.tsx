@@ -332,7 +332,10 @@ function StepTimer({ seconds }: { seconds: number }) {
   }, [running]);
 
   function adjust(delta: number) {
-    setRemaining((r) => Math.max(30, r + delta));
+    const next = Math.max(0, remaining + delta);
+    setRemaining(next);
+    setDone(next === 0);
+    if (next === 0) setRunning(false);
   }
 
   return (
