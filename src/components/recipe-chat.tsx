@@ -8,6 +8,7 @@ import {
   createUserRecipe,
   updateUserRecipe,
 } from "@/app/(app)/recipes/actions";
+import { getApiErrorMessage } from "@/lib/client-api-error";
 import type { AdaptedRecipe } from "@/lib/ai/schemas/recipe";
 import type { RecipeRow } from "@/lib/types";
 
@@ -79,8 +80,12 @@ export function RecipeChat({
             recipe: recipePayload(),
           }),
         });
+        if (!res.ok) {
+          throw new Error(
+            await getApiErrorMessage(res, "Adaptation failed. Try again."),
+          );
+        }
         const body = await res.json();
-        if (!res.ok) throw new Error(body.error ?? "Adaptation failed");
         setMessages((prev) => [
           ...prev,
           {
