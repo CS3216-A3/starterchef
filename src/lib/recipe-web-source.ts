@@ -17,7 +17,7 @@ export async function loadRecipeWebSource(url: string): Promise<string> {
   // from public to private between preflight and connect must not be fetched.
   const dispatcher = new Agent({
     connect: {
-      lookup(hostname, _options, callback) {
+      lookup(hostname, options, callback) {
         void lookup(hostname, { all: true, verbatim: true })
           .then((addresses) => {
             if (
@@ -29,6 +29,13 @@ export async function loadRecipeWebSource(url: string): Promise<string> {
                 "",
                 0,
               );
+              return;
+            }
+            // autoSelectFamily (default on Node ≥20) calls lookup with
+            // all: true and expects the full address list back, not a
+            // single address.
+            if (options.all) {
+              callback(null, addresses);
               return;
             }
             const selected = addresses[0];
