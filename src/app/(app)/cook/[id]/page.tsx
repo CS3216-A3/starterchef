@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { BackButton } from "@/components/back-button";
 import { Button } from "@/components/button";
 import { CookAssist } from "@/components/cook-assist";
+import { StepPhoto } from "@/components/step-photo";
 import { StepTracker } from "@/components/step-tracker";
 import { getActiveCookingSession, getRecipeBySlug } from "@/lib/data";
 
@@ -61,18 +62,7 @@ export default async function CookPage({
           <p className="text-xs font-bold tracking-wide text-espresso-light uppercase">
             {recipeTitle}
           </p>
-          <div className="flex items-center justify-between gap-3">
-            <h1 className="text-2xl font-extrabold">Get everything ready</h1>
-            {recipe.user_id ? (
-              <Link
-                href={`/recipes/${recipe.id}/edit`}
-                aria-label="Edit this recipe"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-card text-espresso-light ring-1 ring-oat transition-colors hover:bg-oat hover:text-espresso"
-              >
-                <Pencil className="h-4 w-4" />
-              </Link>
-            ) : null}
-          </div>
+          <h1 className="text-2xl font-extrabold">Get everything ready</h1>
           <p className="text-sm font-semibold text-espresso-light">
             {recipe.minutes} min · {recipe.difficulty} · serves{" "}
             {recipe.servings} · {steps.length} steps
@@ -134,11 +124,20 @@ export default async function CookPage({
           </ol>
         </section>
 
-        <Link href={`/cook/${id}?step=1`} className="self-stretch">
-          <Button size="md" className="w-full">
-            Start cooking <ArrowRight className="h-4 w-4" />
-          </Button>
-        </Link>
+        <div className="flex flex-col gap-2">
+          <Link href={`/cook/${id}?step=1`} className="self-stretch">
+            <Button size="md" className="w-full">
+              Start cooking <ArrowRight className="h-4 w-4" />
+            </Button>
+          </Link>
+          {recipe.user_id ? (
+            <Link href={`/recipes/${recipe.id}/edit`} className="self-stretch">
+              <Button variant="outline" size="md" className="w-full">
+                <Pencil className="h-4 w-4" /> Customise this recipe first
+              </Button>
+            </Link>
+          ) : null}
+        </div>
       </div>
     );
   }
@@ -176,11 +175,10 @@ export default async function CookPage({
           {current.instruction}
         </p>
         {current.photoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- user-uploaded
-          <img
-            src={current.photoUrl}
-            alt="Your photo of this step"
-            className="h-24 w-36 rounded-2xl object-cover ring-1 ring-oat"
+          <StepPhoto
+            recipeSlug={recipe.slug}
+            stepIndex={current.index}
+            photoUrl={current.photoUrl}
           />
         ) : null}
         {current.photoCheckpoint ? (

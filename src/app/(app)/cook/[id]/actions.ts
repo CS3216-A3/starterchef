@@ -10,7 +10,11 @@ import {
 } from "@/lib/ai/schemas/cooking";
 import { logSessionEvent } from "@/lib/session-events";
 import { createClient } from "@/lib/supabase/server";
-import type { SessionEventRow } from "@/lib/types";
+import type {
+  RecipeStep,
+  SessionEventRow,
+  SessionRecipeSnapshot,
+} from "@/lib/types";
 import { safeActionFailure } from "@/lib/action-result";
 
 const slugSchema = z.string().trim().min(1).max(200);
@@ -223,4 +227,73 @@ async function generateSessionRecap(
     // Recap generation is a nice-to-have — a failed model call must not
     // break finishing a session.
   }
+}
+
+/**
+ * Remove the checkpoint photo shown on a step. Clears it from the recipe
+ * (when the user owns it) and from the in-progress session snapshot. The
+ * session_events timeline is deliberately untouched — removal only affects
+ * what is displayed on the step.
+ */
+export async function removeStepPhoto(input: {
+  recipeSlug: string;
+  stepIndex: number;
+}) {
+  const parsed = z
+    .object({
+      recipeSlug: slugSchema,
+      stepIndex: z.number().int().min(1).max(500),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { error: "Invalid input" };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in" };
+
+  const { data: recipe } = await supabase
+    .from("recipes")
+    .select("id, user_id, steps")
+    .eq("slug", parsed.data.recipeSlug)
+    .maybeSingle();
+  if (!recipe) return { error: "Recipe not found" };
+
+  const steps = ((recipe.steps as RecipeStep[] | null) ?? []).map((s) =>
+    s.index === parsed.data.stepIndex ? { ...s, photoUrl: undefined } : s,
+  );
+
+  if (recipe.user_id === user.id) {
+    const { error } = await supabase
+      .from("recipes")
+      .update({ steps })
+      .eq("id", recipe.id);
+    if (error) return safeActionFailure("remove the photo", error);
+  }
+
+  const { data: session } = await supabase
+    .from("cooking_sessions")
+    .select("id, recipe")
+    .eq("user_id", user.id)
+    .eq("status", "in_progress")
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const sessionRecipe = session?.recipe as SessionRecipeSnapshot | null;
+  if (
+    session &&
+    sessionRecipe?.slug === parsed.data.recipeSlug &&
+    sessionRecipe.steps
+  ) {
+    const snapshotSteps = (sessionRecipe.steps ?? []).map((s) =>
+      s.index === parsed.data.stepIndex ? { ...s, photoUrl: undefined } : s,
+    );
+    await supabase
+      .from("cooking_sessions")
+      .update({ recipe: { ...sessionRecipe, steps: snapshotSteps } })
+      .eq("id", session.id);
+  }
+
+  return { ok: true };
 }

@@ -77,6 +77,49 @@ export function RecipePreviewButton({ recipe }: { recipe: RecipePreview }) {
             <p className="inline-flex items-center gap-1.5 text-xs font-bold text-flame">
               <Sparkles className="h-3.5 w-3.5" /> {recipe.whyGood}
             </p>
+
+            <div className="flex max-h-64 flex-col gap-4 overflow-y-auto">
+              {recipe.ingredients.length > 0 && (
+                <section>
+                  <h4 className="text-xs font-extrabold tracking-wide text-espresso-light uppercase">
+                    Ingredients
+                  </h4>
+                  <ul className="mt-2 flex flex-wrap gap-1.5">
+                    {recipe.ingredients.map((item) => (
+                      <li
+                        key={item}
+                        className="rounded-full bg-oat px-2.5 py-1 text-xs font-bold"
+                      >
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+              {recipe.steps.length > 0 && (
+                <section>
+                  <h4 className="text-xs font-extrabold tracking-wide text-espresso-light uppercase">
+                    Steps
+                  </h4>
+                  <ol className="mt-2 flex flex-col gap-1.5">
+                    {recipe.steps.map((step) => (
+                      <li
+                        key={step.index}
+                        className="flex gap-2.5 text-sm font-semibold"
+                      >
+                        <span className="w-5 shrink-0 text-right font-extrabold text-flame">
+                          {step.index}
+                        </span>
+                        <span className="text-espresso-light">
+                          {step.title}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              )}
+            </div>
+
             <div className="mt-1 flex gap-2">
               <Link
                 href={href}

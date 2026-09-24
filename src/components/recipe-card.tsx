@@ -73,6 +73,8 @@ export function RecipeCard({
                 whyGood: recipe.whyGood,
                 iconName: recipe.iconName,
                 imageUrl: recipe.imageUrl,
+                ingredients: recipe.ingredients,
+                steps: recipe.steps,
               }}
             />
           </div>

@@ -14,6 +14,7 @@ import { DeleteRecipeButton } from "@/components/delete-recipe-button";
 import { RecipeChat } from "@/components/recipe-chat";
 import { RecipeImage } from "@/components/recipe-image";
 import { SaveRecipeButton } from "@/components/save-recipe-button";
+import { StepPhoto } from "@/components/step-photo";
 import { getRecipeBySlug, getSavedRecipeIds, getUser } from "@/lib/data";
 import { iconMap } from "@/lib/recipe-view";
 import { getSessionsForRecipe } from "@/lib/session-events";
@@ -195,14 +196,22 @@ export default async function RecipeOverviewPage({
                     Tip: {step.tip}
                   </p>
                 )}
-                {step.photoUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element -- user-uploaded
-                  <img
-                    src={step.photoUrl}
-                    alt={`Your photo of step ${step.index}`}
-                    className="mt-1 h-20 w-28 rounded-xl object-cover ring-1 ring-oat"
-                  />
-                )}
+                {step.photoUrl &&
+                  (isOwner ? (
+                    <StepPhoto
+                      recipeSlug={recipe.slug}
+                      stepIndex={step.index}
+                      photoUrl={step.photoUrl}
+                      className="mt-1 h-20 w-28"
+                    />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element -- user-uploaded
+                    <img
+                      src={step.photoUrl}
+                      alt={`Your photo of step ${step.index}`}
+                      className="mt-1 h-20 w-28 rounded-xl object-cover ring-1 ring-oat"
+                    />
+                  ))}
               </div>
             </li>
           ))}
