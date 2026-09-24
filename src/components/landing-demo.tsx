@@ -31,14 +31,16 @@ import { cn } from "@/lib/utils";
 
 const PAD_SEE_EW_IMAGE =
   "https://www.themealdb.com/images/media/meals/uuuspp1468263334.jpg";
+const MY_FOOD_IMAGE =
+  "https://www.themealdb.com/images/media/meals/rg9ze01763479093.jpg";
 
 const detectedItems = [
-  { name: "Eggs", soon: false },
-  { name: "Spinach", soon: true },
-  { name: "Chicken thighs", soon: false },
-  { name: "Cheddar", soon: false },
-  { name: "Milk", soon: true },
-  { name: "Carrots", soon: false },
+  "Eggs",
+  "Milk",
+  "Apple",
+  "Spinach",
+  "Chicken thighs",
+  "Carrots",
 ];
 
 const shelfTop = [Egg, Milk, Apple];
@@ -76,8 +78,7 @@ export function ScanDemo() {
     });
   }
 
-  const kept = detectedItems.filter((item) => !removed.has(item.name));
-  const expiring = kept.filter((item) => item.soon);
+  const kept = detectedItems.filter((name) => !removed.has(name));
 
   return (
     <div
@@ -100,7 +101,7 @@ export function ScanDemo() {
         <span className="absolute bottom-2 left-2 h-5 w-5 rounded-bl-md border-b-2 border-l-2 border-espresso/40" />
         <span className="absolute right-2 bottom-2 h-5 w-5 rounded-br-md border-r-2 border-b-2 border-espresso/40" />
         {phase === "scanning" && (
-          <span className="absolute inset-x-4 top-4 h-0.5 animate-[scan-sweep_1.4s_ease-in-out_infinite] rounded-full bg-flame shadow-[0_0_12px_2px] shadow-flame/60" />
+          <span className="absolute inset-x-4 top-4 h-0.5 animate-[scan-sweep_1.4s_ease-in-out_infinite] rounded-full bg-flame shadow-[0_0_12px_2px] shadow-flame/60 motion-reduce:animate-none" />
         )}
         <span className="absolute bottom-1.5 left-3 text-[10px] font-extrabold tracking-wide text-espresso-light uppercase">
           Fridge · shelf view
@@ -110,14 +111,14 @@ export function ScanDemo() {
       {phase === "review" || phase === "saved" ? (
         <>
           <div className="flex flex-wrap gap-1.5">
-            {detectedItems.map((item) => {
-              const isRemoved = removed.has(item.name);
+            {detectedItems.map((name) => {
+              const isRemoved = removed.has(name);
               return (
                 <button
-                  key={item.name}
+                  key={name}
                   type="button"
                   disabled={phase === "saved"}
-                  onClick={() => toggle(item.name)}
+                  onClick={() => toggle(name)}
                   aria-pressed={!isRemoved}
                   className={cn(
                     "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold transition-colors",
@@ -127,16 +128,13 @@ export function ScanDemo() {
                   )}
                 >
                   <Check className="h-3 w-3 text-flame" />
-                  {item.name}
+                  {name}
                 </button>
               );
             })}
           </div>
           <p className="text-xs font-semibold text-espresso-light">
-            {kept.length} items kept
-            {expiring.length > 0 &&
-              `, ${expiring.map((i) => i.name.toLowerCase()).join(" and ")} expire soon`}
-            . Tap a chip to correct the list.
+            {kept.length} items kept. Tap a chip to correct the list.
           </p>
           {phase === "review" ? (
             <Button size="sm" onClick={() => setPhase("saved")}>
@@ -170,9 +168,9 @@ const suggestions = [
     time: "25 min",
     imageUrl: PAD_SEE_EW_IMAGE,
     reasons: [
-      "Uses the chicken that expires soon",
-      "All 7 ingredients already in your kitchen",
+      "Uses chicken thighs and 6 more items from your kitchen",
       "Only needs your frying pan",
+      "Fits your beginner skill level",
     ],
   },
   {
@@ -180,7 +178,7 @@ const suggestions = [
     match: 88,
     time: "20 min",
     reasons: [
-      "Uses the spinach that expires soon",
+      "Uses spinach, eggs and cheddar",
       "Pantry staples only",
       "Beginner-friendly techniques",
     ],
@@ -283,14 +281,13 @@ function SourcePreview({ source }: { source: ImportSource }) {
   if (source === "photo") {
     return (
       <div className="flex items-center gap-3 rounded-2xl border-2 border-dashed border-espresso/15 bg-cream p-3">
-        <span className="relative h-12 w-12 overflow-hidden rounded-lg">
-          <Image
-            src={PAD_SEE_EW_IMAGE}
-            alt=""
-            fill
-            sizes="48px"
-            className="object-cover"
-          />
+        <span className="flex h-16 w-14 shrink-0 -rotate-3 flex-col gap-1 rounded bg-card p-1.5 shadow-sm ring-1 ring-oat">
+          <span className="h-1.5 w-2/3 rounded-full bg-espresso/50" />
+          <span className="h-0.5 w-full rounded-full bg-espresso/20" />
+          <span className="h-0.5 w-full rounded-full bg-espresso/20" />
+          <span className="h-0.5 w-4/5 rounded-full bg-espresso/20" />
+          <span className="h-0.5 w-full rounded-full bg-espresso/20" />
+          <span className="h-0.5 w-3/5 rounded-full bg-espresso/20" />
         </span>
         <span className="text-xs font-bold text-espresso-light">
           recipe-card.jpg
@@ -300,21 +297,13 @@ function SourcePreview({ source }: { source: ImportSource }) {
   }
   if (source === "text") {
     return (
-      <div className="flex flex-col gap-1.5 rounded-2xl border-2 border-espresso/10 bg-cream p-3">
-        {[
-          "Pad see ew",
-          "400g rice noodles, 2 eggs, chinese broccoli…",
-          "1. Soak the noodles in warm water…",
-        ].map((line, i) => (
-          <span
-            key={i}
-            className={cn(
-              "block h-2.5 rounded-full bg-espresso/15",
-              i === 2 && "w-3/4",
-            )}
-            title={line}
-          />
-        ))}
+      <div className="rounded-2xl border-2 border-espresso/10 bg-cream p-3">
+        <p className="line-clamp-4 text-[11px] leading-snug font-semibold text-espresso-light">
+          This pad see ew is my weeknight hero. I first made it on a rainy
+          Sunday and have not ordered takeout since. Chewy rice noodles,
+          caramelised chicken, Chinese broccoli, and that smoky wok char. Serves
+          2, ready in 25 minutes.
+        </p>
       </div>
     );
   }
@@ -601,7 +590,7 @@ export function CookDemo() {
           >
             <span className="relative block aspect-video w-full">
               <Image
-                src={PAD_SEE_EW_IMAGE}
+                src={MY_FOOD_IMAGE}
                 alt="Your pan"
                 fill
                 sizes="(max-width: 640px) 100vw, 33vw"

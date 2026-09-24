@@ -1,0 +1,35 @@
+name: Hosted security
+
+on:
+  workflow_dispatch:
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SECURITY_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SECURITY_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SECURITY_SUPABASE_SECRET_KEY }}
+      SECURITY_USER_A_EMAIL: ${{ secrets.SECURITY_USER_A_EMAIL }}
+      SECURITY_USER_A_PASSWORD: ${{ secrets.SECURITY_USER_A_PASSWORD }}
+      SECURITY_USER_B_EMAIL: ${{ secrets.SECURITY_USER_B_EMAIL }}
+      SECURITY_USER_B_PASSWORD: ${{ secrets.SECURITY_USER_B_PASSWORD }}
+      SECURITY_PHASE4_TESTS: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Require hosted security credentials
+        run: |
+          for name in NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SECRET_KEY SECURITY_USER_A_EMAIL SECURITY_USER_A_PASSWORD SECURITY_USER_B_EMAIL SECURITY_USER_B_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "Missing hosted security credential: $name"
+              exit 1
+            fi
+          done
+      - run: npm run test:security:integration
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:security:e2e

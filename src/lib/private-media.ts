@@ -28,7 +28,7 @@ export async function resolveMediaReference(
   if (!path) return reference;
   const { data, error } = await supabase.storage
     .from("recipe-inputs")
-    .createSignedUrl(path, 10 * 60);
+    .createSignedUrl(path, 5 * 60);
   if (error) throw new Error("Could not authorize private media");
   return data.signedUrl;
 }

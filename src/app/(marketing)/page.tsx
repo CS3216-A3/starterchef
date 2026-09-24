@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Button } from "@/components/button";
+import { buttonStyles } from "@/components/button";
 import {
   CookDemo,
   HistoryDemo,
@@ -30,7 +30,7 @@ import {
 } from "@/lib/credits";
 
 export const metadata: Metadata = {
-  title: "StarterChef · Your start to great cooking",
+  title: { absolute: "StarterChef · Your start to great cooking" },
   alternates: { canonical: "/" },
 };
 
@@ -38,13 +38,13 @@ const howItWorks = [
   {
     icon: ScanLine,
     title: "Scan your kitchen",
-    body: "Point your camera at the fridge or pantry. StarterChef recognises ingredients and equipment, flags what expires soon, and always lets you correct the list before anything is saved.",
+    body: "Point your camera at the fridge or pantry. StarterChef recognises ingredients and equipment, and always lets you correct the list before anything is saved.",
     Demo: ScanDemo,
   },
   {
     icon: Sparkles,
     title: "Recipes that fit your kitchen",
-    body: "Every suggestion is ranked by what you have, what expires soon, your equipment, dietary needs, and how much time you have. Open a card to see exactly why it was picked.",
+    body: "Every suggestion is ranked by what you have, your equipment, dietary needs, skill level, and how much time you have. Open a card to see exactly why it was picked.",
     Demo: RecipeMatchDemo,
   },
   {
@@ -76,14 +76,27 @@ const sgd = (amount: number) => `S$${amount.toFixed(2)}`;
 
 function PlanCell({ value }: { value: string }) {
   if (value === "✓") {
-    return <Check className="mx-auto h-4 w-4 text-flame" strokeWidth={2.5} />;
+    return (
+      <>
+        <Check
+          className="mx-auto h-4 w-4 text-flame-ink"
+          strokeWidth={2.5}
+          aria-hidden="true"
+        />
+        <span className="sr-only">Included</span>
+      </>
+    );
   }
   if (value === "—") {
     return (
-      <Minus
-        className="mx-auto h-4 w-4 text-espresso-light/50"
-        strokeWidth={2.5}
-      />
+      <>
+        <Minus
+          className="mx-auto h-4 w-4 text-espresso-light/50"
+          strokeWidth={2.5}
+          aria-hidden="true"
+        />
+        <span className="sr-only">Not included</span>
+      </>
     );
   }
   return <span className="text-xs font-bold sm:text-sm">{value}</span>;
@@ -107,16 +120,15 @@ export default function LandingPage() {
           actually make, and talks you through every step, no experience needed.
         </p>
         <div className="flex flex-col gap-3 sm:flex-row">
-          <Link href="/today">
-            <Button size="lg">
-              <Camera className="h-5 w-5" />
-              Scan my kitchen
-            </Button>
+          <Link href="/today" className={buttonStyles({ size: "lg" })}>
+            <Camera className="h-5 w-5" />
+            Scan my kitchen
           </Link>
-          <a href="#how-it-works">
-            <Button size="lg" variant="outline">
-              See how it works
-            </Button>
+          <a
+            href="#how-it-works"
+            className={buttonStyles({ size: "lg", variant: "outline" })}
+          >
+            See how it works
           </a>
         </div>
       </section>
@@ -203,10 +215,14 @@ export default function LandingPage() {
                     AI credits
                   </td>
                   <td className="p-4 text-center sm:p-5">
-                    <PlanCell value="100 / month" />
+                    <PlanCell
+                      value={`${freePlan.credits.toLocaleString()} / month`}
+                    />
                   </td>
                   <td className="bg-flame-soft/50 p-4 text-center sm:p-5">
-                    <PlanCell value="1,500 / month" />
+                    <PlanCell
+                      value={`${plusPlan.credits.toLocaleString()} / month`}
+                    />
                   </td>
                 </tr>
                 <tr className="border-b border-oat">
@@ -239,17 +255,26 @@ export default function LandingPage() {
                 <tr>
                   <td className="p-4 sm:p-5" />
                   <td className="p-4 text-center sm:p-5">
-                    <Link href="/today">
-                      <Button size="sm" variant="outline" className="w-full">
-                        Start free
-                      </Button>
+                    <Link
+                      href="/today"
+                      className={buttonStyles({
+                        size: "sm",
+                        variant: "outline",
+                        className: "w-full",
+                      })}
+                    >
+                      Start free
                     </Link>
                   </td>
                   <td className="bg-flame-soft/50 p-4 text-center sm:p-5">
-                    <Link href="/today">
-                      <Button size="sm" className="w-full">
-                        Go Plus
-                      </Button>
+                    <Link
+                      href="/today"
+                      className={buttonStyles({
+                        size: "sm",
+                        className: "w-full",
+                      })}
+                    >
+                      Get started
                     </Link>
                   </td>
                 </tr>

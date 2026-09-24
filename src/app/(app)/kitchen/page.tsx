@@ -159,7 +159,7 @@ function RemoveItemForm({ id }: { id: string }) {
       <button
         type="submit"
         aria-label="Remove"
-        className="ml-1 text-espresso-light hover:text-flame"
+        className="ml-1 text-espresso-light hover:text-flame-ink"
       >
         ×
       </button>

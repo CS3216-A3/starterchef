@@ -16,6 +16,32 @@ import { flushPostHogAI } from "@/lib/posthog/server";
 
 export type MeasuredGenerateArgs = Parameters<typeof generateObject>[0];
 
+export const REDACTED_SDK_TELEMETRY = {
+  isEnabled: true,
+  recordInputs: false,
+  recordOutputs: false,
+} as const;
+
+type CallMetadata = {
+  userId?: string;
+  route?: string;
+  stage?: string;
+  capability?: string;
+  modality?: "text" | "image" | "audio" | "video" | "mixed";
+  draftId?: string;
+  sessionId?: string;
+  voiceAttemptId?: string;
+};
+
+async function recordAiCall(row: Record<string, unknown>) {
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    await createAdminClient().from("ai_calls").insert(row);
+  } catch {
+    // Telemetry must not prevent an AI answer or expose provider payloads.
+  }
+}
+
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null
     ? (value as Record<string, unknown>)
@@ -73,6 +99,7 @@ export async function measuredGenerate(
   name: string,
   args: MeasuredGenerateArgs,
   modelContext?: { provider: AiProvider; model: string },
+  metadata: CallMetadata = {},
 ) {
   const startedAt = performance.now();
   // OpenAI reasoning models reject sampling controls. The provider adapter
@@ -82,27 +109,44 @@ export async function measuredGenerate(
   const providerArgs =
     provider === "openai" ? { ...args, temperature: undefined } : args;
 
-  const result = await generateObject({
-    ...providerArgs,
-    telemetry: {
-      functionId: name,
-    },
-  });
-
-  const latencyMs = performance.now() - startedAt;
-
-  console.info(
-    JSON.stringify({
-      event: "ai_call",
-      name,
-      provider,
-      model: modelContext?.model ?? getModelName(provider),
-      latencyMs,
-      usage: result.usage,
-    }),
-  );
-
-  await flushPostHogAI();
-
-  return result;
+  const model = modelContext?.model ?? getModelName(provider);
+  const safeName = name.replace(/[^a-z0-9-]/gi, "").slice(0, 80);
+  const base = {
+    user_id: metadata.userId ?? null,
+    name: safeName,
+    provider,
+    model: model.slice(0, 80),
+    route: (metadata.route ?? "gateway").slice(0, 100),
+    stage: (metadata.stage ?? safeName).slice(0, 80),
+    prompt_template_version: "phase5-v1",
+    capability: (metadata.capability ?? safeName).slice(0, 40),
+    modality: metadata.modality ?? "text",
+    draft_id: metadata.draftId ?? null,
+    session_id: metadata.sessionId ?? null,
+    voice_attempt_id: metadata.voiceAttemptId ?? null,
+  };
+  try {
+    const result = await generateObject({
+      ...providerArgs,
+      telemetry: { ...REDACTED_SDK_TELEMETRY, functionId: safeName },
+    });
+    await recordAiCall({
+      ...base,
+      outcome: "success",
+      latency_ms: Math.round(performance.now() - startedAt),
+      input_tokens: result.usage?.inputTokens ?? null,
+      output_tokens: result.usage?.outputTokens ?? null,
+    });
+    return result;
+  } catch (error) {
+    await recordAiCall({
+      ...base,
+      outcome: "failure",
+      latency_ms: Math.round(performance.now() - startedAt),
+      error_code: safeAiFailureCode(error),
+    });
+    throw error;
+  } finally {
+    await flushPostHogAI();
+  }
 }

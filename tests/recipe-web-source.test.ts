@@ -93,4 +93,60 @@ describe("permissive public recipe URLs", () => {
       loadRecipeWebSource("https://food.example.org/recipe"),
     ).resolves.toContain("Title: Soup");
   });
+
+  it("falls back to a Wayback snapshot when the site refuses the fetch", async () => {
+    const fetcher = vi.spyOn(globalThis, "fetch");
+    fetcher
+      .mockResolvedValueOnce(new Response("blocked", { status: 402 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            archived_snapshots: {
+              closest: {
+                available: true,
+                status: "200",
+                url: "http://web.archive.org/web/2025/https://food.example.org/recipe",
+              },
+            },
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response("<html>recipe</html>", { status: 200 }),
+      );
+    await expect(
+      loadRecipeWebSource("https://food.example.org/recipe"),
+    ).resolves.toContain("Title: Soup");
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(String(fetcher.mock.calls[1][0])).toContain(
+      "archive.org/wayback/available",
+    );
+    expect(String(fetcher.mock.calls[2][0])).toContain(
+      "https://web.archive.org/web/2025/",
+    );
+  });
+
+  it("keeps the block error when nothing is archived", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("blocked", { status: 403 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ archived_snapshots: {} }), {
+          status: 200,
+        }),
+      );
+    await expect(
+      loadRecipeWebSource("https://food.example.org/recipe"),
+    ).rejects.toThrow(/403/);
+  });
+
+  it("does not consult the archive for other HTTP errors", async () => {
+    const fetcher = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("gone", { status: 404 }));
+    await expect(
+      loadRecipeWebSource("https://food.example.org/recipe"),
+    ).rejects.toThrow(/404/);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
 });
