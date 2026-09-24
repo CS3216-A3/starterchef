@@ -61,4 +61,18 @@ describe("draft verification rationale", () => {
       ),
     ).toEqual(oldReview.gemini_initial);
   });
+
+  it("shows final deterministic photo completeness findings", () => {
+    const review = {
+      ...verification,
+      photoCompleteness: { summary: "Missing poultry instruction" },
+    };
+    expect(
+      selectDraftVerificationReport(
+        "blocked",
+        "PHOTO_RECIPE_INCOMPLETE",
+        review,
+      ),
+    ).toEqual(review.photoCompleteness);
+  });
 });

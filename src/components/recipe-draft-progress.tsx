@@ -37,6 +37,7 @@ type DraftStatus =
   | "extracting_or_generating"
   | "verifying"
   | "adjudicating"
+  | "awaiting_user_input"
   | "awaiting_user_acceptance"
   | "accepted"
   | "rejected"
@@ -53,6 +54,7 @@ type DraftResponse = {
   recipe: DraftRecipe | null;
   updatedAt: string;
   review: DraftVerification | null;
+  clarificationExpiresAt?: string | null;
 };
 
 const STAGES: { statuses: DraftStatus[]; label: string; detail: string }[] = [
@@ -62,7 +64,7 @@ const STAGES: { statuses: DraftStatus[]; label: string; detail: string }[] = [
     detail: "We’re securely loading your source and cooking preferences.",
   },
   {
-    statuses: ["extracting_or_generating"],
+    statuses: ["extracting_or_generating", "awaiting_user_input"],
     label: "Building the recipe",
     detail: "We’re turning it into clear beginner-friendly steps.",
   },
@@ -99,6 +101,7 @@ export function RecipeDraftProgress({
   const [draft, setDraft] = useState<DraftResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
+  const [clarification, setClarification] = useState("");
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [now, setNow] = useState(() => Date.now());
 
@@ -199,6 +202,36 @@ export function RecipeDraftProgress({
     }
   }
 
+  async function submitClarification() {
+    setActing(true);
+    try {
+      const response = await fetch(`/api/recipe-drafts/${draftId}/clarify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answer: clarification.trim() }),
+      });
+      if (!response.ok)
+        throw new Error(
+          await getApiErrorMessage(response, "Could not resume recipe review"),
+        );
+      setDraft((current) =>
+        current ? { ...current, status: "queued" } : current,
+      );
+      setClarification("");
+      setError(null);
+      setRefreshNonce((value) => value + 1);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not resume recipe review",
+      );
+      setRefreshNonce((value) => value + 1);
+    } finally {
+      setActing(false);
+    }
+  }
+
   const stage = draft ? currentStage(draft.status) : 0;
   const selectedReview = draft
     ? selectDraftVerificationReport(
@@ -236,9 +269,11 @@ export function RecipeDraftProgress({
             ? draft.status === "blocked"
               ? "This recipe did not pass review"
               : "This recipe needs another try"
-            : draft?.status === "awaiting_user_acceptance"
-              ? "Your verified recipe is ready"
-              : "Checking your recipe"}
+            : draft?.status === "awaiting_user_input"
+              ? "One detail will help us finish"
+              : draft?.status === "awaiting_user_acceptance"
+                ? "Your verified recipe is ready"
+                : "Checking your recipe"}
         </h2>
         <p className="mt-1 text-sm font-semibold text-espresso-light">
           {failure
@@ -314,8 +349,68 @@ export function RecipeDraftProgress({
           </p>
         )}
 
+      {draft?.status === "awaiting_user_input" && (
+        <div className="flex flex-col gap-3 rounded-2xl bg-oat p-4">
+          {draft.review?.sourceAssessment?.summary && (
+            <p className="text-sm font-semibold text-espresso-light">
+              {draft.review.sourceAssessment.summary}
+            </p>
+          )}
+          <label
+            htmlFor={`clarification-${draftId}`}
+            className="text-sm font-extrabold"
+          >
+            {draft.review?.sourceAssessment?.clarificationQuestion ??
+              "What dish is this, and what are its main ingredients?"}
+          </label>
+          <textarea
+            id={`clarification-${draftId}`}
+            value={clarification}
+            onChange={(event) => setClarification(event.target.value)}
+            maxLength={2000}
+            rows={3}
+            className="rounded-2xl border-2 border-espresso/10 bg-card p-3 text-sm outline-none focus:border-flame"
+            placeholder="Add the dish name or ingredients you know"
+          />
+          {draft.clarificationExpiresAt && (
+            <p className="text-xs font-semibold text-espresso-light">
+              Reply before{" "}
+              {new Date(draft.clarificationExpiresAt).toLocaleString()}. The
+              private photo is retained for only 24 hours after upload.
+            </p>
+          )}
+          <Button
+            onClick={() => void submitClarification()}
+            disabled={acting || !clarification.trim()}
+          >
+            {acting ? "Resuming…" : "Continue recipe review"}
+          </Button>
+        </div>
+      )}
+
       {draft?.status === "awaiting_user_acceptance" && draft.recipe && (
-        <DraftRecipePreview recipe={draft.recipe} />
+        <>
+          {draft.review?.sourceAssessment && (
+            <div className="rounded-2xl bg-oat p-4 text-sm font-semibold text-espresso-light">
+              <p className="font-extrabold text-espresso">
+                {draft.review.sourceAssessment.sourceType === "recipe_card"
+                  ? "Completed from a recipe card"
+                  : "Approximation from a dish photo"}
+              </p>
+              <p className="mt-1">
+                Please check inferred details before saving.
+              </p>
+              {draft.review.assumptions?.length ? (
+                <ul className="mt-2 list-disc pl-5">
+                  {draft.review.assumptions.map((assumption) => (
+                    <li key={assumption}>{assumption}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          )}
+          <DraftRecipePreview recipe={draft.recipe} />
+        </>
       )}
 
       {takingLonger && (
@@ -476,6 +571,7 @@ function DraftRecipePreview({ recipe }: { recipe: DraftRecipe }) {
 function isTerminal(status: DraftStatus) {
   return [
     "awaiting_user_acceptance",
+    "awaiting_user_input",
     "accepted",
     "rejected",
     "failed_retryable",
@@ -485,6 +581,8 @@ function isTerminal(status: DraftStatus) {
 }
 
 function failureMessage(status: DraftStatus, code: string | null) {
+  if (code === "PHOTO_CLARIFICATION_EXPIRED" || code === "PHOTO_INPUT_EXPIRED")
+    return "The private photo expired before this review could finish. Upload it again to start a new recipe.";
   if (code === "PROVIDER_TEMPORARILY_UNAVAILABLE")
     return "The AI provider is temporarily busy. You can retry this review without uploading the recipe again.";
   if (status === "failed_retryable")

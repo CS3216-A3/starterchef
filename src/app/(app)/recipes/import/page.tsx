@@ -14,6 +14,7 @@ interface ImportState {
   text: string;
   url: string;
   photoInputId: string;
+  dishHint: string;
   videoUrl: string;
 }
 
@@ -23,6 +24,7 @@ export default function ImportRecipePage() {
     text: "",
     url: "",
     photoInputId: "",
+    dishHint: "",
     videoUrl: "",
   });
   const [loading, setLoading] = useState(false);
@@ -164,8 +166,8 @@ export default function ImportRecipePage() {
           Import a recipe
         </h1>
         <p className="mt-1 font-semibold text-espresso-light">
-          Paste text, a link, a photo of a recipe card, or a YouTube cooking
-          video.
+          Paste text, a link, a photo of a recipe card or finished dish, or a
+          YouTube cooking video.
         </p>
       </div>
 
@@ -252,6 +254,22 @@ export default function ImportRecipePage() {
 
           {state.source === "photo" && (
             <div className="flex flex-col gap-4">
+              <label className="flex flex-col gap-2 text-sm font-extrabold">
+                Dish name (optional)
+                <input
+                  type="text"
+                  value={state.dishHint}
+                  onChange={(event) =>
+                    setState((current) => ({
+                      ...current,
+                      dishHint: event.target.value,
+                    }))
+                  }
+                  maxLength={120}
+                  placeholder="e.g. chicken curry with rice"
+                  className="rounded-2xl border-2 border-espresso/10 bg-card p-3 text-sm font-semibold outline-none focus:border-flame"
+                />
+              </label>
               <input
                 type="file"
                 accept="image/*"
@@ -287,7 +305,7 @@ export default function ImportRecipePage() {
               )}
               {state.photoInputId && uploadProgress === null && (
                 <p className="text-sm font-bold text-espresso-light">
-                  Recipe image uploaded. You can now extract it.
+                  Photo uploaded. You can now build a recipe.
                 </p>
               )}
             </div>
@@ -330,7 +348,7 @@ export default function ImportRecipePage() {
             }
             size="lg"
           >
-            {loading ? "Reading recipe…" : "Extract recipe"}
+            {loading ? "Building recipe…" : "Build recipe"}
             {!loading && <Sparkles className="h-4 w-4" />}
           </Button>
 
@@ -413,7 +431,7 @@ function buildDraftRequest(
 ):
   | { kind: "text"; content: string }
   | { kind: "url" | "youtube"; url: string }
-  | { kind: "photo"; inputId: string }
+  | { kind: "photo"; inputId: string; dishHint?: string }
   | null {
   switch (state.source) {
     case "text":
@@ -422,7 +440,13 @@ function buildDraftRequest(
       return state.url.trim() ? { kind: "url", url: state.url } : null;
     case "photo":
       return state.photoInputId
-        ? { kind: "photo", inputId: state.photoInputId }
+        ? {
+            kind: "photo",
+            inputId: state.photoInputId,
+            ...(state.dishHint.trim()
+              ? { dishHint: state.dishHint.trim() }
+              : {}),
+          }
         : null;
     case "video":
       return state.videoUrl.trim()

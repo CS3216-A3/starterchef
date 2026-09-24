@@ -8,6 +8,15 @@ export type VerificationReport = {
 };
 
 export type DraftVerification = VerificationReport & {
+  sourceAssessment?: {
+    sourceType?: "recipe_card" | "finished_dish" | "unusable";
+    summary?: string;
+    visibleFacts?: string[];
+    uncertainties?: string[];
+    clarificationQuestion?: string | null;
+  };
+  assumptions?: string[];
+  photoCompleteness?: VerificationReport;
   verification_initial?: VerificationReport;
   verification_final?: VerificationReport;
   adjudication?: VerificationReport;
@@ -31,6 +40,13 @@ export function selectDraftVerificationReport(
   if (status === "blocked") {
     if (failureCode === "INITIAL_INDEPENDENT_VERIFIER_BLOCKED")
       return initial ?? null;
+    if (failureCode === "PHOTO_RECIPE_INCOMPLETE")
+      return verification.photoCompleteness ?? null;
+    if (
+      failureCode === "PHOTO_CLARIFICATION_EXPIRED" ||
+      failureCode === "PHOTO_INPUT_EXPIRED"
+    )
+      return verification.summary ? verification : null;
     if (
       failureCode === "FINAL_INDEPENDENT_VERIFIER_FAILED" ||
       failureCode === "FINAL_REVISION_UNRESOLVED"

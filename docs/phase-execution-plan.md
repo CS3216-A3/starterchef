@@ -302,6 +302,25 @@ over recommendation context.
 Phase 3 is complete when every user-visible AI recipe change becomes an owned,
 auditable draft and no unallowlisted source or unverified recipe is published.
 
+### Photo recipe correction (migration `0030`)
+
+The current draft implementation uses the single provider selected by
+`AI_PROVIDER`; its public HTTP/HTTPS import policy is unchanged. Photo drafts
+now classify a recipe card versus a finished dish before generation. The
+finished-dish result is an explicitly labeled home-cook approximation, not a
+transcription. Both photo modes preserve inferred details for user review;
+initial and final verifiers receive the original private image and trusted
+dietary constraints. Repairable omissions request the existing single revision,
+while irreparable safety or identity problems remain blocks.
+
+`0030_photo_recipe_clarification.sql` adds an owner-only, one-round clarification
+on the same active draft and reserves seven quota units for photo classification
+plus the existing generation/review ceiling. Apply it before deploying the new
+photo workflow. Paused drafts expire before their 24-hour private inputs are
+removed; the daily retention job and draft-creation RPC release expired active
+slots. The `eval:photo` command accepts a consented local JPEG path and never
+commits or persists that image.
+
 ## Phase 4 — durable cooking, assistant, and live voice
 
 ### Migration `0022_session_integrity_and_retention.sql`
