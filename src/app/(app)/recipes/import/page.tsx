@@ -182,6 +182,11 @@ export default function ImportRecipePage() {
           Paste text, a link, a photo of a recipe card or finished dish, or a
           YouTube cooking video.
         </p>
+        <p className="mt-2 text-sm font-semibold text-espresso-light">
+          Building any recipe starts a six-credit daily AI review. Uploading a
+          photo only stores it privately; the review starts when you tap Build
+          recipe.
+        </p>
       </div>
 
       <div className="grid grid-cols-4 gap-2">

@@ -1,5 +1,7 @@
 import { z } from "zod";
+import { apiError } from "@/lib/api-error";
 import { protectedError, withProtectedRoute } from "@/lib/protected-route";
+import { getDailyAiLimit } from "@/lib/rate-limit";
 import {
   isAllowedRecipeUrl,
   isAllowedYouTubeUrl,
@@ -165,20 +167,46 @@ export const POST = withProtectedRoute(
       p_input_id: inputRow?.id ?? null,
       p_idempotency_key: input.idempotencyKey,
     });
+    if (error?.code === "P0001") {
+      const { data: usage, error: usageError } = await supabase
+        .from("ai_usage_quota")
+        .select("date,count")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (usageError || !usage)
+        return protectedError(
+          { requestId },
+          429,
+          "RATE_LIMITED",
+          "A recipe review needs 6 daily AI credits. Your allowance resets at midnight UTC.",
+        );
+      const today = new Date().toISOString().slice(0, 10);
+      const limit = getDailyAiLimit();
+      const used = usage.date === today ? usage.count : 0;
+      const remaining = Math.max(0, limit - used);
+      const resetAt = new Date(`${today}T00:00:00.000Z`);
+      resetAt.setUTCDate(resetAt.getUTCDate() + 1);
+      const response = apiError(
+        429,
+        "RATE_LIMITED",
+        `A recipe review needs 6 daily AI credits. You have ${remaining} of ${limit} left. Credits reset at midnight UTC.`,
+        { required: 6, remaining, limit, resetAt: resetAt.toISOString() },
+        requestId,
+      );
+      response.headers.set(
+        "Retry-After",
+        String(Math.max(0, Math.ceil((resetAt.getTime() - Date.now()) / 1000))),
+      );
+      return response;
+    }
     if (error)
       return protectedError(
         { requestId },
-        error.code === "P0001" ? 429 : error.code === "23505" ? 409 : 500,
-        error.code === "P0001"
-          ? "RATE_LIMITED"
-          : error.code === "23505"
-            ? "CONFLICT"
-            : "INTERNAL_ERROR",
-        error.code === "P0001"
-          ? "Daily AI credit limit reached"
-          : error.code === "23505"
-            ? "Finish or reject your active recipe draft first"
-            : "Could not create recipe draft",
+        error.code === "23505" ? 409 : 500,
+        error.code === "23505" ? "CONFLICT" : "INTERNAL_ERROR",
+        error.code === "23505"
+          ? "Finish or reject your active recipe draft first"
+          : "Could not create recipe draft",
       );
     const outcome = result as {
       draft?: {
