@@ -18,6 +18,7 @@ import { POST } from "@/app/api/ai/realtime-sessions/route";
 
 const attemptId = "75dcc627-6124-4505-a4bf-3ab35cff841f";
 const sessionId = "631d4b15-4723-4c60-833d-bdf7ee817847";
+const deadline = new Date(Date.now() + 15 * 60_000).toISOString();
 const route = POST as unknown as (context: unknown) => Promise<Response>;
 
 function context(
@@ -38,11 +39,7 @@ function context(
             table === "profiles"
               ? { dietary_restrictions: ["vegetarian"], allergies: ["peanut"] }
               : table === "realtime_attempts"
-                ? {
-                    expires_at: new Date(
-                      Date.now() + 15 * 60_000,
-                    ).toISOString(),
-                  }
+                ? { expires_at: deadline }
                 : {
                     status: "in_progress",
                     current_step: 1,
@@ -105,6 +102,7 @@ describe("realtime credential contract", () => {
     expect(await response.json()).toMatchObject({
       provider: "openai",
       credential: "ephemeral-openai",
+      sessionDeadlineAt: deadline,
     });
     const [url, request] = fetcher.mock.calls[0] as unknown as [
       string,

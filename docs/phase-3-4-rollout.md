@@ -1,5 +1,10 @@
 # Phase 3 stabilization and Phase 4 rollout
 
+For Phase 5 migration order and current release commands, see
+[`phase-5-release.md`](phase-5-release.md). The later migrations are `0033`
+and `0034`; the public bucket is made private only after its object audit and
+preview verification.
+
 Keep migrations append-only. Apply `0028_phase3_operational_fixes.sql` and
 `0029_session_integrity_reconciliation.sql` to a disposable or staging
 Supabase project first. Do not reset a project that contains valuable data.
