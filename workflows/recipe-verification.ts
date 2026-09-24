@@ -93,6 +93,10 @@ export async function recipeVerificationWorkflow(
     await deterministicGuard(draftId, "after_adjudication", attemptId);
     const finalVerdict = await verifyRecipe(draftId, "final", attemptId);
     if (finalVerdict === "revise") {
+      if (!(await finalRevisionAvailable(draftId, attemptId))) {
+        await failUnresolvedFinalRevision(draftId, attemptId);
+        throw new FatalError("Final verifier requested a second revision");
+      }
       await adjudicate(draftId, attemptId);
       await deterministicGuard(draftId, "after_final_revision", attemptId);
       const revisedFinalVerdict = await verifyRecipe(
@@ -291,6 +295,10 @@ async function acquireOrGenerateRecipe(
           );
           throw new FatalError("Photo clarification expired");
         }
+        verification = {
+          ...verification,
+          clarificationExpiresAt: deadline.toISOString(),
+        };
         const { data: paused } = await admin
           .from("recipe_drafts")
           .update({
@@ -771,6 +779,13 @@ async function failUnresolvedFinalRevision(draftId: string, attemptId: string) {
     draft.verification,
     attemptId,
   );
+}
+
+async function finalRevisionAvailable(draftId: string, attemptId: string) {
+  "use step";
+  const admin = createAdminClient();
+  const draft = await loadDraft(admin, draftId, attemptId);
+  return draft.retry_count < 1;
 }
 
 async function loadDraft(
