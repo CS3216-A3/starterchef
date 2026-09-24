@@ -1,0 +1,15 @@
+{
+  "name": "StarterChef",
+  "url": "https://starterchef.vercel.app/",
+  "tagline": "Your AI cooking companion, from pantry to plate",
+  "description": "New to cooking? Scan your ingredients, find recipes that fit your kitchen, and follow one step at a time with AI help. Import recipes you love, ask questions as you cook, and save the changes that worked for you.",
+  "suggestedTopics": ["Cooking", "Artificial Intelligence", "Food & Drink"],
+  "gallery": [
+    "gallery/01-pantry-to-plate.png",
+    "gallery/02-review-your-scan.png",
+    "gallery/03-cook-with-help.png",
+    "gallery/04-launch-plans.png"
+  ],
+  "thumbnail": "gallery/thumbnail.png",
+  "status": "Draft for review; not submitted"
+}

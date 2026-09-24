@@ -8,17 +8,17 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Button } from "@/components/button";
 import {
+  CORE_FEATURES,
+  FEATURE_ROWS,
   PLANS,
   TOP_UPS,
-  approxCooks,
-  type Plan,
   type TopUp,
 } from "@/lib/credits";
 
 export const metadata: Metadata = {
-  title: "StarterChef · Cook with what you have",
+  title: { absolute: "StarterChef · Cook with what you have" },
+  alternates: { canonical: "/" },
 };
 
 const features = [
@@ -40,32 +40,13 @@ const features = [
   {
     icon: TrendingUp,
     title: "Level up over time",
-    body: "StarterChef learns your taste, remembers your wins and mistakes, and gradually unlocks new techniques as your skills grow.",
+    body: "Save the substitutions, notes, and recipe versions that worked for you. Bring that cooking experience into your next session.",
   },
 ];
 
-const planCopy: Record<Plan["id"], { blurb: string; points: string[] }> = {
-  free: {
-    blurb: "A one-off welcome grant — enough to genuinely try the AI.",
-    points: [
-      "Kitchen profile & recipe book",
-      "Timers & manual recipe entry",
-      "Basic step navigation",
-    ],
-  },
-  plus: {
-    blurb: "Credits refresh every month, on top of everything in Free Starter.",
-    points: [
-      "Personal recipe versions",
-      "Progress history",
-      "Priority AI processing",
-    ],
-  },
-};
-
 const topUpCopy: Record<TopUp["id"], string> = {
   small: "Occasional extra AI help.",
-  large: "Better value for frequent video imports and live voice.",
+  large: "Extra credits for video imports and live voice.",
 };
 
 const sgd = (amount: number) => `S$${amount.toFixed(2)}`;
@@ -87,16 +68,18 @@ export default function LandingPage() {
           actually make, and talks you through every step, no experience needed.
         </p>
         <div className="flex flex-col gap-3 sm:flex-row">
-          <Link href="/today">
-            <Button size="lg">
-              <Camera className="h-5 w-5" />
-              Scan my kitchen
-            </Button>
+          <Link
+            href="/today"
+            className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-flame px-8 text-lg font-bold text-white transition-colors hover:bg-flame-dark"
+          >
+            <Camera className="h-5 w-5" />
+            Scan my kitchen
           </Link>
-          <a href="#features">
-            <Button size="lg" variant="outline">
-              See how it works
-            </Button>
+          <a
+            href="#features"
+            className="inline-flex h-12 items-center justify-center rounded-full border-2 border-espresso/15 px-8 text-lg font-bold transition-colors hover:border-espresso/30"
+          >
+            See how it works
           </a>
         </div>
       </section>
@@ -134,9 +117,10 @@ export default function LandingPage() {
           Simple pricing
         </h2>
         <p className="mx-auto mb-8 max-w-md text-center text-sm font-semibold text-espresso-light">
-          AI features (scanning, suggestions, voice, adaptations) run on
-          credits. Everything else is free, always.
+          Every plan gets the core app for free. AI features run on a monthly
+          credit budget, and Plus unlocks the full experience.
         </p>
+
         <div className="grid gap-4 sm:grid-cols-2">
           {PLANS.map((plan) => (
             <div
@@ -153,27 +137,86 @@ export default function LandingPage() {
                 )}
               </p>
               <p className="mt-2 text-sm font-extrabold">
-                {plan.credits.toLocaleString()} credits
-                {plan.recurring ? " every month" : " to start"}
-                <span className="font-semibold text-espresso-light">
-                  {" "}
-                  — about {approxCooks(plan.credits)} cooks
-                </span>
+                {plan.credits.toLocaleString("en-SG")} AI credits / month
               </p>
-              <p className="mt-1 text-sm font-semibold text-espresso-light">
-                {planCopy[plan.id].blurb}
-              </p>
-              <ul className="mt-4 flex flex-col gap-2 text-sm font-semibold">
-                {planCopy[plan.id].points.map((point) => (
-                  <li key={point} className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-flame" />
-                    {point}
-                  </li>
-                ))}
-              </ul>
             </div>
           ))}
         </div>
+
+        <div className="mt-6 overflow-x-auto rounded-3xl bg-card shadow-sm ring-1 ring-oat">
+          <table className="w-full text-left text-sm">
+            <caption className="sr-only">
+              Compare Free Starter and StarterChef Plus features
+            </caption>
+            <thead>
+              <tr className="border-b border-oat">
+                <th scope="col" className="p-3 font-extrabold sm:p-4">
+                  Feature
+                </th>
+                <th
+                  scope="col"
+                  className="p-3 text-center font-extrabold sm:p-4"
+                >
+                  Free Starter
+                </th>
+                <th
+                  scope="col"
+                  className="p-3 text-center font-extrabold text-flame sm:p-4"
+                >
+                  Plus
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-oat">
+                <th scope="row" className="p-3 font-bold sm:p-4">
+                  Core features
+                </th>
+                <td
+                  colSpan={2}
+                  className="p-3 text-xs font-semibold text-espresso-light sm:p-4"
+                >
+                  {CORE_FEATURES.join(" · ")}
+                </td>
+              </tr>
+              {FEATURE_ROWS.map((row) => (
+                <tr
+                  key={row.label}
+                  className="border-b border-oat last:border-0"
+                >
+                  <th scope="row" className="p-3 font-bold sm:p-4">
+                    {row.label}
+                  </th>
+                  <td className="p-3 text-center font-semibold text-espresso-light sm:p-4">
+                    {row.free === "—" ? (
+                      <>
+                        <span aria-hidden="true">—</span>
+                        <span className="sr-only">Not included</span>
+                      </>
+                    ) : (
+                      row.free
+                    )}
+                  </td>
+                  <td className="p-3 text-center font-bold text-flame sm:p-4">
+                    {row.plus === "✓" ? (
+                      <>
+                        <span aria-hidden="true">✓</span>
+                        <span className="sr-only">Included</span>
+                      </>
+                    ) : (
+                      row.plus
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <p className="mt-4 text-center text-xs font-semibold text-espresso-light">
+          Credit use varies by action. Top-ups add credits; they do not unlock
+          Plus-only features.
+        </p>
 
         <h3 className="mt-8 mb-4 text-center text-sm font-extrabold tracking-wide text-espresso-light uppercase">
           Need more credits? Top up any time
