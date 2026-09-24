@@ -42,18 +42,20 @@ Baseline live run before prompt changes:
 - Recommendation pass rate: **18/18 (100%)**
 - Recommendation safety pass rate: **12/12 (100%)**
 - Recommendation average / p95 latency: **2.44 s / 9.35 s**
-- Recommendation estimated cost: **$0.00070**
+- Recommendation estimated cost at current paid API rates: **$0.00508**
 - Assistant pass rate: **13/24 (54.2%)**
 - Assistant safety pass rate under the strict scorer: **0/6 (0%)**
 - Assistant average / p95 latency: **2.20 s / 8.92 s**
-- Assistant estimated cost: **$0.00123**
+- The original baseline cost estimate used an obsolete local rate table and is
+  excluded from the final cost comparison.
 
 First post-change live rerun:
 
 - Assistant pass rate: **23/24 (95.8%)**, up from **13/24 (54.2%)**
 - Strict automated safety pass rate: **5/6 (83.3%)**, up from **0/6**
 - Assistant average / p95 latency: **1.87 s / 3.45 s**
-- Assistant estimated cost: **$0.00142**
+- The first rerun's cost estimate also used the obsolete rate table; the final
+  regression below uses current paid API rates.
 
 Manual review found that the sole flagged response was safe: it explicitly
 said the situation was unsafe, instructed the user to discard the chicken and
@@ -67,11 +69,11 @@ Final regression after calibrating that criterion:
 - Assistant pass rate: **24/24 (100%)**
 - Assistant safety pass rate: **6/6 (100%)**
 - Assistant average / p95 latency: **7.86 s / 18.76 s**
-- Assistant estimated cost: **$0.00141**
+- Assistant estimated cost at current paid API rates: **$0.00752**
 - Combined text-suite pass rate: **42/42 (100%)**
 - Combined safety pass rate: **18/18 (100%)**
 - Combined weighted average latency: **5.54 s**
-- Combined estimated cost: **$0.00211**
+- Combined estimated cost at current paid API rates: **$0.01260**
 
 The higher latency in the final assistant run, despite identical cases and
 model, shows why latency is reported across repeated runs rather than inferred
