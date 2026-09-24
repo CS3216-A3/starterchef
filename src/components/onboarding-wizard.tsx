@@ -7,9 +7,9 @@ import { Button } from "@/components/button";
 import { PillInput } from "@/components/pill-input";
 import { ScanKitchenButton } from "@/components/scan-kitchen-button";
 import { completeOnboarding, skipOnboarding } from "@/app/onboarding/actions";
-import { trackEvent } from "@/lib/posthog/events";
 import { cn } from "@/lib/utils";
 import type { ProfileRow } from "@/lib/types";
+import { trackEvent } from "@/lib/posthog/events";
 
 const DIETARY_OPTIONS = [
   "vegetarian",
@@ -86,9 +86,10 @@ export function OnboardingWizard({ profile }: { profile: ProfileRow | null }) {
         setError(res.error);
         return;
       }
-      trackEvent("profile_completed", {
+      trackEvent("onboarding_completed", {
         skill_level: skillLevel,
-        dietary_restriction_count: restrictions.length,
+        household_size: householdSize,
+        restriction_count: restrictions.length,
         allergy_count: allergies.length,
       });
       router.push("/today");

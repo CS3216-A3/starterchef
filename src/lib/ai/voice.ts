@@ -10,15 +10,9 @@ export const VOICE_PROVIDERS = ["web-speech", "openai", "gemini"] as const;
 export type VoiceProvider = (typeof VOICE_PROVIDERS)[number];
 
 export function getVoiceProvider(): VoiceProvider {
-  const value = process.env.NEXT_PUBLIC_VOICE_PROVIDER ?? "web-speech";
-  if (value === "web-speech" || value === "openai" || value === "gemini") {
-    return value;
-  }
-  return "web-speech";
-}
-
-export function isVoiceSimulationEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_VOICE_SIMULATE === "true";
+  const value = process.env.NEXT_PUBLIC_VOICE_PROVIDER ?? "openai";
+  if (value === "web-speech") return "web-speech";
+  return "openai";
 }
 
 export interface VoiceAssistantMetrics {
@@ -39,9 +33,3 @@ export type VoiceAssistantState =
   | { status: "processing" }
   | { status: "speaking"; transcript?: string }
   | { status: "error"; message: string };
-
-export interface VoiceSessionConfig {
-  provider: VoiceProvider;
-  recipeTitle: string;
-  stepTitle: string;
-}

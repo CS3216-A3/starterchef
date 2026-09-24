@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { KITCHEN_ICON_KEYS } from "@/lib/item-icons";
+import { KITCHEN_ICON_KEYS } from "@/lib/item-icon-keys";
 
 const iconKey = z
   .enum(KITCHEN_ICON_KEYS)
@@ -11,24 +11,31 @@ const iconKey = z
  * low-confidence guesses silently.
  */
 export const kitchenScanSchema = z.object({
-  ingredients: z.array(
-    z.object({
-      name: z.string(),
-      confidence: z.enum(["high", "medium", "low"]),
-      estimatedQuantity: z.string().optional(),
-      expiresWithinDays: z.number().int().positive().optional(),
-      icon: iconKey,
-    }),
-  ),
-  equipment: z.array(
-    z.object({
-      name: z.string(),
-      confidence: z.enum(["high", "medium", "low"]),
-      icon: iconKey,
-    }),
-  ),
+  ingredients: z
+    .array(
+      z.object({
+        name: z.string(),
+        confidence: z.enum(["high", "medium", "low"]),
+        // OpenAI strict JSON Schema requires every property to be required.
+        // Use null when the photo does not establish a value.
+        estimatedQuantity: z.string().nullable(),
+        expiresWithinDays: z.number().int().positive().nullable(),
+        icon: iconKey,
+      }),
+    )
+    .max(24),
+  equipment: z
+    .array(
+      z.object({
+        name: z.string(),
+        confidence: z.enum(["high", "medium", "low"]),
+        icon: iconKey,
+      }),
+    )
+    .max(16),
   uncertainItems: z
     .array(z.string())
+    .max(20)
     .describe("Items the model could not identify confidently"),
 });
 

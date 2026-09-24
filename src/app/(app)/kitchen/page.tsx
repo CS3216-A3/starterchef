@@ -1,8 +1,9 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { AddKitchenItemForm } from "@/components/add-kitchen-item-form";
 import { ScanKitchenButton } from "@/components/scan-kitchen-button";
 import { VoiceAddItems } from "@/components/voice-add-items";
-import { addKitchenItem, removeKitchenItem } from "@/app/(app)/kitchen/actions";
+import { removeKitchenItem } from "@/app/(app)/kitchen/actions";
 import { getKitchenItems, getProfile } from "@/lib/data";
 import { kitchenIcon } from "@/lib/item-icons";
 
@@ -38,7 +39,7 @@ export default async function KitchenPage() {
               <h2 className="text-lg font-extrabold">Ingredients</h2>
               <div className="flex items-center gap-3">
                 <VoiceAddItems />
-                <AddItemForm kind="ingredient" />
+                <AddKitchenItemForm kind="ingredient" />
               </div>
             </div>
             {ingredients.length === 0 ? (
@@ -72,7 +73,7 @@ export default async function KitchenPage() {
           <section className="rounded-3xl bg-card p-5 shadow-sm ring-1 ring-oat">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-extrabold">Equipment</h2>
-              <AddItemForm kind="equipment" />
+              <AddKitchenItemForm kind="equipment" />
             </div>
             {equipment.length === 0 ? (
               <p className="text-sm font-semibold text-espresso-light">
@@ -101,7 +102,7 @@ export default async function KitchenPage() {
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-extrabold">Your profile</h2>
               <Link
-                href="/settings"
+                href="/settings/edit"
                 className="text-sm font-bold text-flame hover:text-flame-dark"
               >
                 Edit profile
@@ -148,27 +149,6 @@ export default async function KitchenPage() {
         </aside>
       </div>
     </div>
-  );
-}
-
-function AddItemForm({ kind }: { kind: "ingredient" | "equipment" }) {
-  return (
-    <form action={addKitchenItem} className="flex items-center gap-2">
-      <input type="hidden" name="kind" value={kind} />
-      <input
-        name="name"
-        type="text"
-        placeholder={`Add ${kind}…`}
-        required
-        className="rounded-full border border-oat-dark bg-cream px-3 py-1.5 text-sm font-semibold text-espresso focus:border-flame focus:outline-none"
-      />
-      <button
-        type="submit"
-        className="rounded-full bg-espresso px-3 py-1.5 text-sm font-bold text-white hover:bg-espresso-light"
-      >
-        Add
-      </button>
-    </form>
   );
 }
 

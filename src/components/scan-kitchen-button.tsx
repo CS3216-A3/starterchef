@@ -1,49 +1,17 @@
 "use client";
 
 import { Camera, CircleAlert, ScanLine, Sparkles, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/button";
-import { saveKitchenItems } from "@/app/(app)/kitchen/actions";
+import { getApiErrorMessage } from "@/lib/client-api-error";
+import type { KitchenScanCandidate } from "@/lib/types";
 import { trackEvent } from "@/lib/posthog/events";
-import type { KitchenScanResult } from "@/lib/ai/schemas/kitchen-scan";
-import type { KitchenIconKey } from "@/lib/item-icons";
-
-type ScannedItem = {
-  key: string;
-  kind: "ingredient" | "equipment";
-  name: string;
-  confidence: "high" | "medium" | "low";
-  estimatedQuantity?: string;
-  expiresWithinDays?: number;
-  icon: KitchenIconKey;
-};
-
-function flattenItems(result: KitchenScanResult): ScannedItem[] {
-  return [
-    ...result.ingredients.map((i) => ({
-      key: `ingredient:${i.name}`,
-      kind: "ingredient" as const,
-      name: i.name,
-      confidence: i.confidence,
-      estimatedQuantity: i.estimatedQuantity,
-      expiresWithinDays: i.expiresWithinDays,
-      icon: i.icon,
-    })),
-    ...result.equipment.map((i) => ({
-      key: `equipment:${i.name}`,
-      kind: "equipment" as const,
-      name: i.name,
-      confidence: i.confidence,
-      icon: i.icon,
-    })),
-  ];
-}
 
 type ScanState =
   | { status: "idle" }
   | { status: "preview" }
   | { status: "scanning" }
-  | { status: "done"; result: KitchenScanResult }
+  | { status: "done"; scanId: string; candidates: KitchenScanCandidate[] }
   | { status: "saving" }
   | { status: "saved"; added: number }
   | { status: "error"; message: string };
@@ -52,24 +20,8 @@ export function ScanKitchenButton() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const idempotencyKeyRef = useRef<string | null>(null);
   const [state, setState] = useState<ScanState>({ status: "idle" });
-  const [excluded, setExcluded] = useState<Set<string>>(new Set());
-
-  const items = useMemo(
-    () => (state.status === "done" ? flattenItems(state.result) : []),
-    [state],
-  );
-  const confidentItems = items.filter((i) => i.confidence !== "low");
-  const uncertainItems = items.filter((i) => i.confidence === "low");
-
-  function toggleExcluded(key: string) {
-    setExcluded((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
 
   async function startCamera() {
     setState({ status: "preview" });
@@ -109,37 +61,79 @@ export function ScanKitchenButton() {
     if (!ctx) return;
     ctx.drawImage(video, 0, 0);
 
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-    stopCamera();
-    void scanImage(dataUrl);
+    canvas.toBlob(
+      (blob) => {
+        if (!blob)
+          return setState({
+            status: "error",
+            message: "Could not capture photo. Try again.",
+          });
+        stopCamera();
+        void scanImage(new File([blob], "kitchen.jpg", { type: "image/jpeg" }));
+      },
+      "image/jpeg",
+      0.85,
+    );
   }
 
-  async function scanImage(dataUrl: string) {
+  async function scanImage(image: File) {
     setState({ status: "scanning" });
     try {
-      const res = await fetch("/api/ai/kitchen-scan", {
+      const form = new FormData();
+      form.set("image", image);
+      const stored = window.sessionStorage.getItem(
+        "starterchef:kitchen-scan-key",
+      );
+      const idempotencyKey =
+        idempotencyKeyRef.current ?? stored ?? crypto.randomUUID();
+      idempotencyKeyRef.current = idempotencyKey;
+      window.sessionStorage.setItem(
+        "starterchef:kitchen-scan-key",
+        idempotencyKey,
+      );
+      form.set("idempotencyKey", idempotencyKey);
+      const res = await fetch("/api/kitchen-scans", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: dataUrl }),
+        body: form,
       });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? "Scan failed");
-      const result = body as KitchenScanResult;
-      setExcluded(
+      if (!res.ok)
+        throw new Error(await getApiErrorMessage(res, "Scan failed"));
+      const body = (await res.json()) as {
+        id?: string;
+        candidates?: KitchenScanCandidate[];
+        status?: string;
+      };
+      if (!body.id || !Array.isArray(body.candidates))
+        throw new Error("Scan failed");
+      setState({
+        status: "done",
+        scanId: body.id,
+        candidates: body.candidates,
+      });
+      // Confident matches come pre-checked; low-confidence items are left
+      // for the cook to confirm before they are added.
+      setSelected(
         new Set(
-          flattenItems(result)
-            .filter((i) => i.confidence === "low")
-            .map((i) => i.key),
+          body.candidates
+            .filter((candidate) => candidate.confidence !== "low")
+            .map((candidate) => candidate.id),
         ),
       );
       trackEvent("kitchen_scan_completed", {
-        ingredient_count: result.ingredients.length,
-        equipment_count: result.equipment.length,
-        uncertain_count:
-          result.ingredients.filter((i) => i.confidence === "low").length +
-          result.equipment.filter((i) => i.confidence === "low").length,
+        ingredient_count: body.candidates.filter(
+          (candidate) => candidate.kind === "ingredient",
+        ).length,
+        equipment_count: body.candidates.filter(
+          (candidate) => candidate.kind === "equipment",
+        ).length,
+        uncertain_count: body.candidates.filter(
+          (candidate) => candidate.confidence === "low",
+        ).length,
       });
-      setState({ status: "done", result });
+      if (body.status && body.status !== "processing") {
+        window.sessionStorage.removeItem("starterchef:kitchen-scan-key");
+        idempotencyKeyRef.current = null;
+      }
     } catch (err) {
       setState({
         status: "error",
@@ -148,33 +142,61 @@ export function ScanKitchenButton() {
     }
   }
 
-  async function addToKitchen(result: KitchenScanResult) {
-    setState({ status: "saving" });
-    const now = new Date();
-    const confirmed = flattenItems(result).filter((i) => !excluded.has(i.key));
-    const items = confirmed.map((i) => ({
-      kind: i.kind,
-      name: i.name,
-      quantity: i.estimatedQuantity ?? null,
-      expiresOn: i.expiresWithinDays
-        ? new Date(now.getTime() + i.expiresWithinDays * 86400000)
-            .toISOString()
-            .slice(0, 10)
-        : null,
-      icon: i.icon,
-      source: "scan" as const,
-    }));
-    const res = await saveKitchenItems(items);
-    if (res.error) {
-      setState({ status: "error", message: res.error });
-    } else {
-      trackEvent("kitchen_scan_confirmed", {
-        items_saved: res.count ?? items.length,
-        items_excluded: excluded.size,
+  async function addToKitchen(
+    scanId: string,
+    candidates: KitchenScanCandidate[],
+  ) {
+    const accepted = candidates
+      .filter((candidate) => selected.has(candidate.id))
+      .map((candidate) => ({
+        id: candidate.id,
+        name: candidate.name,
+        quantity: candidate.quantity,
+        expiresOn: candidate.expiresOn,
+      }));
+    if (accepted.length === 0)
+      return setState({
+        status: "error",
+        message: "Select at least one item to add.",
       });
-      setState({ status: "saved", added: res.count ?? items.length });
+    setState({ status: "saving" });
+    try {
+      const res = await fetch(`/api/kitchen-scans/${scanId}/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(accepted),
+      });
+      if (!res.ok)
+        throw new Error(
+          await getApiErrorMessage(res, "Could not add detected items"),
+        );
+      const body = (await res.json()) as { items?: unknown[] };
+      const added = body.items?.length ?? accepted.length;
+
+      trackEvent("kitchen_items_saved", {
+        source: "scan",
+        item_count: added,
+      });
+
+      setState({
+        status: "saved",
+        added,
+      });
+      window.sessionStorage.removeItem("starterchef:kitchen-scan-key");
+      idempotencyKeyRef.current = null;
+      window.location.reload();
+    } catch (error) {
+      setState({
+        status: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Could not add detected items",
+      });
     }
   }
+
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   function closePreview() {
     stopCamera();
@@ -220,58 +242,121 @@ export function ScanKitchenButton() {
 
       {state.status === "done" && (
         <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-oat">
-          <p className="mb-3 text-sm font-bold">
-            Found {confidentItems.length} confident match
-            {confidentItems.length === 1 ? "" : "es"}
-            {uncertainItems.length > 0 && `, ${uncertainItems.length} to check`}
-            .
+          <p className="mb-2 text-sm font-bold">
+            We found {state.candidates.length} possible items
+            {state.candidates.some((item) => item.confidence === "low")
+              ? ` — ${state.candidates.filter((item) => item.confidence === "low").length} to check`
+              : ""}
+            . Select what to add.
           </p>
-
-          {confidentItems.length > 0 && (
-            <ul className="mb-3 flex flex-wrap gap-1 text-sm font-semibold text-espresso-light">
-              {confidentItems.map((i) => (
-                <li key={i.key} className="rounded-full bg-oat px-2 py-0.5">
-                  {i.name}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {uncertainItems.length > 0 && (
-            <div className="mb-3 flex flex-col gap-2">
-              <p className="flex items-center gap-1.5 text-xs font-bold text-espresso-light">
-                <CircleAlert className="h-3.5 w-3.5 text-flame" />
-                Low confidence — check before adding
-              </p>
-              <ul className="flex flex-col gap-1.5">
-                {uncertainItems.map((i) => (
-                  <li key={i.key}>
-                    <label className="flex items-center gap-2 rounded-xl bg-flame-soft px-3 py-2 text-sm font-semibold">
-                      <input
-                        type="checkbox"
-                        checked={!excluded.has(i.key)}
-                        onChange={() => toggleExcluded(i.key)}
-                        className="h-4 w-4 accent-flame"
-                      />
-                      {i.name}
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
+          <ul className="mb-3 flex flex-wrap gap-1 text-sm font-semibold text-espresso-light">
+            {state.candidates.map((item) => (
+              <li
+                key={item.id}
+                className={`flex items-center gap-2 rounded-xl px-2 py-1 ${
+                  item.confidence === "low" ? "bg-flame-soft" : "bg-oat"
+                }`}
+              >
+                {item.confidence === "low" && (
+                  <CircleAlert
+                    className="h-3.5 w-3.5 shrink-0 text-flame"
+                    aria-label="Low confidence — check before adding"
+                  />
+                )}
+                <input
+                  aria-label={`Select ${item.name}`}
+                  type="checkbox"
+                  checked={selected.has(item.id)}
+                  onChange={() =>
+                    setSelected((current) => {
+                      const next = new Set(current);
+                      if (next.has(item.id)) next.delete(item.id);
+                      else next.add(item.id);
+                      return next;
+                    })
+                  }
+                />
+                <input
+                  aria-label={`${item.name} name`}
+                  className="min-w-0 bg-transparent font-semibold"
+                  value={item.name}
+                  onChange={(event) =>
+                    setState((current) =>
+                      current.status === "done"
+                        ? {
+                            ...current,
+                            candidates: current.candidates.map((candidate) =>
+                              candidate.id === item.id
+                                ? { ...candidate, name: event.target.value }
+                                : candidate,
+                            ),
+                          }
+                        : current,
+                    )
+                  }
+                />
+                {item.kind === "ingredient" ? (
+                  <input
+                    aria-label={`${item.name} quantity`}
+                    className="w-16 bg-transparent text-xs"
+                    placeholder="amount"
+                    value={item.quantity ?? ""}
+                    onChange={(event) =>
+                      setState((current) =>
+                        current.status === "done"
+                          ? {
+                              ...current,
+                              candidates: current.candidates.map((candidate) =>
+                                candidate.id === item.id
+                                  ? {
+                                      ...candidate,
+                                      quantity: event.target.value || null,
+                                    }
+                                  : candidate,
+                              ),
+                            }
+                          : current,
+                      )
+                    }
+                  />
+                ) : null}
+                {item.kind === "ingredient" ? (
+                  <input
+                    aria-label={`${item.name} expiry`}
+                    className="w-28 bg-transparent text-xs"
+                    type="date"
+                    value={item.expiresOn ?? ""}
+                    onChange={(event) =>
+                      setState((current) =>
+                        current.status === "done"
+                          ? {
+                              ...current,
+                              candidates: current.candidates.map((candidate) =>
+                                candidate.id === item.id
+                                  ? {
+                                      ...candidate,
+                                      expiresOn: event.target.value || null,
+                                    }
+                                  : candidate,
+                              ),
+                            }
+                          : current,
+                      )
+                    }
+                  />
+                ) : null}
+              </li>
+            ))}
+          </ul>
           <p className="mb-3 text-xs font-semibold text-espresso-light">
             Existing items won&apos;t be removed. These will be merged in.
           </p>
           <Button
             type="button"
             className="w-full"
-            onClick={() => addToKitchen(state.result)}
-            disabled={items.length - excluded.size === 0}
+            onClick={() => addToKitchen(state.scanId, state.candidates)}
           >
-            Add {items.length - excluded.size} item
-            {items.length - excluded.size === 1 ? "" : "s"}
+            Add to my kitchen
           </Button>
         </div>
       )}

@@ -1,5 +1,6 @@
-import { generateObject } from "ai";
-import { getModelName, getProvider } from "@/lib/ai/model";
+import "server-only";
+import { APICallError, generateObject } from "ai";
+import { getModelName, getProvider, type AiProvider } from "@/lib/ai/model";
 import { flushPostHogAI } from "@/lib/posthog/server";
 
 /**
@@ -13,13 +14,76 @@ import { flushPostHogAI } from "@/lib/posthog/server";
  * PostHog's default span attribution until the SDK adds support.
  */
 
-type GenerateObjectArgs = Parameters<typeof generateObject>[0];
+export type MeasuredGenerateArgs = Parameters<typeof generateObject>[0];
 
-export async function measuredGenerate(name: string, args: GenerateObjectArgs) {
+function record(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function safeProviderRejectionCode(error: APICallError): string {
+  const data = record(error.data);
+  const detail = data && record(data.error) ? record(data.error) : data;
+  const code = detail?.code;
+  const parameter = detail?.param;
+
+  if (code === "invalid_json_schema" || code === "schema_validation_error")
+    return "PROVIDER_SCHEMA_REJECTED";
+  if (code === "invalid_image" || code === "image_too_large")
+    return "PROVIDER_IMAGE_REJECTED";
+  if (
+    code === "unsupported_parameter" ||
+    (typeof parameter === "string" &&
+      !parameter.startsWith("input") &&
+      !parameter.startsWith("text.format"))
+  )
+    return "PROVIDER_PARAMETER_REJECTED";
+  if (typeof parameter === "string" && parameter.startsWith("text.format"))
+    return "PROVIDER_SCHEMA_REJECTED";
+  if (typeof parameter === "string" && parameter.startsWith("input"))
+    return "PROVIDER_IMAGE_REJECTED";
+  return "PROVIDER_REJECTED";
+}
+
+/**
+ * Maps SDK failures to a small, safe diagnostic vocabulary. Provider response
+ * bodies can contain prompts or implementation details and must never reach
+ * logs or API responses.
+ */
+export function safeAiFailureCode(error: unknown): string {
+  if (!APICallError.isInstance(error)) return "GENERATION_FAILED";
+
+  switch (error.statusCode) {
+    case 400:
+      return safeProviderRejectionCode(error);
+    case 401:
+    case 403:
+      return "PROVIDER_AUTH_FAILED";
+    case 429:
+      return "PROVIDER_RATE_LIMITED";
+    default:
+      return error.statusCode != null && error.statusCode >= 500
+        ? "PROVIDER_UNAVAILABLE"
+        : "PROVIDER_REQUEST_FAILED";
+  }
+}
+
+export async function measuredGenerate(
+  name: string,
+  args: MeasuredGenerateArgs,
+  modelContext?: { provider: AiProvider; model: string },
+) {
   const startedAt = performance.now();
+  // OpenAI reasoning models reject sampling controls. The provider adapter
+  // currently removes them with a warning; normalize once at the gateway so
+  // all routes share quiet, provider-compatible behavior.
+  const provider = modelContext?.provider ?? getProvider();
+  const providerArgs =
+    provider === "openai" ? { ...args, temperature: undefined } : args;
 
   const result = await generateObject({
-    ...args,
+    ...providerArgs,
     telemetry: {
       functionId: name,
     },
@@ -31,8 +95,8 @@ export async function measuredGenerate(name: string, args: GenerateObjectArgs) {
     JSON.stringify({
       event: "ai_call",
       name,
-      provider: getProvider(),
-      model: getModelName(),
+      provider,
+      model: modelContext?.model ?? getModelName(provider),
       latencyMs,
       usage: result.usage,
     }),

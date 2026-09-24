@@ -3,44 +3,39 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { ProfileInput } from "@/app/(app)/settings/actions";
+import { safeActionFailure } from "@/lib/action-result";
+import { profileInputSchema } from "@/lib/validation/actions";
 
 /**
  * Save the profile details collected during onboarding and mark the wizard
  * complete so the user isn't redirected again.
  */
 export async function completeOnboarding(input: ProfileInput) {
+  const parsed = profileInputSchema.safeParse(input);
+  if (!parsed.success)
+    return { error: "Check your profile values and try again" };
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in" };
 
-  const skillLevel = ["beginner", "intermediate", "advanced"].includes(
-    input.skillLevel,
-  )
-    ? input.skillLevel
-    : "beginner";
-  const householdSize = Math.max(
-    1,
-    Math.min(20, Math.floor(input.householdSize) || 1),
-  );
+  const value = parsed.data;
 
   const { error } = await supabase
     .from("profiles")
     .update({
-      display_name: input.displayName.trim() || null,
-      dietary_restrictions: input.dietaryRestrictions,
-      allergies: input.allergies
-        .map((a) => a.trim())
-        .filter((a) => a.length > 0),
-      skill_level: skillLevel,
-      household_size: householdSize,
+      display_name: value.displayName || null,
+      dietary_restrictions: value.dietaryRestrictions,
+      allergies: value.allergies,
+      skill_level: value.skillLevel,
+      household_size: value.householdSize,
       onboarded_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
     .eq("id", user.id);
 
-  if (error) return { error: error.message };
+  if (error) return safeActionFailure("finish onboarding", error);
   revalidatePath("/today");
   return { ok: true };
 }
@@ -53,10 +48,11 @@ export async function skipOnboarding() {
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in" };
 
-  await supabase
+  const { error } = await supabase
     .from("profiles")
     .update({ onboarded_at: new Date().toISOString() })
     .eq("id", user.id);
+  if (error) return safeActionFailure("skip onboarding", error);
   revalidatePath("/today");
   return { ok: true };
 }

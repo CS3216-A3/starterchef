@@ -4,9 +4,9 @@ import { Mic, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { saveKitchenItems } from "@/app/(app)/kitchen/actions";
-import { trackEvent } from "@/lib/posthog/events";
 import type { KitchenVoiceResult } from "@/lib/ai/schemas/kitchen-scan";
-import { cn } from "@/lib/utils";
+import { trackEvent } from "@/lib/posthog/events";
+import { apiErrorMessage, cn } from "@/lib/utils";
 
 interface SpeechRecognitionLike {
   lang: string;
@@ -54,7 +54,7 @@ export function VoiceAddItems() {
       const body = (await res.json().catch(() => null)) as
         (KitchenVoiceResult & { error?: string }) | null;
       if (!res.ok || !body) {
-        throw new Error(body?.error ?? "Couldn't parse that");
+        throw new Error(apiErrorMessage(body, "Couldn't parse that"));
       }
       if (body.items.length === 0) {
         setState({
@@ -73,13 +73,19 @@ export function VoiceAddItems() {
             source: "manual",
           })),
         );
-        if ("error" in result && result.error) {
-          setState({ status: "error", message: result.error });
+        if (!("count" in result)) {
+          setState({
+            status: "error",
+            message:
+              "error" in result && result.error
+                ? result.error
+                : "Could not save these items",
+          });
           return;
         }
-        trackEvent("pantry_item_added", {
-          method: "voice",
-          item_count: body.items.length,
+        trackEvent("kitchen_items_saved", {
+          source: "voice",
+          item_count: result.count,
         });
         setState({ status: "idle" });
         router.refresh();

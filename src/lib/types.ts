@@ -28,6 +28,30 @@ export interface KitchenItemRow {
   created_at: string;
 }
 
+export type KitchenScanStatus =
+  "processing" | "awaiting_confirmation" | "applied" | "failed" | "expired";
+
+export interface KitchenScanCandidate {
+  id: string;
+  kind: KitchenItemKind;
+  name: string;
+  quantity: string | null;
+  expiresOn: string | null;
+  icon: string;
+  confidence: "high" | "medium" | "low";
+}
+
+export interface KitchenScanRow {
+  id: string;
+  user_id: string;
+  candidates: KitchenScanCandidate[];
+  accepted: unknown[] | null;
+  status: KitchenScanStatus;
+  failure_code: string | null;
+  created_at: string;
+  expires_at: string;
+}
+
 /** A single step inside `recipes.steps` / `cooking_sessions.recipe.steps`. */
 export interface RecipeStep {
   index: number;
@@ -54,6 +78,8 @@ export interface RecipeRow {
   icon: string;
   image_tint: string;
   image_url: string | null;
+  /** Original opaque private reference; present only at authorized server boundaries. */
+  image_reference?: string | null;
   ingredients: string[];
   equipment: string[];
   steps: RecipeStep[];
@@ -101,6 +127,15 @@ export interface CookingSessionRow {
   recipe_id: string | null;
   recipe: SessionRecipeSnapshot;
   current_step: number;
+  version: number;
+  timer_state: {
+    status: "idle" | "running" | "paused";
+    stepIndex?: number;
+    durationSeconds?: number;
+    startedAt?: string;
+    endsAt?: string;
+    pausedRemainingSeconds?: number;
+  };
   status: "in_progress" | "completed" | "abandoned";
   summary: SessionSummary | null;
   started_at: string;

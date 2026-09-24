@@ -1,3 +1,4 @@
+import "server-only";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -35,20 +36,33 @@ function getNextMidnightUTC(): Date {
  */
 export async function checkRateLimit(
   userId: string,
-  client = createAdminClient(),
+  unitsOrClient: number | ReturnType<typeof createAdminClient> = 1,
+  clientOverride?: ReturnType<typeof createAdminClient>,
 ): Promise<RateLimitResult> {
+  const units = typeof unitsOrClient === "number" ? unitsOrClient : 1;
+  const client =
+    typeof unitsOrClient === "number"
+      ? (clientOverride ?? createAdminClient())
+      : unitsOrClient;
   const limit = getDailyAiLimit();
 
-  const { data, error } = await client.rpc("increment_ai_usage", {
+  if (!Number.isInteger(units) || units < 1 || units > 100) {
+    throw new Error("Invalid AI quota cost");
+  }
+
+  const { data, error } = await client.rpc("consume_ai_usage", {
     p_user_id: userId,
+    p_units: units,
+    p_limit: limit,
   });
 
   if (error) {
     throw new Error(`Rate limit check failed: ${error.message}`);
   }
 
-  const count = typeof data === "number" ? data : 1;
-  const allowed = count <= limit;
+  const row = Array.isArray(data) ? data[0] : data;
+  const count = typeof row?.total === "number" ? row.total : 0;
+  const allowed = row?.allowed === true;
   const remaining = Math.max(0, limit - count);
   const resetAt = getNextMidnightUTC();
   const retryAfter = Math.max(
@@ -72,10 +86,16 @@ export async function checkRateLimit(
 export function createRateLimitResponse(result: RateLimitResult): NextResponse {
   return NextResponse.json(
     {
-      error: "Daily AI request limit reached",
-      limit: result.limit,
-      remaining: result.remaining,
-      retryAfter: result.retryAfter,
+      error: {
+        code: "RATE_LIMITED",
+        message: "You've used today's AI credits — they reset at midnight UTC.",
+        details: {
+          limit: result.limit,
+          remaining: result.remaining,
+          retryAfter: result.retryAfter,
+          resetAt: result.resetAt,
+        },
+      },
     },
     {
       status: 429,
