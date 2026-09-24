@@ -34,6 +34,10 @@ kitchen → get recipes that fit → cook step-by-step with a voice assistant.
   `gh run list --limit 1` then `gh run watch` or `gh run view --log-failed`
   for failures. Vercel deploys surface as GitHub checks on the commit.
 - Run `/pre-push-checks` for the full commit/push verification loop.
+- **Review before you push, and after reviewers comment.** Self-review the
+  full diff against current `origin/main`, and on PRs verify each Copilot or
+  human comment against the code, fix the valid ones, and reply on every
+  thread. See `/code-review`.
 
 ## Conventions
 
