@@ -81,7 +81,6 @@ export function RecipeCard({
           <div className="flex-1">
             <StartCookingButton
               recipeId={recipe.id}
-              slug={recipe.slug}
               primary={recipe.primaryCta}
               label="Let's cook"
             />

@@ -1,94 +1,87 @@
-import { ArrowLeft, ArrowRight, Pencil } from "lucide-react";
+import { ArrowRight, Pencil } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackButton } from "@/components/back-button";
 import { Button } from "@/components/button";
 import { CookAssist } from "@/components/cook-assist";
+import { CookStepNavigation } from "@/components/cook-step-navigation";
 import { StepPhoto } from "@/components/step-photo";
-import { StepTracker } from "@/components/step-tracker";
-import { getActiveCookingSession, getRecipeBySlug } from "@/lib/data";
+import { getRecipeById } from "@/lib/data";
+import { getSessionById } from "@/lib/session-events";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
+/** The cook URL is a session UUID. Progress always comes from the immutable
+ * server snapshot, never from browser query parameters. `?prep` shows the
+ * mise en place screen before the first step. */
 export default async function CookPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ step?: string }>;
+  searchParams: Promise<{ prep?: string }>;
 }) {
   const { id } = await params;
-  const { step } = await searchParams;
+  const { prep } = await searchParams;
+  const session = await getSessionById(id);
+  if (!session || session.status !== "in_progress") notFound();
+  const steps = session.recipe.steps ?? [];
+  const current = steps.find((step) => step.index === session.current_step);
+  if (!current) notFound();
+  const progress = Math.round((session.current_step / steps.length) * 100);
+  const version = session.version;
+  // Sessions from databases that have not applied 0029 lack timer_state.
+  // Keep the cook screen usable instead of crashing while rendering a timer.
+  const timerState = session.timer_state ?? { status: "idle" as const };
 
-  // [id] is the recipe slug (e.g. "tomato-egg-stir-fry").
-  const [recipe, session] = await Promise.all([
-    getRecipeBySlug(id),
-    getActiveCookingSession(),
-  ]);
-  if (!recipe || (recipe.steps ?? []).length === 0) notFound();
-
-  const recipeTitle = recipe.title;
-  // Checkpoint photos taken in this session live on the session snapshot for
-  // catalogue recipes — merge them over the base steps.
-  const sessionSteps =
-    session?.recipe?.slug === recipe.slug ? session.recipe.steps : undefined;
-  const sessionPhotos = new Map(
-    (sessionSteps ?? [])
-      .filter((s) => s.photoUrl)
-      .map((s) => [s.index, s.photoUrl] as const),
-  );
-  const steps = (recipe.steps ?? []).map((s) =>
-    sessionPhotos.has(s.index)
-      ? { ...s, photoUrl: sessionPhotos.get(s.index) }
-      : s,
-  );
-  const stepIndex = Math.min(Math.max(Number(step ?? 1) || 1, 1), steps.length);
-  const current = steps[stepIndex - 1];
-  // Only log to the session actually cooking this recipe.
-  const sessionId =
-    session?.recipe?.slug === recipe.slug ? session.id : undefined;
-  const progress = Math.round((stepIndex / steps.length) * 100);
-
-  // No ?step → mise en place: the cook gathers ingredients and equipment
-  // before the first instruction, instead of being dropped into step 1.
-  if (!step) {
-    // Seeded/imported rows can have nulls despite the string[] type.
-    const allIngredients = recipe.ingredients ?? [];
-    const allEquipment = recipe.equipment ?? [];
+  // Mise en place: gather ingredients and equipment before the first
+  // instruction instead of dropping straight into step 1.
+  if (prep !== undefined) {
+    const recipe = session.recipe_id
+      ? await getRecipeById(session.recipe_id)
+      : null;
+    const allIngredients = recipe?.ingredients ?? [];
+    const allEquipment = recipe?.equipment ?? [];
     return (
       <div className="mx-auto flex max-w-lg flex-col gap-6">
         <BackButton />
         <header className="flex flex-col gap-1">
           <p className="text-xs font-bold tracking-wide text-espresso-light uppercase">
-            {recipeTitle}
+            {session.recipe.title}
           </p>
           <h1 className="text-2xl font-extrabold">Get everything ready</h1>
           <p className="text-sm font-semibold text-espresso-light">
-            {recipe.minutes} min · {recipe.difficulty} · serves{" "}
-            {recipe.servings} · {steps.length} steps
+            {recipe
+              ? `${recipe.minutes} min · ${recipe.difficulty} · serves ${recipe.servings} · `
+              : ""}
+            {steps.length} steps
           </p>
-          {recipe.description ? (
+          {recipe?.description ? (
             <p className="text-sm font-semibold text-espresso-light">
               {recipe.description}
             </p>
           ) : null}
         </header>
 
-        <section className="flex flex-col gap-2 rounded-3xl bg-card p-4 shadow-sm ring-1 ring-oat">
-          <h2 className="text-xs font-extrabold tracking-wide text-espresso-light uppercase">
-            Ingredients
-          </h2>
-          <ul className="flex flex-wrap gap-2">
-            {allIngredients.map((item) => (
-              <li
-                key={item}
-                className="rounded-full bg-oat px-3 py-1.5 text-sm font-bold"
-              >
-                {item}
-              </li>
-            ))}
-          </ul>
-        </section>
+        {allIngredients.length > 0 ? (
+          <section className="flex flex-col gap-2 rounded-3xl bg-card p-4 shadow-sm ring-1 ring-oat">
+            <h2 className="text-xs font-extrabold tracking-wide text-espresso-light uppercase">
+              Ingredients
+            </h2>
+            <ul className="flex flex-wrap gap-2">
+              {allIngredients.map((item) => (
+                <li
+                  key={item}
+                  className="rounded-full bg-oat px-3 py-1.5 text-sm font-bold"
+                >
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         {allEquipment.length > 0 ? (
           <section className="flex flex-col gap-2 rounded-3xl bg-card p-4 shadow-sm ring-1 ring-oat">
@@ -125,12 +118,15 @@ export default async function CookPage({
         </section>
 
         <div className="flex flex-col gap-2">
-          <Link href={`/cook/${id}?step=1`} className="self-stretch">
+          <Link href={`/cook/${id}`} className="self-stretch">
             <Button size="md" className="w-full">
-              Start cooking <ArrowRight className="h-4 w-4" />
+              {session.current_step > 1
+                ? `Resume cooking · step ${session.current_step}`
+                : "Start cooking"}{" "}
+              <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
-          {recipe.user_id ? (
+          {recipe && recipe.user_id === session.user_id ? (
             <Link href={`/recipes/${recipe.id}/edit`} className="self-stretch">
               <Button variant="outline" size="md" className="w-full">
                 <Pencil className="h-4 w-4" /> Customise this recipe first
@@ -142,16 +138,35 @@ export default async function CookPage({
     );
   }
 
+  // The latest checkpoint photo for this step — shown under the instruction
+  // so the cook can compare (and remove it) without touching the timeline.
+  const supabase = await createClient();
+  const { data: checkpoint } = await supabase
+    .from("cooking_checkpoints")
+    .select("id, object_path")
+    .eq("session_id", session.id)
+    .eq("step_index", session.current_step)
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  let checkpointPhotoUrl: string | null = null;
+  if (checkpoint) {
+    const { data: signed } = await createAdminClient()
+      .storage.from("recipe-inputs")
+      .createSignedUrl(checkpoint.object_path, 5 * 60);
+    checkpointPhotoUrl = signed?.signedUrl ?? null;
+  }
+
   return (
     <div className="mx-auto flex max-w-lg flex-col gap-6">
-      {sessionId && <StepTracker sessionId={sessionId} stepIndex={stepIndex} />}
       <header className="flex flex-col gap-2">
         <p className="text-xs font-bold tracking-wide text-espresso-light uppercase">
-          {recipeTitle}
+          {session.recipe.title}
         </p>
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-extrabold">
-            Step {stepIndex} of {steps.length}
+            Step {session.current_step} of {steps.length}
           </h1>
           <span className="text-sm font-extrabold text-flame">{progress}%</span>
         </div>
@@ -168,93 +183,45 @@ export default async function CookPage({
           />
         </div>
       </header>
-
       <section className="flex flex-col gap-2">
         <h2 className="text-2xl font-extrabold">{current.title}</h2>
         <p className="leading-relaxed font-semibold text-espresso-light">
           {current.instruction}
         </p>
-        {current.photoUrl ? (
+        {checkpointPhotoUrl && checkpoint ? (
           <StepPhoto
-            recipeSlug={recipe.slug}
-            stepIndex={current.index}
-            photoUrl={current.photoUrl}
+            sessionId={session.id}
+            checkpointId={checkpoint.id}
+            photoUrl={checkpointPhotoUrl}
           />
         ) : null}
-        {current.photoCheckpoint ? (
+        {current.photoCheckpoint && (
           <p className="text-xs font-semibold text-espresso-light">
             What it should look like: {current.photoCheckpoint}
           </p>
-        ) : null}
-        {current.tip ? (
+        )}
+        {current.tip && (
           <p className="rounded-2xl bg-flame-soft p-3 text-sm font-semibold">
             Tip: {current.tip}
           </p>
-        ) : null}
+        )}
       </section>
-
-      {(current.ingredients ?? []).length > 0 ? (
-        <section className="rounded-3xl bg-oat p-4">
-          <h3 className="mb-2 text-xs font-extrabold tracking-wide text-espresso-light uppercase">
-            For this step
-          </h3>
-          <ul className="flex flex-wrap gap-2">
-            {(current.ingredients ?? []).map((item) => (
-              <li
-                key={item}
-                className="rounded-full bg-card px-3 py-1.5 text-sm font-bold"
-              >
-                {item}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
       <CookAssist
-        context={{
-          recipeTitle,
-          stepTitle: current.title,
-          instruction: current.instruction,
-          photoCheckpoint: current.photoCheckpoint,
-          recipeId: recipe.id,
-          recipeSlug: recipe.slug,
-        }}
-        sessionId={sessionId}
-        stepIndex={stepIndex}
-        cookUrl={`/cook/${id}`}
+        sessionId={session.id}
+        recipeId={session.recipe_id}
+        stepIndex={session.current_step}
+        currentInstruction={current.instruction}
         totalSteps={steps.length}
         durationSeconds={current.durationSeconds}
+        version={version}
+        timerState={timerState}
       />
-
-      <nav className="flex items-center justify-between gap-3">
-        {stepIndex > 1 ? (
-          <Link href={`/cook/${id}?step=${stepIndex - 1}`}>
-            <Button variant="outline" size="md">
-              <ArrowLeft className="h-4 w-4" /> Previous
-            </Button>
-          </Link>
-        ) : (
-          <Link href={`/cook/${id}`}>
-            <Button variant="outline" size="md">
-              <ArrowLeft className="h-4 w-4" /> Prep list
-            </Button>
-          </Link>
-        )}
-        {stepIndex < steps.length ? (
-          <Link href={`/cook/${id}?step=${stepIndex + 1}`}>
-            <Button size="md">
-              Done, next step <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
-        ) : (
-          <Link href={`/cook/${id}/finish`}>
-            <Button size="md">
-              Finish cooking <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
-        )}
-      </nav>
+      <CookStepNavigation
+        sessionId={session.id}
+        currentStep={session.current_step}
+        totalSteps={steps.length}
+        version={version}
+      />
     </div>
   );
 }

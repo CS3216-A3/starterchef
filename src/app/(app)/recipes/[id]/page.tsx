@@ -14,7 +14,6 @@ import { DeleteRecipeButton } from "@/components/delete-recipe-button";
 import { RecipeChat } from "@/components/recipe-chat";
 import { RecipeImage } from "@/components/recipe-image";
 import { SaveRecipeButton } from "@/components/save-recipe-button";
-import { StepPhoto } from "@/components/step-photo";
 import { getRecipeBySlug, getSavedRecipeIds, getUser } from "@/lib/data";
 import { iconMap } from "@/lib/recipe-view";
 import { getSessionsForRecipe } from "@/lib/session-events";
@@ -122,12 +121,7 @@ export default async function RecipeOverviewPage({
         )}
       </div>
 
-      <StartCookingButton
-        recipeId={recipe.id}
-        slug={recipe.slug}
-        primary
-        label="Start cooking"
-      />
+      <StartCookingButton recipeId={recipe.id} primary label="Start cooking" />
 
       {/* Ingredients */}
       <section className="flex flex-col gap-2">
@@ -135,9 +129,9 @@ export default async function RecipeOverviewPage({
           Ingredients
         </h2>
         <ul className="flex flex-wrap gap-2">
-          {recipe.ingredients.map((ing) => (
+          {recipe.ingredients.map((ing, index) => (
             <li
-              key={ing}
+              key={`${index}:${ing}`}
               className="rounded-full bg-card px-3 py-1.5 text-sm font-bold ring-1 ring-oat"
             >
               {ing}
@@ -152,9 +146,9 @@ export default async function RecipeOverviewPage({
             Equipment
           </h2>
           <ul className="flex flex-wrap gap-2">
-            {recipe.equipment.map((item) => (
+            {recipe.equipment.map((item, index) => (
               <li
-                key={item}
+                key={`${index}:${item}`}
                 className="rounded-full bg-oat px-3 py-1.5 text-sm font-bold"
               >
                 {item}
@@ -196,22 +190,14 @@ export default async function RecipeOverviewPage({
                     Tip: {step.tip}
                   </p>
                 )}
-                {step.photoUrl &&
-                  (isOwner ? (
-                    <StepPhoto
-                      recipeSlug={recipe.slug}
-                      stepIndex={step.index}
-                      photoUrl={step.photoUrl}
-                      className="mt-1 h-20 w-28"
-                    />
-                  ) : (
-                    // eslint-disable-next-line @next/next/no-img-element -- user-uploaded
-                    <img
-                      src={step.photoUrl}
-                      alt={`Your photo of step ${step.index}`}
-                      className="mt-1 h-20 w-28 rounded-xl object-cover ring-1 ring-oat"
-                    />
-                  ))}
+                {step.photoUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element -- user-uploaded
+                  <img
+                    src={step.photoUrl}
+                    alt={`Your photo of step ${step.index}`}
+                    className="mt-1 h-20 w-28 rounded-xl object-cover ring-1 ring-oat"
+                  />
+                )}
               </div>
             </li>
           ))}
@@ -272,7 +258,7 @@ export default async function RecipeOverviewPage({
         </section>
       )}
 
-      <RecipeChat recipe={recipe} isOwner={isOwner} />
+      <RecipeChat recipeId={recipe.id} />
 
       {isOwner && (
         <DeleteRecipeButton recipeId={recipe.id} recipeTitle={recipe.title} />

@@ -62,7 +62,9 @@ export const POST = withAiRoute({
     }
     const snapshot = session.recipe as {
       title?: string;
-      steps?: { index?: number; title?: string }[];
+      ingredients?: string[];
+      equipment?: string[];
+      steps?: { index?: number; title?: string; instruction?: string }[];
     };
     const currentStep = snapshot.steps?.find(
       (step) => step.index === session.current_step,
@@ -89,6 +91,9 @@ export const POST = withAiRoute({
       system: renderPrompt("cooking-assistant", {
         recipeTitle: snapshot.title,
         stepTitle: currentStep.title,
+        stepInstruction: currentStep.instruction ?? "",
+        recipeIngredients: list(snapshot.ingredients),
+        recipeEquipment: list(snapshot.equipment),
         memory: memory.length
           ? memory.map((f) => `- ${f}`).join("\n")
           : "- Nothing recorded yet — this may be their first session.",

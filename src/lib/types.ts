@@ -127,6 +127,15 @@ export interface CookingSessionRow {
   recipe_id: string | null;
   recipe: SessionRecipeSnapshot;
   current_step: number;
+  version: number;
+  timer_state: {
+    status: "idle" | "running" | "paused";
+    stepIndex?: number;
+    durationSeconds?: number;
+    startedAt?: string;
+    endsAt?: string;
+    pausedRemainingSeconds?: number;
+  };
   status: "in_progress" | "completed" | "abandoned";
   summary: SessionSummary | null;
   started_at: string;

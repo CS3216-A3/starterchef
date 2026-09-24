@@ -10,9 +10,9 @@ voice-enabled AI sous-chef.
 
 ## Team
 
-| Name                  | Matric no. | Contributions                                                              |
-| --------------------- | ---------- | -------------------------------------------------------------------------- |
-| Huang Kaijuan Joulene | A0299187E  | Created the app, implemented the core features, and handled the deployment |
+| Name  | Matric no. | Contributions |
+| ----- | ---------- | ------------- |
+| _TBD_ | _TBD_      | _TBD_         |
 
 ## Tech stack
 
@@ -20,10 +20,11 @@ voice-enabled AI sous-chef.
 - **Tailwind CSS v4** — brand tokens in `src/app/globals.css`
 - **Vercel AI SDK** — provider-agnostic LLM layer (`src/lib/ai/`), swappable
   via `AI_PROVIDER` env var
-- **Recipe verification routing** â€” uses the selected provider end-to-end by
+- **Recipe verification routing** — uses the selected provider end-to-end by
   default; set `RECIPE_VERIFICATION_ROUTING=cross-provider` to opt into the
   OpenAI/Gemini independent-verifier workflow (requires both keys)
 - **Supabase** — auth, Postgres, storage (`supabase/migrations/`)
+- **Live voice** — OpenAI Realtime first, with one pre-connection Gemini Live fallback
 - **Vitest** + **ESLint/Prettier** + **Husky/lint-staged** + **GitHub Actions**
 
 ## Local setup
@@ -39,8 +40,8 @@ npm run dev                  # http://localhost:3000
 1. Create a project at supabase.com.
 2. In **Project Settings → API Keys**, copy the **publishable** key (starts with `sb_publishable_`) into `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and the **secret** key (starts with `sb_secret_`) into `SUPABASE_SECRET_KEY`.
 3. In **Project Settings → Data API**, enable the Data API and disable **Automatically expose new tables**.
-4. Run the migrations in `supabase/migrations/` in order in the Supabase SQL editor.
-5. Load the starter recipe catalogue: run `supabase/seed/recipes.sql` in the SQL editor. The 6 recipes are placeholder demo data from TheMealDB.
+4. Run the migrations in `supabase/migrations/` (through 0029) in order. Before applying 0024 or later to an existing project, follow the [Phase 3/4 preflight](docs/phase-3-4-rollout.md).
+5. Load the starter recipe catalogue: run `supabase/seed/recipes.sql` in the SQL editor. The 6 recipes are placeholder demo data with unknown attribution; replace them with properly attributed recipes before release.
 6. In **Authentication → URL Configuration**, set:
    - Site URL: `http://localhost:3000/today`
    - Redirect URLs: `http://localhost:3000/auth/callback` and your production URL once deployed
@@ -65,7 +66,7 @@ src/app/(app)/         authed app shell: today, kitchen, recipes, cook/[id], set
 src/lib/data.ts        server-side query helpers (profiles, kitchen_items, recipes, sessions)
 src/lib/types.ts       DB row types (hand-maintained)
 supabase/seed/         starter recipe catalogue (placeholder demo data)
-src/app/api/ai/        AI endpoints (kitchen-scan, suggest-recipes, assistant, realtime session)
+src/app/api/ai/        AI endpoints (kitchen-scan, suggestions, trusted assistant, realtime credentials)
 src/hooks/             voice hooks: web-speech, OpenAI Realtime, Gemini Live
 src/lib/ai/            provider abstraction, zod schemas, tools, voice telemetry
 src/lib/posthog/       analytics init + event tracking helper

@@ -3,6 +3,7 @@ import { ownedSession, sessionIdFromPath } from "@/lib/cooking-session-api";
 import { protectedError, withProtectedRoute } from "@/lib/protected-route";
 
 const bodySchema = z.object({
+  rating: z.number().int().min(1).max(5).nullable().optional(),
   wouldMakeAgain: z.boolean().nullable(),
   perceivedDifficulty: z.number().int().min(1).max(5).nullable(),
   notes: z.string().max(2000).default(""),
@@ -16,19 +17,13 @@ export const PUT = withProtectedRoute(async (context) => {
     return protectedError(context, 400, "INVALID_REQUEST", "Invalid feedback");
   const known = await ownedSession(context, id);
   if (known.error) return known.error;
-  const { error } = await context.supabase
-    .from("recipe_feedback")
-    .upsert(
-      {
-        user_id: context.user.id,
-        session_id: id,
-        recipe_id: known.data.recipe_id,
-        would_make_again: parsed.data.wouldMakeAgain,
-        perceived_difficulty: parsed.data.perceivedDifficulty,
-        notes: parsed.data.notes,
-      },
-      { onConflict: "user_id,session_id" },
-    );
+  const { error } = await context.supabase.rpc("save_cooking_feedback", {
+    p_session_id: id,
+    p_rating: parsed.data.rating ?? null,
+    p_would_make_again: parsed.data.wouldMakeAgain,
+    p_perceived_difficulty: parsed.data.perceivedDifficulty,
+    p_notes: parsed.data.notes,
+  });
   if (error)
     return protectedError(
       context,

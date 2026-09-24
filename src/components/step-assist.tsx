@@ -4,38 +4,18 @@ import { useState } from "react";
 import { Send, Sparkles } from "lucide-react";
 import { Button } from "@/components/button";
 import type { AssistantReply } from "@/lib/ai/schemas/assistant";
-import { apiErrorMessage } from "@/lib/utils";
-
-interface StepContext {
-  recipeTitle: string;
-  stepTitle: string;
-  instruction: string;
-  photoCheckpoint?: string;
-  /** Enables persisting checkpoint photos onto the step. */
-  recipeId?: string;
-  recipeSlug?: string;
-}
-
-interface SessionLink {
-  /** When provided, interactions are recorded on the session timeline. */
-  sessionId?: string;
-  stepIndex?: number;
-}
+import { clientErrorMessage } from "@/lib/client-error";
 
 /** Text Q&A for the current step — same assistant the voice button uses.
  *  When `snapFrame` returns a frame ("Show my food" is on), the question is
  *  answered through step-check so the model can see what the user means. */
 export function StepAskBox({
-  context,
   sessionId,
-  stepIndex,
-  snapFrame,
   onAction,
 }: {
-  context: StepContext;
-  snapFrame?: () => string | null;
+  sessionId: string;
   onAction?: (action: NonNullable<AssistantReply["action"]>) => void;
-} & SessionLink) {
+}) {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
   const [answer, setAnswer] = useState<string | null>(null);
@@ -47,40 +27,18 @@ export function StepAskBox({
     setLoading(true);
     setError(null);
     try {
-      const frame = snapFrame?.() ?? null;
-      const res = await fetch(
-        frame ? "/api/ai/step-check" : "/api/ai/assistant",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            frame
-              ? {
-                  image: frame,
-                  question: text,
-                  context,
-                  sessionId,
-                  stepIndex,
-                  recipeId: context.recipeId,
-                  recipeSlug: context.recipeSlug,
-                }
-              : {
-                  question: text,
-                  context: {
-                    recipeTitle: context.recipeTitle,
-                    stepTitle: context.stepTitle,
-                  },
-                  sessionId,
-                  stepIndex,
-                  channel: "text",
-                },
-          ),
-        },
-      );
+      // Checkpoints are uploaded separately as multipart blobs. Text Q&A
+      // never sends browser-authored recipe context or a base64 image.
+      const res = await fetch("/api/ai/assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: text, sessionId, channel: "text" }),
+      });
       const body = await res.json();
-      if (!res.ok) throw new Error(apiErrorMessage(body, "Assistant failed"));
-      if (!frame && body.action) onAction?.(body.action);
-      setAnswer(frame ? body.feedback : body.answer);
+      if (!res.ok)
+        throw new Error(clientErrorMessage(body, "Assistant failed"));
+      if (body.action) onAction?.(body.action);
+      setAnswer(body.answer);
       setQuestion("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
