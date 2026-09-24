@@ -18,14 +18,18 @@ interface ImportState {
   videoUrl: string;
 }
 
+const EMPTY_SOURCE_FIELDS: Omit<ImportState, "source"> = {
+  text: "",
+  url: "",
+  photoInputId: "",
+  dishHint: "",
+  videoUrl: "",
+};
+
 export default function ImportRecipePage() {
   const [state, setState] = useState<ImportState>({
     source: "text",
-    text: "",
-    url: "",
-    photoInputId: "",
-    dishHint: "",
-    videoUrl: "",
+    ...EMPTY_SOURCE_FIELDS,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -228,7 +232,12 @@ export default function ImportRecipePage() {
               setReviewDraftId(null);
               setResumedDraft(false);
               setError(null);
-              if (source) setState((s) => ({ ...s, source }));
+              // Start fresh: never resubmit the old source or a consumed
+              // photo input by accident.
+              setState((s) => ({
+                source: source ?? s.source,
+                ...EMPTY_SOURCE_FIELDS,
+              }));
             }}
           />
         </>

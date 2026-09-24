@@ -44,6 +44,8 @@ type Draft = {
 
 type RecipeVerificationRouting = "single" | "cross-provider";
 
+const SOURCE_UNREADABLE_MESSAGE = "Recipe source could not be read";
+
 /**
  * Single-provider verification is the safe operational default: it keeps a
  * review within the provider selected by AI_PROVIDER. Set this explicitly to
@@ -425,7 +427,11 @@ async function acquireOrGenerateRecipe(
         : draft.kind === "url"
           ? await loadRecipeWebSource(
               requiredRequestString(draft.request, "url"),
-            )
+            ).catch(() => {
+              // Blocked, missing, or non-recipe pages won't succeed on a
+              // workflow retry; tag them so the UI can suggest the Text tab.
+              throw new FatalError(SOURCE_UNREADABLE_MESSAGE);
+            })
           : draft.kind === "adapted"
             ? JSON.stringify({ ...trustedContext, adaptation: adaptedSource })
             : context;
@@ -922,9 +928,10 @@ async function recordWorkflowFailure(
       .eq("workflow_attempt_id", attemptId);
     return;
   }
-  const temporary = /high demand|rate limit|temporar|unavailable|retry/i.test(
-    message,
-  );
+  const sourceUnreadable = message === SOURCE_UNREADABLE_MESSAGE;
+  const temporary =
+    !sourceUnreadable &&
+    /high demand|rate limit|temporar|unavailable|retry/i.test(message);
   logWorkflowEvent("recipe_workflow_failed", draftId, {
     failureCategory: workflowFailureCategory(message),
   });
@@ -932,14 +939,18 @@ async function recordWorkflowFailure(
     .from("recipe_drafts")
     .update({
       status: "failed_retryable",
-      failure_code: temporary
-        ? "PROVIDER_TEMPORARILY_UNAVAILABLE"
-        : "WORKFLOW_FAILED",
+      failure_code: sourceUnreadable
+        ? "SOURCE_UNREADABLE"
+        : temporary
+          ? "PROVIDER_TEMPORARILY_UNAVAILABLE"
+          : "WORKFLOW_FAILED",
       verification: {
         ...((draft.verification as Record<string, unknown>) ?? {}),
-        summary: temporary
-          ? "The AI provider is temporarily busy. You can retry this review without uploading the recipe again."
-          : "Recipe verification could not finish. You can retry this review.",
+        summary: sourceUnreadable
+          ? "We couldn't read a recipe from that link."
+          : temporary
+            ? "The AI provider is temporarily busy. You can retry this review without uploading the recipe again."
+            : "Recipe verification could not finish. You can retry this review.",
       },
       updated_at: new Date().toISOString(),
     })
