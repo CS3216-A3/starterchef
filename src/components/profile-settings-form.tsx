@@ -1,6 +1,8 @@
 "use client";
 
 import { Minus, Plus } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/button";
 import { PillInput } from "@/components/pill-input";
@@ -62,8 +64,9 @@ export function ProfileSettingsForm({
   const [householdSize, setHouseholdSize] = useState(
     profile?.household_size ?? 1,
   );
-  const [status, setStatus] = useState<"idle" | "saved" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "error">("idle");
   const [pending, startTransition] = useTransition();
+  const router = useRouter();
 
   function toggleRestriction(option: string) {
     setRestrictions((prev) =>
@@ -91,7 +94,7 @@ export function ProfileSettingsForm({
         dietary_restrictions: restrictions.length,
         skill_level: skillLevel,
       });
-      setStatus("saved");
+      router.push("/settings");
     });
   }
 
@@ -215,9 +218,12 @@ export function ProfileSettingsForm({
         <Button type="submit" size="md" disabled={pending}>
           {pending ? "Saving…" : "Save profile"}
         </Button>
-        {status === "saved" && (
-          <span className="text-sm font-bold text-green-700">Saved!</span>
-        )}
+        <Link
+          href="/settings"
+          className="inline-flex h-11 items-center rounded-full px-6 font-bold text-espresso-light transition-colors hover:bg-oat/60 hover:text-espresso"
+        >
+          Cancel
+        </Link>
         {status === "error" && (
           <span className="text-sm font-bold text-red-700">
             Couldn&apos;t save. Try again.

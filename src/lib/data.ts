@@ -179,6 +179,48 @@ export async function getSavedRecipeIds(): Promise<Set<string>> {
   );
 }
 
+export interface CookingHistoryEntry {
+  id: string;
+  status: CookingSessionRow["status"];
+  current_step: number;
+  summary: CookingSessionRow["summary"];
+  started_at: string;
+  completed_at: string | null;
+  title: string | null;
+  slug: string | null;
+}
+
+/** Recent cooking sessions (newest first) plus the all-time completed count,
+ * for the profile page. Only the snapshot's title/slug are selected. */
+export async function getCookingHistory(limit = 20): Promise<{
+  sessions: CookingHistoryEntry[];
+  completedCount: number;
+}> {
+  const { supabase, user } = await getUserId();
+  if (!user) return { sessions: [], completedCount: 0 };
+  const [history, completed] = await Promise.all([
+    supabase
+      .from("cooking_sessions")
+      .select(
+        "id, status, current_step, summary, started_at, completed_at, title:recipe->>title, slug:recipe->>slug",
+      )
+      .eq("user_id", user.id)
+      .order("started_at", { ascending: false })
+      .limit(limit),
+    supabase
+      .from("cooking_sessions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("status", "completed"),
+  ]);
+  assertQuery(history.error, "load cooking history");
+  assertQuery(completed.error, "count completed sessions");
+  return {
+    sessions: (history.data as CookingHistoryEntry[] | null) ?? [],
+    completedCount: completed.count ?? 0,
+  };
+}
+
 /** The user's most recent in-progress cooking session, if any. */
 export async function getActiveCookingSession(): Promise<CookingSessionRow | null> {
   const { supabase, user } = await getUserId();

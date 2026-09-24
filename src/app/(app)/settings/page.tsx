@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
-import { ChefHat, Sparkles } from "lucide-react";
-import { ProfileSettingsForm } from "@/components/profile-settings-form";
-import { getAiUsageToday, getProfile } from "@/lib/data";
+import Link from "next/link";
+import { ChefHat, History, Pencil, Sparkles } from "lucide-react";
+import { CookingHistoryList } from "@/components/cooking-history-list";
+import { getAiUsageToday, getCookingHistory, getProfile } from "@/lib/data";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Your profile",
@@ -10,8 +12,24 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const [profile, usage] = await Promise.all([getProfile(), getAiUsageToday()]);
+  const [profile, usage, history] = await Promise.all([
+    getProfile(),
+    getAiUsageToday(),
+    getCookingHistory(),
+  ]);
   const usedPct = Math.min(100, (usage.used / usage.limit) * 100);
+  const skill = profile?.skill_level ?? "beginner";
+  const household = profile?.household_size ?? 1;
+  const diet = [
+    ...(profile?.dietary_restrictions ?? []),
+    ...(profile?.allergies ?? []).map((a) => `no ${a}`),
+  ];
+
+  const stats = [
+    { label: "Dishes cooked", value: history.completedCount },
+    { label: "Skill level", value: skill, capitalize: true },
+    { label: "Cooking for", value: household },
+  ];
 
   return (
     <div className="mx-auto flex max-w-lg flex-col gap-6">
@@ -23,12 +41,72 @@ export default async function SettingsPage() {
           <h1 className="truncate text-3xl font-extrabold tracking-tight">
             {profile?.display_name || "Your profile"}
           </h1>
-          <p className="mt-0.5 text-sm font-semibold text-espresso-light">
-            Tell us about yourself so StarterChef can customise recipes for your
-            needs.
+          <p className="mt-0.5 text-sm font-semibold text-espresso-light capitalize">
+            {skill} cook
           </p>
         </div>
+        <Link
+          href="/settings/edit"
+          className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full bg-oat px-4 text-sm font-bold text-espresso transition-colors hover:bg-oat-dark"
+        >
+          <Pencil className="h-4 w-4" /> Edit profile
+        </Link>
       </div>
+
+      <dl className="grid grid-cols-3 gap-3">
+        {stats.map(({ label, value, capitalize }) => (
+          <div
+            key={label}
+            className="flex flex-col gap-1 rounded-3xl bg-card p-4 text-center ring-1 ring-oat"
+          >
+            <dd
+              className={cn(
+                "text-xl font-extrabold",
+                capitalize && "capitalize",
+              )}
+            >
+              {value}
+            </dd>
+            <dt className="order-last text-xs font-bold text-espresso-light">
+              {label}
+            </dt>
+          </div>
+        ))}
+      </dl>
+
+      <section className="flex flex-col gap-2 rounded-3xl bg-card p-5 ring-1 ring-oat">
+        <h2 className="text-sm font-extrabold">Diet & allergies</h2>
+        {diet.length > 0 ? (
+          <ul className="flex flex-wrap gap-2">
+            {diet.map((d) => (
+              <li
+                key={d}
+                className="rounded-full bg-oat px-3 py-1 text-xs font-bold"
+              >
+                {d}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm font-semibold text-espresso-light">
+            None set.{" "}
+            <Link
+              href="/settings/edit"
+              className="font-bold text-flame hover:text-flame-dark"
+            >
+              Add them
+            </Link>{" "}
+            so recipes are tailored to you.
+          </p>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="flex items-center gap-2 text-xs font-extrabold tracking-wide text-espresso-light uppercase">
+          <History className="h-4 w-4" /> Cooking history
+        </h2>
+        <CookingHistoryList sessions={history.sessions} />
+      </section>
 
       <section className="flex flex-col gap-3 rounded-3xl bg-oat p-5">
         <div className="flex items-center justify-between">
@@ -60,8 +138,6 @@ export default async function SettingsPage() {
           Credits reset daily at midnight UTC.
         </p>
       </section>
-
-      <ProfileSettingsForm profile={profile} />
     </div>
   );
 }
