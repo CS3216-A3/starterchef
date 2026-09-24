@@ -5,6 +5,10 @@ import { Check, CircleAlert, LoaderCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/button";
 import { getApiErrorMessage } from "@/lib/client-api-error";
+import {
+  selectDraftVerificationReport,
+  type DraftVerification,
+} from "@/lib/recipe-draft-review";
 
 type DraftRecipe = {
   title: string;
@@ -48,19 +52,7 @@ type DraftResponse = {
   acceptedRecipeId: string | null;
   recipe: DraftRecipe | null;
   updatedAt: string;
-  review: {
-    summary?: string;
-    verdict?: string;
-    findings?: { severity?: string; message?: string }[];
-    gemini_final?: {
-      summary?: string;
-      findings?: { severity?: string; message?: string }[];
-    };
-    verification_final?: {
-      summary?: string;
-      findings?: { severity?: string; message?: string }[];
-    };
-  } | null;
+  review: DraftVerification | null;
 };
 
 const STAGES: { statuses: DraftStatus[]; label: string; detail: string }[] = [
@@ -96,7 +88,13 @@ function currentStage(status: DraftStatus) {
   return STAGES.findIndex((stage) => stage.statuses.includes(status));
 }
 
-export function RecipeDraftProgress({ draftId }: { draftId: string }) {
+export function RecipeDraftProgress({
+  draftId,
+  onStartOver,
+}: {
+  draftId: string;
+  onStartOver?: () => void;
+}) {
   const router = useRouter();
   const [draft, setDraft] = useState<DraftResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -202,10 +200,13 @@ export function RecipeDraftProgress({ draftId }: { draftId: string }) {
   }
 
   const stage = draft ? currentStage(draft.status) : 0;
-  const finalReview =
-    draft?.review?.verification_final ??
-    draft?.review?.gemini_final ??
-    draft?.review;
+  const selectedReview = draft
+    ? selectDraftVerificationReport(
+        draft.status,
+        draft.failureCode,
+        draft.review,
+      )
+    : null;
   const failure =
     draft &&
     ["blocked", "failed_permanent", "failed_retryable", "rejected"].includes(
@@ -232,7 +233,9 @@ export function RecipeDraftProgress({ draftId }: { draftId: string }) {
         </p>
         <h2 className="mt-1 text-xl font-extrabold">
           {failure
-            ? "This recipe needs another try"
+            ? draft.status === "blocked"
+              ? "This recipe did not pass review"
+              : "This recipe needs another try"
             : draft?.status === "awaiting_user_acceptance"
               ? "Your verified recipe is ready"
               : "Checking your recipe"}
@@ -278,18 +281,38 @@ export function RecipeDraftProgress({ draftId }: { draftId: string }) {
         })}
       </ol>
 
-      {finalReview?.summary && (
+      {draft?.status === "blocked" && (
+        <h3 className="text-sm font-extrabold text-espresso">
+          Why this review was blocked
+        </h3>
+      )}
+      {selectedReview?.summary && (
         <p className="rounded-2xl bg-oat p-3 text-sm font-semibold text-espresso-light">
-          {finalReview.summary}
+          {selectedReview.summary}
         </p>
       )}
-      {finalReview?.findings?.length ? (
+      {selectedReview?.findings?.length ? (
         <ul className="flex flex-col gap-2 rounded-2xl bg-oat p-3 text-sm font-semibold text-espresso-light">
-          {finalReview.findings.map((finding, index) => (
-            <li key={`${finding.message}-${index}`}>{finding.message}</li>
+          {selectedReview.findings.map((finding, index) => (
+            <li key={`${finding.message}-${index}`}>
+              {finding.severity && (
+                <span className="mr-1 font-extrabold text-espresso capitalize">
+                  {finding.severity}:
+                </span>
+              )}
+              {finding.message}
+            </li>
           ))}
         </ul>
       ) : null}
+      {draft?.status === "blocked" &&
+        !selectedReview?.summary &&
+        !selectedReview?.findings?.length && (
+          <p className="rounded-2xl bg-oat p-3 text-sm font-semibold text-espresso-light">
+            Detailed findings were not saved for this review. You can try a
+            clearer recipe source or contact support with the review code below.
+          </p>
+        )}
 
       {draft?.status === "awaiting_user_acceptance" && draft.recipe && (
         <DraftRecipePreview recipe={draft.recipe} />
@@ -357,6 +380,11 @@ export function RecipeDraftProgress({ draftId }: { draftId: string }) {
             ? `Review code: ${draft.failureCode}`
             : "You can start a new recipe review with a clearer source."}
         </div>
+      )}
+      {draft?.status === "blocked" && onStartOver && (
+        <Button className="w-full" onClick={onStartOver}>
+          Try another recipe
+        </Button>
       )}
       {draft?.status === "failed_retryable" &&
         (draft.restartCount ?? 0) < 2 && (
@@ -462,7 +490,7 @@ function failureMessage(status: DraftStatus, code: string | null) {
   if (status === "failed_retryable")
     return "The verification service had a temporary problem. Start a new review in a moment.";
   if (status === "blocked")
-    return "We found a safety or dietary issue, so this recipe cannot be saved.";
+    return "This draft did not pass verification, so it was not saved.";
   return "This review is no longer available.";
 }
 

@@ -208,7 +208,17 @@ export default function ImportRecipePage() {
               before starting another import.
             </p>
           )}
-          <RecipeDraftProgress draftId={reviewDraftId} />
+          <RecipeDraftProgress
+            draftId={reviewDraftId}
+            onStartOver={() => {
+              const url = new URL(window.location.href);
+              url.searchParams.delete("draft");
+              window.history.replaceState(null, "", url);
+              setReviewDraftId(null);
+              setResumedDraft(false);
+              setError(null);
+            }}
+          />
         </>
       ) : (
         <form onSubmit={handleExtract} className="flex flex-col gap-4">
