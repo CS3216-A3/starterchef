@@ -432,11 +432,11 @@ async function acquireOrGenerateRecipe(
               // Blocked, missing, or non-recipe pages won't succeed on a
               // workflow retry; tag them so the UI can suggest the Text tab.
               // The reason is our own fetch/parse message (e.g. "Could not
-              // fetch recipe page (403)"), never page content.
-              logWorkflowEvent("recipe_source_unreadable", draftId, {
-                reason: workflowErrorMessage(error, "unknown"),
-              });
-              throw new FatalError(SOURCE_UNREADABLE_MESSAGE);
+              // fetch recipe page (403)"), never page content. It rides on
+              // the FatalError so it lands in the workflow run log too.
+              const reason = workflowErrorMessage(error, "unknown");
+              logWorkflowEvent("recipe_source_unreadable", draftId, { reason });
+              throw new FatalError(`${SOURCE_UNREADABLE_MESSAGE}: ${reason}`);
             })
           : draft.kind === "adapted"
             ? JSON.stringify({ ...trustedContext, adaptation: adaptedSource })
@@ -934,7 +934,10 @@ async function recordWorkflowFailure(
       .eq("workflow_attempt_id", attemptId);
     return;
   }
-  const sourceUnreadable = message === SOURCE_UNREADABLE_MESSAGE;
+  const sourceUnreadable = message.startsWith(SOURCE_UNREADABLE_MESSAGE);
+  const sourceError = message.startsWith(`${SOURCE_UNREADABLE_MESSAGE}: `)
+    ? message.slice(SOURCE_UNREADABLE_MESSAGE.length + 2)
+    : undefined;
   const temporary =
     !sourceUnreadable &&
     /high demand|rate limit|temporar|unavailable|retry/i.test(message);
@@ -957,6 +960,7 @@ async function recordWorkflowFailure(
           : temporary
             ? "The AI provider is temporarily busy. You can retry this review without uploading the recipe again."
             : "Recipe verification could not finish. You can retry this review.",
+        ...(sourceError ? { sourceError } : {}),
       },
       updated_at: new Date().toISOString(),
     })
@@ -977,6 +981,7 @@ function logWorkflowEvent(
 
 function workflowFailureCategory(error: unknown) {
   const message = workflowErrorMessage(error, "");
+  if (message.startsWith(SOURCE_UNREADABLE_MESSAGE)) return "source_unreadable";
   if (/high demand|rate limit|temporar|unavailable|retry/i.test(message))
     return "provider_temporarily_unavailable";
   if (/api key|not configured|authentication|unauthorized/i.test(message))
