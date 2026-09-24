@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { createMetrics, logMetrics } from "@/lib/ai/voice-metrics";
 import type { VoiceAssistantMetrics } from "@/lib/ai/voice";
 import type { AssistantReply } from "@/lib/ai/schemas/assistant";
+import { clientErrorMessage } from "@/lib/client-error";
 
 type AskState =
   | { status: "idle" }
@@ -90,7 +91,8 @@ export function AskAssistantButton({
         body: JSON.stringify({ question, sessionId, channel: "voice" }),
       });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? "Assistant failed");
+      if (!res.ok)
+        throw new Error(clientErrorMessage(body, "Assistant failed"));
 
       metricsRef.current.firstResponseAt ??= performance.now();
       // step-check returns {feedback}; assistant returns {answer, action?}.

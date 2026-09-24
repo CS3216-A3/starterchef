@@ -19,6 +19,7 @@ import { VoiceAssistantButton } from "@/components/voice-assistant-button";
 import type { AssistantReply } from "@/lib/ai/schemas/assistant";
 import type { StepCheck } from "@/lib/ai/schemas/cooking";
 import type { CookingSessionRow } from "@/lib/types";
+import { clientErrorMessage } from "@/lib/client-error";
 import { cn } from "@/lib/utils";
 
 /**
@@ -131,7 +132,7 @@ export function CookAssist({
         },
       );
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? "Check failed");
+      if (!res.ok) throw new Error(clientErrorMessage(body, "Check failed"));
       setCheck(body as StepCheck & { previewUrl?: string | null });
       setCheckpointProposal(body.proposal ?? null);
     } catch (err) {
@@ -421,23 +422,30 @@ function StepTimer({
   persisted: CookingSessionRow["timer_state"];
 }) {
   const router = useRouter();
-  const [now, setNow] = useState(() => Date.now());
+  // The initial value is stable across server and browser hydration.
+  const [now, setNow] = useState(0);
   const [selectedSeconds, setSelectedSeconds] = useState(seconds);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
+    const initialTick = window.setTimeout(() => setNow(Date.now()), 0);
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearTimeout(initialTick);
+      window.clearInterval(timer);
+    };
   }, []);
   const sameStep = persisted.stepIndex === stepIndex;
   const running = sameStep && persisted.status === "running";
   const paused = sameStep && persisted.status === "paused";
   const remaining =
     running && persisted.endsAt
-      ? Math.max(
-          0,
-          Math.ceil((new Date(persisted.endsAt).getTime() - now) / 1000),
-        )
+      ? now === 0
+        ? (persisted.durationSeconds ?? selectedSeconds)
+        : Math.max(
+            0,
+            Math.ceil((new Date(persisted.endsAt).getTime() - now) / 1000),
+          )
       : paused
         ? (persisted.pausedRemainingSeconds ?? selectedSeconds)
         : selectedSeconds;

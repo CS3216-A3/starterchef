@@ -20,6 +20,9 @@ export default async function CookPage({
   if (!current) notFound();
   const progress = Math.round((session.current_step / steps.length) * 100);
   const version = session.version;
+  // Sessions from databases that have not applied 0029 lack timer_state.
+  // Keep the cook screen usable instead of crashing while rendering a timer.
+  const timerState = session.timer_state ?? { status: "idle" as const };
 
   return (
     <div className="mx-auto flex max-w-lg flex-col gap-6">
@@ -68,7 +71,7 @@ export default async function CookPage({
         totalSteps={steps.length}
         durationSeconds={current.durationSeconds}
         version={version}
-        timerState={session.timer_state}
+        timerState={timerState}
       />
       <CookStepNavigation
         sessionId={session.id}

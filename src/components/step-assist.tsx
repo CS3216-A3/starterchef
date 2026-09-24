@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Send, Sparkles } from "lucide-react";
 import { Button } from "@/components/button";
 import type { AssistantReply } from "@/lib/ai/schemas/assistant";
+import { clientErrorMessage } from "@/lib/client-error";
 
 /** Text Q&A for the current step — same assistant the voice button uses.
  *  When `snapFrame` returns a frame ("Show my food" is on), the question is
@@ -34,7 +35,8 @@ export function StepAskBox({
         body: JSON.stringify({ question: text, sessionId, channel: "text" }),
       });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? "Assistant failed");
+      if (!res.ok)
+        throw new Error(clientErrorMessage(body, "Assistant failed"));
       if (body.action) onAction?.(body.action);
       setAnswer(body.answer);
       setQuestion("");
