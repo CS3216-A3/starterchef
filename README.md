@@ -5,14 +5,14 @@ beginners: scan your kitchen to detect ingredients and equipment, get recipe
 suggestions ranked by what you already have, and cook step-by-step with a
 voice-enabled AI sous-chef.
 
-- **Live app:** _TBD — add deployed URL here_
+- **Live app:** [_Click here_](https://starterchef.vercel.app/)
 - **Course:** CS3216 Assignment 3 (Artificial Intelligence Application)
 
 ## Team
 
 | Name  | Matric no. | Contributions |
 | ----- | ---------- | ------------- |
-| _TBD_ | _TBD_      | _TBD_         |
+| Huang Kaijuan Joulene | A0299817E | Created the base app with core features and tech stack. Designed app logo and interactive landing page. |
 
 ## Tech stack
 
