@@ -102,7 +102,7 @@ export default async function KitchenPage() {
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-extrabold">Your profile</h2>
               <Link
-                href="/settings"
+                href="/settings/edit"
                 className="text-sm font-bold text-flame hover:text-flame-dark"
               >
                 Edit profile
