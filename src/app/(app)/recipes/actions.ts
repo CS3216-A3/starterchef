@@ -248,11 +248,41 @@ export async function saveRecipeFeedback(
     would_cook_again: input.wouldCookAgain,
     notes: input.notes,
   };
-  const { error: feedbackError } = session?.id
-    ? await supabase
+  let feedbackError: unknown = null;
+  if (session?.id) {
+    // Some deployed databases predate the unique session index required by
+    // PostgREST upsert. Find and update explicitly so retries work on either
+    // schema version and do not create duplicate feedback rows.
+    const { data: existing, error: lookupError } = await supabase
+      .from("recipe_feedback")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("session_id", session.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (lookupError) {
+      feedbackError = lookupError;
+    } else if (existing) {
+      const { error } = await supabase
         .from("recipe_feedback")
-        .upsert(feedbackRow, { onConflict: "user_id,session_id" })
-    : await supabase.from("recipe_feedback").insert(feedbackRow);
+        .update(feedbackRow)
+        .eq("id", existing.id)
+        .eq("user_id", user.id);
+      feedbackError = error;
+    } else {
+      const { error } = await supabase
+        .from("recipe_feedback")
+        .insert(feedbackRow);
+      feedbackError = error;
+    }
+  } else {
+    const { error } = await supabase
+      .from("recipe_feedback")
+      .insert(feedbackRow);
+    feedbackError = error;
+  }
 
   if (feedbackError)
     return safeActionFailure("save your feedback", feedbackError);
