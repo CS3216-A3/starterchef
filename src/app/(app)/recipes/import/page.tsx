@@ -89,10 +89,19 @@ export default function ImportRecipePage() {
         );
         return;
       }
-      const body = (await queued.json()) as { draftId?: string };
+      const body = (await queued.json()) as {
+        draftId?: string;
+        resumedDraft?: boolean;
+      };
       if (!body.draftId)
         setError("Recipe review was queued but could not be opened.");
-      else setReviewDraftId(body.draftId);
+      else {
+        if (body.resumedDraft)
+          setError(
+            "You already have a recipe under review — accept or reject it, then start a new one.",
+          );
+        setReviewDraftId(body.draftId);
+      }
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {

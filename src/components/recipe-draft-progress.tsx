@@ -42,6 +42,7 @@ type DraftStatus =
 
 type DraftResponse = {
   draftId: string;
+  kind?: "generated" | "photo" | "text" | "url" | "adapted" | "youtube";
   status: DraftStatus;
   failureCode: string | null;
   restartCount?: number;
@@ -237,7 +238,7 @@ export function RecipeDraftProgress({ draftId }: { draftId: string }) {
         </h2>
         <p className="mt-1 text-sm font-semibold text-espresso-light">
           {failure
-            ? failureMessage(draft.status, draft.failureCode)
+            ? failureMessage(draft.status, draft.failureCode, draft.kind)
             : draft
               ? STAGES[Math.max(stage, 0)]?.detail
               : "Connecting to your recipe review…"}
@@ -443,9 +444,15 @@ function isTerminal(status: DraftStatus) {
   ].includes(status);
 }
 
-function failureMessage(status: DraftStatus, code: string | null) {
+function failureMessage(
+  status: DraftStatus,
+  code: string | null,
+  kind?: DraftResponse["kind"],
+) {
   if (code === "PROVIDER_TEMPORARILY_UNAVAILABLE")
     return "The AI provider is temporarily busy. You can retry this review without uploading the recipe again.";
+  if (kind === "url")
+    return "We couldn't read that link — many recipe sites block automated access. Open the recipe in your browser, copy the text, and paste it into the Text tab instead.";
   if (status === "failed_retryable")
     return "The verification service had a temporary problem. Start a new review in a moment.";
   if (status === "blocked")

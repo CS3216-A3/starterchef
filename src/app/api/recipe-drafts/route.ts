@@ -5,6 +5,17 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { start } from "workflow/api";
 import { recipeVerificationWorkflow } from "../../../../workflows/recipe-verification";
 
+/** Statuses that still hold the one-active-draft-per-user slot. */
+const ACTIVE_DRAFT_STATUSES = [
+  "queued",
+  "acquiring_source",
+  "extracting_or_generating",
+  "verifying",
+  "adjudicating",
+  "awaiting_user_acceptance",
+  "failed_retryable",
+] as const;
+
 const requestSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("generated"),
@@ -97,6 +108,53 @@ export const POST = withProtectedRoute(async ({ request, requestId, user }) => {
         "Recipe not found",
       );
   }
+  // recipe_drafts_one_active_per_user allows a single non-terminal draft
+  // per user. Reconcile it before inserting instead of surfacing a 23505.
+  const { data: active } = await admin
+    .from("recipe_drafts")
+    .select("id,status,updated_at")
+    .eq("user_id", user.id)
+    .in("status", ACTIVE_DRAFT_STATUSES)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (active?.status === "awaiting_user_acceptance") {
+    // There's a finished review waiting — hand it back so the user accepts
+    // or rejects it before starting another.
+    return Response.json(
+      { draftId: active.id, status: active.status, resumedDraft: true },
+      { status: 200 },
+    );
+  }
+
+  const STALE_AFTER_MS = 15 * 60 * 1000;
+  const stale =
+    active &&
+    Date.now() - new Date(active.updated_at).getTime() > STALE_AFTER_MS;
+
+  if (active && !stale) {
+    return protectedError(
+      { requestId },
+      409,
+      "CONFLICT",
+      "A recipe is already being processed — give it a moment and try again.",
+    );
+  }
+
+  if (active && stale) {
+    // Stuck in a working state or retryable failure — supersede it so the
+    // new import isn't permanently blocked.
+    await admin
+      .from("recipe_drafts")
+      .update({
+        status: "failed_permanent",
+        failure_code: "SUPERSEDED",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", active.id);
+  }
+
   const requestJson = requestForDraft(input);
   const { data: inserted, error } = await admin
     .from("recipe_drafts")
@@ -113,13 +171,22 @@ export const POST = withProtectedRoute(async ({ request, requestId, user }) => {
       { onConflict: "user_id,idempotency_key", ignoreDuplicates: true },
     )
     .select("id,status,accepted_recipe_id,verification");
-  if (error)
+  if (error) {
+    if (error.code === "23505") {
+      return protectedError(
+        { requestId },
+        409,
+        "CONFLICT",
+        "Finish or reject your current recipe review, then try again.",
+      );
+    }
     return protectedError(
       { requestId },
       500,
       "INTERNAL_ERROR",
       "Could not create recipe draft",
     );
+  }
   const draft =
     inserted?.[0] ??
     (
