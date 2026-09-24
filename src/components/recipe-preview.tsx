@@ -128,11 +128,7 @@ export function RecipePreviewButton({ recipe }: { recipe: RecipePreview }) {
                 Open full recipe
               </Link>
               <div className="flex-1">
-                <StartCookingButton
-                  recipeId={recipe.id}
-                  slug={recipe.slug}
-                  label="Let's cook"
-                />
+                <StartCookingButton recipeId={recipe.id} label="Let's cook" />
               </div>
             </div>
           </div>
