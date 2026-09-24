@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/button";
 import { deleteUserRecipe } from "@/app/(app)/recipes/actions";
+import { trackEvent } from "@/lib/posthog/events";
 
 /** Delete a user-owned recipe after an explicit confirmation. */
 export function DeleteRecipeButton({
@@ -26,6 +27,7 @@ export function DeleteRecipeButton({
         setError(result.error);
         return;
       }
+      trackEvent("recipe_deleted", { recipe_id: recipeId });
       router.push("/recipes");
     });
   }

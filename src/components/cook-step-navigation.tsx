@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/button";
+import { trackEvent } from "@/lib/posthog/events";
 
 export function CookStepNavigation({
   sessionId,
@@ -39,6 +40,13 @@ export function CookStepNavigation({
         return;
       }
       if (!response.ok) throw new Error("Could not save progress");
+      if (step > currentStep) {
+        trackEvent("step_completed", {
+          session_id: sessionId,
+          step_index: currentStep,
+          total_steps: totalSteps,
+        });
+      }
       router.refresh();
     } catch (cause) {
       setError(
