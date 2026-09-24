@@ -21,7 +21,7 @@ import {
 } from "@/lib/ai/schemas/recipe-verification";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadRecipeWebSource } from "@/lib/recipe-web-source";
-import { workflowErrorMessage } from "@/lib/workflow-error";
+import { workflowErrorChain, workflowErrorMessage } from "@/lib/workflow-error";
 import { recipeSafetyFailure } from "@/lib/validation/recipe-safety";
 import {
   applyPhotoCompleteness,
@@ -434,7 +434,7 @@ async function acquireOrGenerateRecipe(
               // The reason is our own fetch/parse message (e.g. "Could not
               // fetch recipe page (403)"), never page content. It rides on
               // the FatalError so it lands in the workflow run log too.
-              const reason = workflowErrorMessage(error, "unknown");
+              const reason = workflowErrorChain(error, "unknown");
               logWorkflowEvent("recipe_source_unreadable", draftId, { reason });
               throw new FatalError(`${SOURCE_UNREADABLE_MESSAGE}: ${reason}`);
             })
