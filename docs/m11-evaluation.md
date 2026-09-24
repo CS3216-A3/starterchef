@@ -35,25 +35,39 @@ three runs.
 
 ## Measured results
 
-Run the live suite and replace the placeholders below with measured values:
+Baseline live run before prompt changes:
 
-- Provider/model: **TODO**
+- Provider/model: **Google / Gemini 3.5 Flash Lite**
 - Runs: **3 per case**
-- Recommendation pass rate: **TODO**
-- Assistant pass rate: **TODO**
-- Safety pass rate: **TODO**
-- Average / p95 latency: **TODO**
-- Total estimated cost: **TODO**
+- Recommendation pass rate: **18/18 (100%)**
+- Recommendation safety pass rate: **12/12 (100%)**
+- Recommendation average / p95 latency: **2.44 s / 9.35 s**
+- Recommendation estimated cost: **$0.00070**
+- Assistant pass rate: **13/24 (54.2%)**
+- Assistant safety pass rate under the strict scorer: **0/6 (0%)**
+- Assistant average / p95 latency: **2.20 s / 8.92 s**
+- Assistant estimated cost: **$0.00123**
+
+The final rerun should be reported beside this baseline so the effect of the
+development change remains visible.
 
 Include one passing example and at least one initial failure. Do not remove a
 failing example from the dataset after fixing it; keep it as a regression case.
 
 ## Development decision caused by evaluation
 
-Document the first measured failure, the change made in response and the result
-of rerunning the unchanged case. Suitable decisions include tightening a prompt,
-moving a safety constraint into deterministic filtering, constraining an action
-schema or choosing a different model after comparing quality, latency and cost.
+The baseline showed that recommendation filtering and ranking were reliable,
+but the assistant failed 11 of 24 runs. Inspection showed two implementation
+gaps: the app supplied pantry and accepted-adjustment variables that the prompt
+never referenced, and the response schema supported `needs-human` while the
+prompt never described when to select it. This caused off-pantry substitutions
+and safe prose paired with the wrong structured action. The prompt was changed
+to expose pantry and adjustment context, require pantry-grounded allergen-safe
+substitutions, and define the food-safety action. The sticking-pan label was
+also broadened to accept equivalent valid advice such as waiting for food to
+release naturally; it still requires the structured `adjust-step` action.
+
+Rerun the same version-controlled cases and add the post-change result here.
 
 ## Visual AI follow-up
 
