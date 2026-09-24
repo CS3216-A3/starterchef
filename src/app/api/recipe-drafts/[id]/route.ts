@@ -15,7 +15,7 @@ export const GET = withProtectedRoute(
     const { data, error } = await supabase
       .from("recipe_drafts")
       .select(
-        "id,status,failure_code,canonical_recipe,verification,accepted_recipe_id,expires_at,restart_count,tailoring_count,updated_at",
+        "id,kind,status,failure_code,canonical_recipe,verification,accepted_recipe_id,expires_at,restart_count,tailoring_count,updated_at",
       )
       .eq("id", id)
       .maybeSingle();
@@ -62,6 +62,7 @@ export const GET = withProtectedRoute(
       new Date(clarificationExpiresAt).getTime() <= Date.now();
     return Response.json({
       draftId: data.id,
+      kind: data.kind,
       status: clarificationExpired ? "blocked" : data.status,
       failureCode: clarificationExpired
         ? "PHOTO_CLARIFICATION_EXPIRED"

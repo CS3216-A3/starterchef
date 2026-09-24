@@ -161,3 +161,35 @@ export const POST = withProtectedRoute(async (context) => {
         : null,
   });
 });
+
+/** Remove a checkpoint photo from the step display. Deletes the private
+ * object and its cooking_checkpoints row; the session_events photo_check
+ * record stays so the timeline is unchanged. */
+export const DELETE = withProtectedRoute(async (context) => {
+  const id = sessionIdFromPath(context.request, -2);
+  const known = await ownedSession(context, id);
+  if (known.error) return known.error;
+  const checkpointId = new URL(context.request.url).searchParams.get(
+    "checkpointId",
+  );
+  if (!checkpointId)
+    return protectedError(
+      context,
+      400,
+      "INVALID_REQUEST",
+      "A checkpointId is required",
+    );
+  const admin = createAdminClient();
+  const { data: checkpoint } = await admin
+    .from("cooking_checkpoints")
+    .select("id, object_path")
+    .eq("id", checkpointId)
+    .eq("session_id", id)
+    .eq("user_id", context.user.id)
+    .maybeSingle();
+  if (!checkpoint)
+    return protectedError(context, 404, "NOT_FOUND", "Checkpoint not found");
+  await admin.from("cooking_checkpoints").delete().eq("id", checkpoint.id);
+  await admin.storage.from("recipe-inputs").remove([checkpoint.object_path]);
+  return Response.json({ ok: true });
+});

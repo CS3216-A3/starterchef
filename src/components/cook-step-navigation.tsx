@@ -61,7 +61,14 @@ export function CookStepNavigation({
             <ArrowLeft className="h-4 w-4" /> Previous
           </Button>
         ) : (
-          <span />
+          <Button
+            variant="outline"
+            size="md"
+            disabled={busy}
+            onClick={() => router.push(`/cook/${sessionId}?prep`)}
+          >
+            <ArrowLeft className="h-4 w-4" /> Prep list
+          </Button>
         )}
         {currentStep < totalSteps ? (
           <Button

@@ -42,7 +42,7 @@ export function StartCookingButton({
           return;
         }
         trackEvent("cooking_session_started", { recipe_id: recipeId });
-        router.push(`/cook/${sessionId}`);
+        router.push(`/cook/${sessionId}?prep`);
       } catch {
         setError("Could not connect. Please try again.");
       }
