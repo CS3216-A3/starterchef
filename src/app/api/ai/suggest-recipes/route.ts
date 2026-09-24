@@ -64,12 +64,10 @@ export const POST = withAiRoute({
   },
   async handler({ trusted }) {
     if (trusted.length === 0) return Response.json({ recommendations: [] });
-    const fallback = trusted
-      .slice(0, 6)
-      .map((item) => ({
-        ...item,
-        reason: `Matches ${item.pantryMatches.length ? item.pantryMatches.join(", ") : "your current cooking preferences"}.`,
-      }));
+    const fallback = trusted.slice(0, 6).map((item) => ({
+      ...item,
+      reason: `Matches ${item.pantryMatches.length ? item.pantryMatches.join(", ") : "your current cooking preferences"}.`,
+    }));
     try {
       const { object: generated } = await measuredGenerate("suggest-recipes", {
         model: getModel("suggestions"),
