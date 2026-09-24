@@ -13,6 +13,15 @@ npm.cmd run test:security:integration
 npm.cmd run test:security:e2e
 ```
 
+To exercise AI recipe imports in the local browser with the same disposable
+accounts, set `RUN_RECIPE_IMPORT_E2E=true` and run
+`npx.cmd playwright test e2e/recipe-import.spec.ts`. This opt-in suite imports
+and saves a text recipe and a recipe-card photo, then checks that both sources
+receive the same daily-limit response when the other account has fewer than
+six credits left. Text reviews reserve six daily AI credits and photo reviews
+reserve seven; the limit proof skips when that account has enough credits. It
+also needs `SUPABASE_SECRET_KEY` locally to remove the rejected test upload.
+
 The integration and journey tests need `SECURITY_USER_A_EMAIL`,
 `SECURITY_USER_A_PASSWORD`, `SECURITY_USER_B_EMAIL`, and
 `SECURITY_USER_B_PASSWORD` in the local process. The Playwright journey uses
