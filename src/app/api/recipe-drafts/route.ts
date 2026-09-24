@@ -45,6 +45,44 @@ const requestSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
+const activeStatuses = [
+  "queued",
+  "acquiring_source",
+  "extracting_or_generating",
+  "verifying",
+  "adjudicating",
+  "awaiting_user_acceptance",
+];
+
+/** Only owner-visible, non-sensitive metadata is needed to resume a review. */
+export const GET = withProtectedRoute(async ({ user, supabase, requestId }) => {
+  const { data, error } = await supabase
+    .from("recipe_drafts")
+    .select("id,kind,status,updated_at")
+    .eq("user_id", user.id)
+    .in("status", activeStatuses)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error)
+    return protectedError(
+      { requestId },
+      500,
+      "INTERNAL_ERROR",
+      "Could not load active recipe review",
+    );
+  return Response.json({
+    activeDraft: data
+      ? {
+          draftId: data.id,
+          kind: data.kind,
+          status: data.status,
+          updatedAt: data.updated_at,
+        }
+      : null,
+  });
+});
+
 export const POST = withProtectedRoute(
   async ({ request, requestId, user, supabase }) => {
     const parsed = requestSchema.safeParse(

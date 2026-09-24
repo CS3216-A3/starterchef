@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { FileImage, Link2, Sparkles, Type, Video } from "lucide-react";
 import { getApiErrorMessage } from "@/lib/client-api-error";
+import { loadActiveRecipeDraft } from "@/lib/active-recipe-draft";
 import { Button } from "@/components/button";
 import { RecipeDraftProgress } from "@/components/recipe-draft-progress";
 
@@ -27,17 +28,44 @@ export default function ImportRecipePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reviewDraftId, setReviewDraftId] = useState<string | null>(null);
+  const [resumedDraft, setResumedDraft] = useState(false);
+  const [checkingActive, setCheckingActive] = useState(true);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   // A durable draft can outlive a browser refresh. Keep the opaque ID in the
   // URL so "check back later" is an actual usable path, while the API still
   // performs the ownership check before revealing any review state.
   useEffect(() => {
-    const timer = window.setTimeout(() => {
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
       const draftId = new URLSearchParams(window.location.search).get("draft");
-      if (draftId) setReviewDraftId(draftId);
+      if (draftId) {
+        setReviewDraftId(draftId);
+        setCheckingActive(false);
+        return;
+      }
+      try {
+        const active = await loadActiveRecipeDraft();
+        if (cancelled) return;
+        if (active) {
+          setReviewDraftId(active.draftId);
+          setResumedDraft(true);
+        }
+      } catch (cause) {
+        if (!cancelled)
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : "Could not find your active review",
+          );
+      } finally {
+        if (!cancelled) setCheckingActive(false);
+      }
     }, 0);
-    return () => window.clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -71,6 +99,18 @@ export default function ImportRecipePage() {
         }),
       });
       if (!queued.ok) {
+        if (queued.status === 409) {
+          try {
+            const active = await loadActiveRecipeDraft();
+            if (active) {
+              setReviewDraftId(active.draftId);
+              setResumedDraft(true);
+              return;
+            }
+          } catch {
+            // Keep the original conflict message if discovery is unavailable.
+          }
+        }
         setError(
           await getApiErrorMessage(queued, "Could not queue recipe review"),
         );
@@ -156,8 +196,20 @@ export default function ImportRecipePage() {
         />
       </div>
 
-      {reviewDraftId ? (
-        <RecipeDraftProgress draftId={reviewDraftId} />
+      {checkingActive ? (
+        <p className="text-sm font-semibold text-espresso-light" role="status">
+          Checking for an existing recipe review…
+        </p>
+      ) : reviewDraftId ? (
+        <>
+          {resumedDraft && (
+            <p className="rounded-2xl bg-oat p-4 text-sm font-semibold text-espresso">
+              You already have a recipe review underway. Finish or cancel it
+              before starting another import.
+            </p>
+          )}
+          <RecipeDraftProgress draftId={reviewDraftId} />
+        </>
       ) : (
         <form onSubmit={handleExtract} className="flex flex-col gap-4">
           {state.source === "text" && (

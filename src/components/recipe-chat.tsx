@@ -4,6 +4,7 @@ import { ChefHat, Send, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/button";
+import { loadActiveRecipeDraft } from "@/lib/active-recipe-draft";
 
 /** Customisation is a request for an owned adaptation draft. The browser never
  * supplies a mutable recipe or saves an AI result directly. */
@@ -29,6 +30,17 @@ export function RecipeChat({ recipeId }: { recipeId: string }) {
         }),
       });
       const body = await response.json().catch(() => null);
+      if (response.status === 409) {
+        try {
+          const active = await loadActiveRecipeDraft();
+          if (active) {
+            router.push(`/recipes/import?draft=${active.draftId}`);
+            return;
+          }
+        } catch {
+          // Keep the original conflict message if discovery is unavailable.
+        }
+      }
       if (!response.ok || typeof body?.draftId !== "string") {
         setError(
           body?.error?.message ?? "Could not start the adaptation review",

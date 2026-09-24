@@ -189,6 +189,7 @@ export function RecipeDraftProgress({ draftId }: { draftId: string }) {
           : current,
       );
       setError(null);
+      setRefreshNonce((value) => value + 1);
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -218,6 +219,7 @@ export function RecipeDraftProgress({ draftId }: { draftId: string }) {
     : 0;
   const takingLonger =
     draft && !isTerminal(draft.status) && secondsSinceUpdate >= 90;
+  const possiblyStalled = takingLonger && secondsSinceUpdate >= 600;
 
   return (
     <section
@@ -296,13 +298,14 @@ export function RecipeDraftProgress({ draftId }: { draftId: string }) {
       {takingLonger && (
         <div className="rounded-2xl bg-oat p-3 text-sm font-semibold text-espresso-light">
           <p className="font-extrabold text-espresso">
-            Still working on this step
+            {possiblyStalled
+              ? "No recent review update"
+              : "Still working on this step"}
           </p>
           <p className="mt-1">
-            The AI provider may be retrying because it is busy. This review is
-            saved securely: you can leave this page and return to this same URL
-            later. If the retries are exhausted, this page will offer a safe
-            retry without another upload.
+            {possiblyStalled
+              ? "This review may be stuck. Refresh its status, or cancel it to start a new import. Cancelling will not save a recipe."
+              : "The AI provider may be retrying because it is busy. This review is saved securely: you can leave this page and return to this same URL later."}
           </p>
         </div>
       )}
@@ -336,6 +339,16 @@ export function RecipeDraftProgress({ draftId }: { draftId: string }) {
             {acting ? "Saving…" : "Accept recipe"}
           </Button>
         </div>
+      )}
+      {draft && !failure && !isTerminal(draft.status) && (
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={() => void decide("reject")}
+          disabled={acting}
+        >
+          {acting ? "Cancelling…" : "Cancel review"}
+        </Button>
       )}
       {failure && (
         <div className="flex items-start gap-2 rounded-2xl bg-flame-soft p-3 text-sm font-bold text-espresso">
