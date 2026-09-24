@@ -66,7 +66,9 @@ export function StepPhoto({
       <span className="mt-1 block text-xs font-semibold text-espresso-light">
         Removing the photo keeps the check result in your cooking timeline.
       </span>
-      {error && <p className="mt-1 text-xs font-bold text-flame">{error}</p>}
+      {error && (
+        <p className="mt-1 text-xs font-bold text-flame-ink">{error}</p>
+      )}
     </span>
   );
 }

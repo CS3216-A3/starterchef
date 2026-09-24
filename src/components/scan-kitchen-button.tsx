@@ -275,7 +275,7 @@ export function ScanKitchenButton() {
                 {item.confidence === "low" && (
                   <span
                     id={`confidence-${item.id}`}
-                    className="flex w-full items-center gap-1.5 text-xs font-extrabold text-flame"
+                    className="flex w-full items-center gap-1.5 text-xs font-extrabold text-flame-ink"
                   >
                     <CircleAlert
                       className="h-4 w-4 shrink-0"
@@ -382,7 +382,7 @@ export function ScanKitchenButton() {
             Existing items won&apos;t be removed.
           </p>
           {state.error && (
-            <p role="alert" className="mb-3 text-sm font-bold text-flame">
+            <p role="alert" className="mb-3 text-sm font-bold text-flame-ink">
               {state.error}
             </p>
           )}

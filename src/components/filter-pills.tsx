@@ -97,21 +97,21 @@ export function FilterPills({
               className={cn(
                 "inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold shadow-sm ring-1 transition-colors",
                 active
-                  ? "bg-flame text-white ring-flame"
+                  ? "bg-flame text-espresso ring-flame"
                   : "bg-card text-espresso ring-oat hover:ring-flame/50",
               )}
             >
               <Icon
                 className={cn(
                   "h-4 w-4",
-                  active ? "text-white" : "text-espresso-light",
+                  active ? "text-espresso" : "text-espresso-light",
                 )}
               />
               {label(displayed)}
               <ChevronDown
                 className={cn(
                   "h-3.5 w-3.5",
-                  active ? "text-white" : "text-espresso-light",
+                  active ? "text-espresso" : "text-espresso-light",
                 )}
               />
             </button>
@@ -125,7 +125,7 @@ export function FilterPills({
                     className={cn(
                       "block w-full px-4 py-2 text-left text-sm font-bold transition-colors hover:bg-oat",
                       (current ?? "") === opt.value
-                        ? "text-flame"
+                        ? "text-flame-ink"
                         : "text-espresso",
                     )}
                   >

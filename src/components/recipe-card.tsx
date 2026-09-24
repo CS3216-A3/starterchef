@@ -42,7 +42,7 @@ export function RecipeCard({
       )}
       <div className="flex flex-1 flex-col gap-2 p-4">
         <h3 className="text-lg leading-snug font-extrabold">
-          <Link href={href} className="hover:text-flame">
+          <Link href={href} className="hover:text-flame-ink">
             {recipe.title}
           </Link>
         </h3>
@@ -57,7 +57,7 @@ export function RecipeCard({
             <Users className="h-3.5 w-3.5" /> Serves {recipe.servings}
           </span>
         </p>
-        <p className="inline-flex items-center gap-1.5 text-xs font-bold text-flame">
+        <p className="inline-flex items-center gap-1.5 text-xs font-bold text-flame-ink">
           <Sparkles className="h-3.5 w-3.5" /> {recipe.whyGood}
         </p>
         <div className="mt-auto flex gap-2 pt-2">

@@ -29,7 +29,7 @@ export default async function RecipesPage() {
         </div>
         <Link
           href="/recipes/import"
-          className="inline-flex shrink-0 items-center gap-2 rounded-full bg-flame px-4 py-2 text-sm font-bold text-white hover:bg-flame-dark"
+          className="inline-flex shrink-0 items-center gap-2 rounded-full bg-flame px-4 py-2 text-sm font-bold text-espresso hover:bg-flame-ink hover:text-white"
         >
           <Plus className="h-4 w-4" /> Import
         </Link>
@@ -44,7 +44,7 @@ export default async function RecipesPage() {
           </p>
           <Link
             href="/recipes/import"
-            className="text-sm font-bold text-flame underline underline-offset-2 hover:text-flame-dark"
+            className="text-sm font-bold text-flame-ink underline underline-offset-2 hover:text-espresso"
           >
             Import your first recipe
           </Link>

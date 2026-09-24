@@ -92,7 +92,7 @@ export default async function SettingsPage() {
             None set.{" "}
             <Link
               href="/settings/edit"
-              className="font-bold text-flame hover:text-flame-dark"
+              className="font-bold text-flame-ink hover:text-espresso"
             >
               Add them
             </Link>{" "}

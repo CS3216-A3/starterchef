@@ -12,10 +12,10 @@ export default function MarketingLayout({
         <Logo />
         <nav className="flex items-center gap-2 text-sm font-bold">
           <a
-            href="#features"
+            href="#how-it-works"
             className="hidden rounded-full px-4 py-2 text-espresso-light hover:text-espresso sm:inline"
           >
-            Features
+            How it works
           </a>
           <a
             href="#pricing"
@@ -25,7 +25,7 @@ export default function MarketingLayout({
           </a>
           <Link
             href="/today"
-            className="rounded-full bg-flame px-5 py-2.5 text-white transition-colors hover:bg-flame-dark"
+            className="rounded-full bg-flame px-5 py-2.5 text-espresso transition-colors hover:bg-flame-ink hover:text-white"
           >
             Get started
           </Link>
@@ -37,7 +37,7 @@ export default function MarketingLayout({
       <footer className="border-t border-oat">
         <div className="mx-auto flex w-full max-w-5xl flex-col items-center justify-between gap-3 px-4 py-8 text-sm font-semibold text-espresso-light sm:flex-row sm:px-6">
           <Logo showWordmark={false} />
-          <p>StarterChef · Your kitchen, your next meal.</p>
+          <p>StarterChef · Your start to great cooking.</p>
           <p>CS3216 Assignment 3</p>
         </div>
       </footer>

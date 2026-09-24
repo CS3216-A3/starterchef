@@ -1,57 +1,110 @@
 import {
   Camera,
+  Check,
   ChefHat,
-  Mic,
+  CookingPot,
+  History,
+  Import,
+  Minus,
   ScanLine,
   Sparkles,
-  TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
 import type { Metadata } from "next";
+import { buttonStyles } from "@/components/button";
+import {
+  CookDemo,
+  HistoryDemo,
+  ImportDemo,
+  RecipeMatchDemo,
+  ScanDemo,
+} from "@/components/landing-demo";
+import { Reveal } from "@/components/reveal";
 import {
   CORE_FEATURES,
   FEATURE_ROWS,
   PLANS,
   TOP_UPS,
+  approxCooks,
   type TopUp,
 } from "@/lib/credits";
 
 export const metadata: Metadata = {
-  title: { absolute: "StarterChef · Cook with what you have" },
+  title: { absolute: "StarterChef · Your start to great cooking" },
   alternates: { canonical: "/" },
 };
 
-const features = [
+const howItWorks = [
   {
     icon: ScanLine,
     title: "Scan your kitchen",
-    body: "Point your camera at your fridge and pantry. StarterChef recognises your ingredients and equipment, and keeps your kitchen inventory up to date.",
+    body: "Point your camera at the fridge or pantry. StarterChef recognises ingredients and equipment, and always lets you correct the list before anything is saved.",
+    Demo: ScanDemo,
   },
   {
     icon: Sparkles,
-    title: "Recipes that fit you",
-    body: "Suggestions ranked by what you already have, what expires soon, your equipment, dietary needs, skill level, and how much time you have.",
+    title: "Recipes that fit your kitchen",
+    body: "Every suggestion is ranked by what you have, your equipment, dietary needs, skill level, and how much time you have. Open a card to see exactly why it was picked.",
+    Demo: RecipeMatchDemo,
   },
   {
-    icon: Mic,
-    title: "Cook hands-free",
-    body: "One step at a time, with voice navigation, timers, and an assistant that answers questions and troubleshoots while you cook.",
+    icon: Import,
+    title: "Import any recipe",
+    body: "Paste a link, a photo of a recipe card, plain text, or a YouTube video. StarterChef extracts it into a structured recipe you review before it joins your book.",
+    Demo: ImportDemo,
   },
   {
-    icon: TrendingUp,
-    title: "Level up over time",
-    body: "Save the substitutions, notes, and recipe versions that worked for you. Bring that cooking experience into your next session.",
+    icon: CookingPot,
+    title: "Cook step by step",
+    body: "Move through one step at a time with big tap targets and built-in timers. Tap the mascot to ask a question by voice, or show your pan for a photo checkpoint.",
+    Demo: CookDemo,
+  },
+  {
+    icon: History,
+    title: "Look back on every cook",
+    body: "Each finished session gets a StarterChef recap with what you asked, the photo checkpoints, and what to try next time. Cross-session memory is part of Plus.",
+    Demo: HistoryDemo,
   },
 ];
 
 const topUpCopy: Record<TopUp["id"], string> = {
   small: "Occasional extra AI help.",
-  large: "Extra credits for video imports and live voice.",
+  large: "Better value for frequent video imports and live voice.",
 };
 
 const sgd = (amount: number) => `S$${amount.toFixed(2)}`;
 
+function PlanCell({ value }: { value: string }) {
+  if (value === "✓") {
+    return (
+      <>
+        <Check
+          className="mx-auto h-4 w-4 text-flame-ink"
+          strokeWidth={2.5}
+          aria-hidden="true"
+        />
+        <span className="sr-only">Included</span>
+      </>
+    );
+  }
+  if (value === "—") {
+    return (
+      <>
+        <Minus
+          className="mx-auto h-4 w-4 text-espresso-light/50"
+          strokeWidth={2.5}
+          aria-hidden="true"
+        />
+        <span className="sr-only">Not included</span>
+      </>
+    );
+  }
+  return <span className="text-xs font-bold sm:text-sm">{value}</span>;
+}
+
 export default function LandingPage() {
+  const [freePlan, plusPlan] = PLANS;
+
   return (
     <>
       <section className="mx-auto flex w-full max-w-5xl flex-col items-center gap-6 px-4 pt-16 pb-20 text-center sm:px-6 sm:pt-24">
@@ -60,24 +113,20 @@ export default function LandingPage() {
           For cooking beginners
         </span>
         <h1 className="max-w-3xl text-4xl leading-tight font-extrabold tracking-tight sm:text-6xl">
-          Good food starts with{" "}
-          <span className="text-flame">what you have.</span>
+          Your start to <span className="text-flame-ink">great cooking.</span>
         </h1>
         <p className="max-w-xl text-lg font-semibold text-espresso-light">
           StarterChef sees what&apos;s in your kitchen, suggests meals you can
           actually make, and talks you through every step, no experience needed.
         </p>
         <div className="flex flex-col gap-3 sm:flex-row">
-          <Link
-            href="/today"
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-flame px-8 text-lg font-bold text-white transition-colors hover:bg-flame-dark"
-          >
+          <Link href="/today" className={buttonStyles({ size: "lg" })}>
             <Camera className="h-5 w-5" />
             Scan my kitchen
           </Link>
           <a
-            href="#features"
-            className="inline-flex h-12 items-center justify-center rounded-full border-2 border-espresso/15 px-8 text-lg font-bold transition-colors hover:border-espresso/30"
+            href="#how-it-works"
+            className={buttonStyles({ size: "lg", variant: "outline" })}
           >
             See how it works
           </a>
@@ -85,28 +134,30 @@ export default function LandingPage() {
       </section>
 
       <section
-        id="features"
-        className="mx-auto w-full max-w-5xl scroll-mt-20 px-4 pb-20 sm:px-6"
+        id="how-it-works"
+        className="mx-auto flex w-full max-w-5xl scroll-mt-20 flex-col gap-12 px-4 pb-20 sm:px-6"
       >
-        <h2 className="mb-8 text-center text-2xl font-extrabold sm:text-3xl">
-          Your AI sous-chef
+        <h2 className="text-center text-2xl font-extrabold sm:text-3xl">
+          How it works
         </h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {features.map(({ icon: Icon, title, body }) => (
-            <div
-              key={title}
-              className="rounded-3xl bg-card p-6 shadow-sm ring-1 ring-oat"
-            >
-              <span className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-flame-soft">
-                <Icon className="h-5 w-5 text-flame" />
-              </span>
-              <h3 className="mb-1 text-lg font-extrabold">{title}</h3>
-              <p className="text-sm leading-relaxed font-semibold text-espresso-light">
-                {body}
-              </p>
+        {howItWorks.map(({ icon: Icon, title, body, Demo }, index) => (
+          <Reveal key={title}>
+            <div className="grid items-center gap-6 sm:grid-cols-2 sm:gap-10">
+              <div className={index % 2 === 1 ? "sm:order-2" : ""}>
+                <span className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-flame-soft">
+                  <Icon className="h-5 w-5 text-flame" />
+                </span>
+                <h3 className="mb-2 text-xl font-extrabold">{title}</h3>
+                <p className="max-w-md text-sm leading-relaxed font-semibold text-espresso-light">
+                  {body}
+                </p>
+              </div>
+              <div className={index % 2 === 1 ? "sm:order-1" : ""}>
+                <Demo />
+              </div>
             </div>
-          ))}
-        </div>
+          </Reveal>
+        ))}
       </section>
 
       <section
@@ -117,130 +168,151 @@ export default function LandingPage() {
           Simple pricing
         </h2>
         <p className="mx-auto mb-8 max-w-md text-center text-sm font-semibold text-espresso-light">
-          Every plan gets the core app for free. AI features run on a monthly
-          credit budget, and Plus unlocks the full experience.
+          AI features like scanning, suggestions, voice, and adaptations run on
+          credits. Everything else is free, always.
         </p>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          {PLANS.map((plan) => (
-            <div
-              key={plan.id}
-              className="flex flex-col rounded-3xl bg-card p-6 shadow-sm ring-1 ring-oat"
-            >
-              <h3 className="text-lg font-extrabold">{plan.name}</h3>
-              <p className="mt-1 text-3xl font-extrabold text-flame">
-                {plan.priceSgd === 0 ? "Free" : `${sgd(plan.priceSgd)}/mo`}
-                {plan.annualPriceSgd && (
-                  <span className="ml-1.5 text-sm font-bold text-espresso-light">
-                    or {sgd(plan.annualPriceSgd)}/year
-                  </span>
-                )}
-              </p>
-              <p className="mt-2 text-sm font-extrabold">
-                {plan.credits.toLocaleString("en-SG")} AI credits / month
-              </p>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-6 overflow-x-auto rounded-3xl bg-card shadow-sm ring-1 ring-oat">
-          <table className="w-full text-left text-sm">
-            <caption className="sr-only">
-              Compare Free Starter and StarterChef Plus features
-            </caption>
-            <thead>
-              <tr className="border-b border-oat">
-                <th scope="col" className="p-3 font-extrabold sm:p-4">
-                  Feature
-                </th>
-                <th
-                  scope="col"
-                  className="p-3 text-center font-extrabold sm:p-4"
-                >
-                  Free Starter
-                </th>
-                <th
-                  scope="col"
-                  className="p-3 text-center font-extrabold text-flame sm:p-4"
-                >
-                  Plus
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b border-oat">
-                <th scope="row" className="p-3 font-bold sm:p-4">
-                  Core features
-                </th>
-                <td
-                  colSpan={2}
-                  className="p-3 text-xs font-semibold text-espresso-light sm:p-4"
-                >
-                  {CORE_FEATURES.join(" · ")}
-                </td>
-              </tr>
-              {FEATURE_ROWS.map((row) => (
-                <tr
-                  key={row.label}
-                  className="border-b border-oat last:border-0"
-                >
-                  <th scope="row" className="p-3 font-bold sm:p-4">
-                    {row.label}
+        <Reveal>
+          <div className="overflow-hidden rounded-3xl bg-card shadow-sm ring-1 ring-oat">
+            <table className="w-full table-fixed">
+              <thead>
+                <tr className="border-b border-oat">
+                  <th className="w-1/2 p-4 text-left align-bottom sm:p-5">
+                    <span className="text-xs font-extrabold tracking-wide text-espresso-light uppercase">
+                      What you get
+                    </span>
                   </th>
-                  <td className="p-3 text-center font-semibold text-espresso-light sm:p-4">
-                    {row.free === "—" ? (
-                      <>
-                        <span aria-hidden="true">—</span>
-                        <span className="sr-only">Not included</span>
-                      </>
-                    ) : (
-                      row.free
-                    )}
+                  {[freePlan, plusPlan].map((plan) => (
+                    <th
+                      key={plan.id}
+                      className={`w-1/4 p-4 align-bottom sm:p-5 ${
+                        plan.id === "plus" ? "bg-flame-soft/50" : ""
+                      }`}
+                    >
+                      <span className="block text-sm font-extrabold sm:text-base">
+                        {plan.name}
+                      </span>
+                      <span className="mt-1 block text-lg font-extrabold text-flame-ink sm:text-xl">
+                        {plan.priceSgd === 0
+                          ? "Free"
+                          : `${sgd(plan.priceSgd)}/mo`}
+                      </span>
+                      {plan.annualPriceSgd && (
+                        <span className="block text-xs font-bold text-espresso-light">
+                          or {sgd(plan.annualPriceSgd)}/year
+                        </span>
+                      )}
+                      <span className="mt-1 block text-xs font-semibold text-espresso-light">
+                        ≈ {approxCooks(plan.credits)} AI-assisted cooks / month
+                      </span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-oat">
+                  <td className="p-4 text-xs font-bold sm:p-5 sm:text-sm">
+                    AI credits
                   </td>
-                  <td className="p-3 text-center font-bold text-flame sm:p-4">
-                    {row.plus === "✓" ? (
-                      <>
-                        <span aria-hidden="true">✓</span>
-                        <span className="sr-only">Included</span>
-                      </>
-                    ) : (
-                      row.plus
-                    )}
+                  <td className="p-4 text-center sm:p-5">
+                    <PlanCell
+                      value={`${freePlan.credits.toLocaleString()} / month`}
+                    />
+                  </td>
+                  <td className="bg-flame-soft/50 p-4 text-center sm:p-5">
+                    <PlanCell
+                      value={`${plusPlan.credits.toLocaleString()} / month`}
+                    />
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                <tr className="border-b border-oat">
+                  <td className="p-4 text-xs font-bold sm:p-5 sm:text-sm">
+                    Core features
+                  </td>
+                  <td
+                    colSpan={2}
+                    className="p-4 text-center text-xs font-semibold text-espresso-light sm:p-5"
+                  >
+                    {CORE_FEATURES.join(" · ")}
+                  </td>
+                </tr>
+                {FEATURE_ROWS.map((row) => (
+                  <tr
+                    key={row.label}
+                    className="border-b border-oat last:border-0"
+                  >
+                    <td className="p-4 text-xs font-bold sm:p-5 sm:text-sm">
+                      {row.label}
+                    </td>
+                    <td className="p-4 text-center sm:p-5">
+                      <PlanCell value={row.free} />
+                    </td>
+                    <td className="bg-flame-soft/50 p-4 text-center sm:p-5">
+                      <PlanCell value={row.plus} />
+                    </td>
+                  </tr>
+                ))}
+                <tr>
+                  <td className="p-4 sm:p-5" />
+                  <td className="p-4 text-center sm:p-5">
+                    <Link
+                      href="/today"
+                      className={buttonStyles({
+                        size: "sm",
+                        variant: "outline",
+                        className: "w-full",
+                      })}
+                    >
+                      Start free
+                    </Link>
+                  </td>
+                  <td className="bg-flame-soft/50 p-4 text-center sm:p-5">
+                    <Link
+                      href="/today"
+                      className={buttonStyles({
+                        size: "sm",
+                        className: "w-full",
+                      })}
+                    >
+                      Get started
+                    </Link>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </Reveal>
 
         <p className="mt-4 text-center text-xs font-semibold text-espresso-light">
           Credit use varies by action. Top-ups add credits; they do not unlock
           Plus-only features.
         </p>
 
-        <h3 className="mt-8 mb-4 text-center text-sm font-extrabold tracking-wide text-espresso-light uppercase">
-          Need more credits? Top up any time
-        </h3>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {TOP_UPS.map((topUp) => (
-            <div
-              key={topUp.id}
-              className="flex items-center justify-between gap-4 rounded-2xl bg-oat p-4"
-            >
-              <div>
-                <p className="text-sm font-extrabold">
-                  {topUp.name} · {topUp.credits.toLocaleString()} credits
-                </p>
-                <p className="text-xs font-semibold text-espresso-light">
-                  {topUpCopy[topUp.id]}
+        <Reveal>
+          <h3 className="mt-8 mb-4 text-center text-sm font-extrabold tracking-wide text-espresso-light uppercase">
+            Need more credits? Top up any time
+          </h3>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {TOP_UPS.map((topUp) => (
+              <div
+                key={topUp.id}
+                className="flex items-center justify-between gap-4 rounded-2xl bg-oat p-4"
+              >
+                <div>
+                  <p className="text-sm font-extrabold">
+                    {topUp.name} · {topUp.credits.toLocaleString()} credits
+                  </p>
+                  <p className="text-xs font-semibold text-espresso-light">
+                    {topUpCopy[topUp.id]}
+                  </p>
+                </div>
+                <p className="shrink-0 text-lg font-extrabold text-flame-ink">
+                  {sgd(topUp.priceSgd)}
                 </p>
               </div>
-              <p className="shrink-0 text-lg font-extrabold text-flame">
-                {sgd(topUp.priceSgd)}
-              </p>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </Reveal>
       </section>
     </>
   );

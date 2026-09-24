@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 export const runtime = "nodejs";
-export const alt = "StarterChef — Good food starts with what you have";
+export const alt = "StarterChef — Your start to great cooking";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -54,8 +54,8 @@ export default function OpengraphImage() {
             maxWidth: 980,
           }}
         >
-          Good food starts with&nbsp;
-          <span style={{ color: "#C2540A" }}>what you have.</span>
+          Your start to&nbsp;
+          <span style={{ color: "#A34405" }}>great cooking.</span>
         </div>
         <div
           style={{
@@ -72,7 +72,7 @@ export default function OpengraphImage() {
       </div>
 
       <div style={{ display: "flex", gap: 12 }}>
-        {["Scan your kitchen", "Recipes that fit you", "Cook hands-free"].map(
+        {["Scan your kitchen", "Recipes that fit you", "Cook step by step"].map(
           (t) => (
             <div
               key={t}

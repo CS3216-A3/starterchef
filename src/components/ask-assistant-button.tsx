@@ -183,7 +183,7 @@ export function AskAssistantButton({
         </p>
       )}
       {state.status === "error" && (
-        <p className="text-xs font-semibold text-flame-dark">{state.message}</p>
+        <p className="text-xs font-semibold text-flame-ink">{state.message}</p>
       )}
     </div>
   );

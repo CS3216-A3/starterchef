@@ -177,7 +177,7 @@ function EventRow({ event }: { event: SessionEventRow }) {
               <span className="text-green-700">✓ looked right</span>
             )}
             {verdict.looksRight === false && (
-              <span className="text-flame">needed a fix</span>
+              <span className="text-flame-ink">needed a fix</span>
             )}
             {time}
           </span>
@@ -193,7 +193,7 @@ function EventRow({ event }: { event: SessionEventRow }) {
           )}
           <span>{String(verdict.feedback ?? "")}</span>
           {verdict.tip ? (
-            <span className="font-bold text-flame">
+            <span className="font-bold text-flame-ink">
               Try: {String(verdict.tip)}
             </span>
           ) : null}

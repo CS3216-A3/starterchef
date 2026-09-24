@@ -132,10 +132,10 @@ export function VoiceAddItems() {
         disabled={pending || state.status === "parsing"}
         aria-label="Add items by voice"
         className={cn(
-          "inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-bold text-white transition-colors",
+          "inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-bold transition-colors",
           state.status === "listening"
-            ? "bg-flame-dark"
-            : "bg-flame hover:bg-flame-dark",
+            ? "bg-flame-ink text-white"
+            : "bg-flame text-espresso hover:bg-flame-ink hover:text-white",
         )}
       >
         <Mic className="h-4 w-4" />

@@ -88,7 +88,7 @@ export function RecommendationPanel({
         </p>
       ) : null}
       {state.message ? (
-        <p role="alert" className="mt-2 text-sm font-semibold text-flame-dark">
+        <p role="alert" className="mt-2 text-sm font-semibold text-flame-ink">
           {state.message}
         </p>
       ) : null}
@@ -109,7 +109,7 @@ export function RecommendationPanel({
                     source: "recommendation",
                   })
                 }
-                className="font-extrabold hover:text-flame"
+                className="font-extrabold hover:text-flame-ink"
               >
                 {item.title}
               </Link>

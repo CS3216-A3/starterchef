@@ -210,7 +210,7 @@ export function OnboardingWizard({ profile }: { profile: ProfileRow | null }) {
                     className={cn(
                       "rounded-full px-4 py-2 text-sm font-bold transition-colors",
                       active
-                        ? "bg-flame text-white"
+                        ? "bg-flame text-espresso"
                         : "bg-oat text-espresso hover:bg-oat-dark",
                     )}
                   >

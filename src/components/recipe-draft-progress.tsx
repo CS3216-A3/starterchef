@@ -309,7 +309,7 @@ export function RecipeDraftProgress({
       aria-live="polite"
     >
       <div>
-        <p className="text-xs font-extrabold tracking-wide text-flame uppercase">
+        <p className="text-xs font-extrabold tracking-wide text-flame-ink uppercase">
           Recipe review
         </p>
         <h2 className="mt-1 text-xl font-extrabold">
@@ -348,7 +348,7 @@ export function RecipeDraftProgress({
               className="flex items-center gap-3 text-sm font-bold"
             >
               <span
-                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${complete ? "bg-flame text-white" : active ? "bg-flame-soft text-flame" : "bg-oat text-espresso-light"}`}
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${complete ? "bg-flame text-espresso" : active ? "bg-flame-soft text-flame-ink" : "bg-oat text-espresso-light"}`}
               >
                 {complete ? (
                   <Check className="h-4 w-4" />
@@ -620,7 +620,7 @@ function DraftRecipePreview({ recipe }: { recipe: DraftRecipe }) {
   return (
     <article className="flex flex-col gap-5 rounded-2xl bg-oat p-4">
       <div>
-        <p className="text-xs font-extrabold tracking-wide text-flame uppercase">
+        <p className="text-xs font-extrabold tracking-wide text-flame-ink uppercase">
           Recipe to save
         </p>
         <h3 className="mt-1 text-lg font-extrabold">{recipe.title}</h3>
@@ -664,7 +664,7 @@ function DraftRecipePreview({ recipe }: { recipe: DraftRecipe }) {
           {recipe.steps.map((step) => (
             <li key={step.index} className="text-sm font-semibold">
               <p className="font-extrabold">
-                <span className="text-flame">{step.index}. </span>
+                <span className="text-flame-ink">{step.index}. </span>
                 {step.title}
                 {step.durationSeconds
                   ? ` (${formatStepDuration(step.durationSeconds)})`

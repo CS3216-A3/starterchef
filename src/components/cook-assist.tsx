@@ -401,7 +401,7 @@ export function CookAssist({
         </div>
       )}
       {changeError && (
-        <p role="alert" className="text-xs font-bold text-flame">
+        <p role="alert" className="text-xs font-bold text-flame-ink">
           {changeError}
         </p>
       )}
@@ -490,7 +490,7 @@ export function CookAssist({
               {check.feedback}
             </p>
             {check.tip && (
-              <p className="mt-1 text-xs font-bold text-flame">
+              <p className="mt-1 text-xs font-bold text-flame-ink">
                 Try: {check.tip}
               </p>
             )}
@@ -523,7 +523,7 @@ export function CookAssist({
           </div>
         )}
         {cameraError && (
-          <p className="text-xs font-bold text-flame">{cameraError}</p>
+          <p className="text-xs font-bold text-flame-ink">{cameraError}</p>
         )}
       </div>
 
@@ -699,7 +699,9 @@ function StepTimer({
           )}
         </Button>
       </div>
-      {error && <p className="w-full text-xs font-bold text-flame">{error}</p>}
+      {error && (
+        <p className="w-full text-xs font-bold text-flame-ink">{error}</p>
+      )}
     </div>
   );
 }
