@@ -9,6 +9,13 @@ import {
 import Link from "next/link";
 import type { Metadata } from "next";
 import { Button } from "@/components/button";
+import {
+  PLANS,
+  TOP_UPS,
+  approxCooks,
+  type Plan,
+  type TopUp,
+} from "@/lib/credits";
 
 export const metadata: Metadata = {
   title: "StarterChef · Cook with what you have",
@@ -37,44 +44,31 @@ const features = [
   },
 ];
 
-const tiers = [
-  {
-    name: "Free Starter",
-    price: "Free",
-    blurb: "1,000 welcome credits — a real chance to try the AI features.",
+const planCopy: Record<Plan["id"], { blurb: string; points: string[] }> = {
+  free: {
+    blurb: "A one-off welcome grant — enough to genuinely try the AI.",
     points: [
       "Kitchen profile & recipe book",
       "Timers & manual recipe entry",
       "Basic step navigation",
     ],
   },
-  {
-    name: "Plus",
-    price: "S$4.90/mo",
-    priceNote: "or S$39.90/year",
-    blurb: "2,500 credits every month, plus everything in Free Starter.",
+  plus: {
+    blurb: "Credits refresh every month, on top of everything in Free Starter.",
     points: [
       "Personal recipe versions",
       "Progress history",
       "Priority AI processing",
     ],
   },
-];
+};
 
-const topUps = [
-  {
-    name: "Small",
-    price: "S$2.90",
-    credits: "1,000 credits",
-    blurb: "Occasional extra AI help.",
-  },
-  {
-    name: "Large",
-    price: "S$7.90",
-    credits: "3,000 credits",
-    blurb: "Better value for frequent visual/video use.",
-  },
-];
+const topUpCopy: Record<TopUp["id"], string> = {
+  small: "Occasional extra AI help.",
+  large: "Better value for frequent video imports and live voice.",
+};
+
+const sgd = (amount: number) => `S$${amount.toFixed(2)}`;
 
 export default function LandingPage() {
   return (
@@ -144,25 +138,33 @@ export default function LandingPage() {
           credits. Everything else is free, always.
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
-          {tiers.map((tier) => (
+          {PLANS.map((plan) => (
             <div
-              key={tier.name}
+              key={plan.id}
               className="flex flex-col rounded-3xl bg-card p-6 shadow-sm ring-1 ring-oat"
             >
-              <h3 className="text-lg font-extrabold">{tier.name}</h3>
+              <h3 className="text-lg font-extrabold">{plan.name}</h3>
               <p className="mt-1 text-3xl font-extrabold text-flame">
-                {tier.price}
-                {tier.priceNote && (
+                {plan.priceSgd === 0 ? "Free" : `${sgd(plan.priceSgd)}/mo`}
+                {plan.annualPriceSgd && (
                   <span className="ml-1.5 text-sm font-bold text-espresso-light">
-                    {tier.priceNote}
+                    or {sgd(plan.annualPriceSgd)}/year
                   </span>
                 )}
               </p>
-              <p className="mt-2 text-sm font-semibold text-espresso-light">
-                {tier.blurb}
+              <p className="mt-2 text-sm font-extrabold">
+                {plan.credits.toLocaleString()} credits
+                {plan.recurring ? " every month" : " to start"}
+                <span className="font-semibold text-espresso-light">
+                  {" "}
+                  — about {approxCooks(plan.credits)} cooks
+                </span>
+              </p>
+              <p className="mt-1 text-sm font-semibold text-espresso-light">
+                {planCopy[plan.id].blurb}
               </p>
               <ul className="mt-4 flex flex-col gap-2 text-sm font-semibold">
-                {tier.points.map((point) => (
+                {planCopy[plan.id].points.map((point) => (
                   <li key={point} className="flex items-center gap-2">
                     <span className="h-1.5 w-1.5 rounded-full bg-flame" />
                     {point}
@@ -177,21 +179,21 @@ export default function LandingPage() {
           Need more credits? Top up any time
         </h3>
         <div className="grid gap-4 sm:grid-cols-2">
-          {topUps.map((topUp) => (
+          {TOP_UPS.map((topUp) => (
             <div
-              key={topUp.name}
+              key={topUp.id}
               className="flex items-center justify-between gap-4 rounded-2xl bg-oat p-4"
             >
               <div>
                 <p className="text-sm font-extrabold">
-                  {topUp.name} · {topUp.credits}
+                  {topUp.name} · {topUp.credits.toLocaleString()} credits
                 </p>
                 <p className="text-xs font-semibold text-espresso-light">
-                  {topUp.blurb}
+                  {topUpCopy[topUp.id]}
                 </p>
               </div>
               <p className="shrink-0 text-lg font-extrabold text-flame">
-                {topUp.price}
+                {sgd(topUp.priceSgd)}
               </p>
             </div>
           ))}
