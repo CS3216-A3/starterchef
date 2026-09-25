@@ -6,7 +6,7 @@
 
 **Tagline:** Your AI cooking companion, from pantry to plate
 
-**Short description:**
+## Short description
 
 New to cooking? Scan your ingredients, find recipes that fit your kitchen, and follow one step at a time with AI help. Import recipes you love, ask questions as you cook, and save the changes that worked for you.
 
@@ -58,4 +58,6 @@ Upload in this order. Each image is 1270 × 760 pixels. The square thumbnail is 
 ![Cook with help](gallery/03-cook-with-help.png)
 ![Launch plans](gallery/04-launch-plans.png)
 
-Launch status: These materials were prepared as a simulated Product Hunt submission for this milestone. StarterChef has not been published on Product Hunt.
+## Launch status: 
+
+These materials were prepared as a simulated Product Hunt submission for this milestone. StarterChef has not been published on Product Hunt.
