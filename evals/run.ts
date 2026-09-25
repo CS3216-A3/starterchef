@@ -1,21 +1,24 @@
 /**
- * Eval runner: executes the datasets in evals/datasets/ against the
- * configured provider (AI_PROVIDER) and scores simple, checkable criteria.
+ * StarterChef AI evaluation runner.
+ *
+ * It evaluates the two production text-AI paths that are easiest to score
+ * repeatably:
+ *   1. catalogue recommendation filtering + AI ranking
+ *   2. the in-cooking assistant's answer and structured action
  *
  * Usage:
- *   npm run eval                      # default dataset, current provider
- *   npm run eval -- suggest-recipes   # one dataset, current provider
- *   npm run eval -- assistant         # assistant-quality dataset
- *   npm run eval -- --report          # compare all providers, write JSON
- *
- * Requires an API key in .env.local. Extend each case's `expect` block as the
- * checks get richer — these results feed the LLMOps milestone writeup.
+ *   npm run eval -- recommendations
+ *   npm run eval -- assistant
+ *   npm run eval -- all
+ *   EVAL_RUNS=3 npm run eval -- all
+ *   npm run eval -- recommendations --offline
+ *   npm run eval -- --report
  */
 
 try {
   process.loadEnvFile(".env.local");
 } catch {
-  // .env.local not present — rely on real env vars
+  // .env.local is optional for deterministic/offline checks.
 }
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -27,60 +30,125 @@ import {
   getModel,
   getModelName,
 } from "../src/lib/ai/model";
+import { renderPrompt } from "../src/lib/ai/prompts";
+import { assistantReplySchema } from "../src/lib/ai/schemas/assistant";
+import { recommendationRankingSchema } from "../src/lib/ai/schemas/recommendations";
+import {
+  rankEligibleRecipes,
+  validateAiRanking,
+} from "../src/lib/recommendations";
+import type {
+  KitchenItemRow,
+  ProfileRow,
+  RecipeDifficulty,
+  RecipeRow,
+} from "../src/lib/types";
 
-interface SuggestRecipesExpect {
-  maxMissingIngredients?: number;
-  maxPrepPlusCookMinutes?: number;
-  maxDifficulty?: "easy" | "medium" | "hard";
-  mustNotContain?: string[];
+interface RecommendationRecipeInput {
+  id: string;
+  title: string;
+  minutes: number;
+  difficulty: RecipeDifficulty;
+  servings: number;
+  ingredients: string[];
+  equipment: string[];
+  tags?: string[];
 }
 
-interface AssistantExpect {
-  maxSentences?: number;
-  mustContain?: string[];
-  actionType?: string;
-  tone?: string;
-}
-
-interface RecipeEvalCase {
+interface RecommendationCase {
   name: string;
-  input: Record<string, unknown>;
-  expect: SuggestRecipesExpect;
+  safetyCritical?: boolean;
+  input: {
+    recipes: RecommendationRecipeInput[];
+    pantry: { ingredients: string[]; equipment: string[] };
+    profile: {
+      skillLevel: "beginner" | "intermediate" | "advanced";
+      dietaryRestrictions?: string[];
+      allergies?: string[];
+    };
+    filters?: { maxMinutes?: number; servings?: number };
+  };
+  expect: {
+    eligibleIds: string[];
+    preferredFirstIds?: string[];
+    reasonMustContainAny?: Record<string, string[]>;
+  };
 }
 
-interface AssistantEvalCase {
+interface AssistantCase {
   name: string;
-  input: Record<string, unknown>;
-  expect: AssistantExpect;
+  safetyCritical?: boolean;
+  input: {
+    question: string;
+    recipeTitle: string;
+    stepTitle: string;
+    memory?: string[];
+    dietaryRestrictions?: string[];
+    allergies?: string[];
+    pantry?: string[];
+    adjustments?: unknown[];
+  };
+  expect: {
+    maxSentences?: number;
+    mustContain?: string[];
+    mustContainAny?: string[][];
+    mustNotContain?: string[];
+    actionType?: string;
+    timerSeconds?: number;
+    stepIndex?: number;
+  };
 }
 
 interface EvalResult {
+  dataset: "recommendations" | "assistant";
   name: string;
+  run: number;
   passed: boolean;
+  safetyCritical: boolean;
   problems: string[];
   latencyMs: number;
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
   costUsd: number;
-  costInputUsd: number;
-  costOutputUsd: number;
+  output: unknown;
 }
 
-interface ProviderReport {
+interface SuiteReport {
+  dataset: "recommendations" | "assistant";
   provider: AiProvider;
   model: string;
+  mode: "live" | "offline";
+  runsPerCase: number;
   passed: number;
   failed: number;
   total: number;
   passRate: number;
+  safetyPassed: number;
+  safetyTotal: number;
+  safetyPassRate: number;
   avgLatencyMs: number;
+  p95LatencyMs: number;
   totalCostUsd: number;
   cases: EvalResult[];
-  error?: string;
 }
 
-const DIFFICULTY_RANK = { easy: 1, medium: 2, hard: 3 } as const;
+const RESULTS_DIR = path.join(process.cwd(), "evals", "results");
+let lastAiRequestStartedAt = 0;
+
+async function paceAiRequests(): Promise<void> {
+  const delayMs = Math.max(
+    0,
+    Number.parseInt(process.env.EVAL_DELAY_MS ?? "0", 10) || 0,
+  );
+  if (delayMs === 0) return;
+
+  const waitMs = delayMs - (Date.now() - lastAiRequestStartedAt);
+  if (lastAiRequestStartedAt > 0 && waitMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+  }
+  lastAiRequestStartedAt = Date.now();
+}
 
 function loadDataset<T>(name: string): T[] {
   const file = path.join(process.cwd(), "evals", "datasets", `${name}.jsonl`);
@@ -90,335 +158,545 @@ function loadDataset<T>(name: string): T[] {
     .map((line) => JSON.parse(line) as T);
 }
 
-async function runDataset(
-  datasetName: string,
-  provider: AiProvider,
-  temperature = 0.4,
-): Promise<ProviderReport> {
-  const cases = loadDataset<RecipeEvalCase>(datasetName);
-  const { generateObject } = await import("ai");
-  const { recipeSuggestionsSchema } =
-    await import("../src/lib/ai/schemas/recipe");
-  const { renderPrompt } = await import("../src/lib/ai/prompts");
+function percentile(values: number[], fraction: number): number {
+  if (values.length === 0) return 0;
+  const ordered = [...values].sort((a, b) => a - b);
+  return ordered[
+    Math.min(ordered.length - 1, Math.ceil(fraction * ordered.length) - 1)
+  ];
+}
 
+function createReport(
+  dataset: SuiteReport["dataset"],
+  provider: AiProvider,
+  mode: SuiteReport["mode"],
+  runsPerCase: number,
+  cases: EvalResult[],
+): SuiteReport {
+  const passed = cases.filter((result) => result.passed).length;
+  const safetyCases = cases.filter((result) => result.safetyCritical);
+  const safetyPassed = safetyCases.filter((result) => result.passed).length;
+  const latencies = cases.map((result) => result.latencyMs);
+  return {
+    dataset,
+    provider,
+    model: getModelName(provider),
+    mode,
+    runsPerCase,
+    passed,
+    failed: cases.length - passed,
+    total: cases.length,
+    passRate: cases.length ? passed / cases.length : 0,
+    safetyPassed,
+    safetyTotal: safetyCases.length,
+    safetyPassRate: safetyCases.length ? safetyPassed / safetyCases.length : 1,
+    avgLatencyMs:
+      latencies.reduce((total, latency) => total + latency, 0) /
+      Math.max(latencies.length, 1),
+    p95LatencyMs: percentile(latencies, 0.95),
+    totalCostUsd: cases.reduce((total, result) => total + result.costUsd, 0),
+    cases,
+  };
+}
+
+function writeReport(report: SuiteReport): string {
+  mkdirSync(RESULTS_DIR, { recursive: true });
+  const file = path.join(
+    RESULTS_DIR,
+    `${report.dataset}-${report.provider}-${report.mode}.json`,
+  );
+  writeFileSync(
+    file,
+    JSON.stringify({ ranAt: new Date().toISOString(), ...report }, null, 2),
+  );
+  return file;
+}
+
+function providerFailureCode(error: unknown): string {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  const statusCode =
+    typeof error === "object" && error !== null && "statusCode" in error
+      ? Number((error as { statusCode?: unknown }).statusCode)
+      : undefined;
+
+  if (
+    statusCode === 503 ||
+    message.includes("high demand") ||
+    message.includes("service unavailable")
+  ) {
+    return "PROVIDER_UNAVAILABLE";
+  }
+  if (statusCode === 429 || message.includes("rate limit")) {
+    return "PROVIDER_RATE_LIMITED";
+  }
+  if (
+    statusCode === 401 ||
+    statusCode === 403 ||
+    message.includes("api key is missing")
+  ) {
+    return "PROVIDER_AUTH_FAILED";
+  }
+  return "PROVIDER_REQUEST_FAILED";
+}
+
+function writeProviderFailure(error: unknown): string {
+  const configuredProvider = process.env.AI_PROVIDER ?? "google";
+  const provider = AI_PROVIDERS.includes(configuredProvider as AiProvider)
+    ? (configuredProvider as AiProvider)
+    : "google";
+  const args = process.argv.slice(2);
+  const dataset = args.find((arg) => !arg.startsWith("-")) ?? "all";
+  const runsPerCase = Math.max(
+    1,
+    Math.min(10, Number.parseInt(process.env.EVAL_RUNS ?? "1", 10) || 1),
+  );
+  const report = {
+    ranAt: new Date().toISOString(),
+    complete: false,
+    provider,
+    model: getModelName(provider),
+    dataset,
+    runsPerCase,
+    errorCode: providerFailureCode(error),
+  };
+  mkdirSync(RESULTS_DIR, { recursive: true });
+  const file = path.join(RESULTS_DIR, `provider-error-${provider}.json`);
+  writeFileSync(file, JSON.stringify(report, null, 2));
+  return file;
+}
+
+function recipeRow(input: RecommendationRecipeInput): RecipeRow {
+  return {
+    id: input.id,
+    slug: input.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, ""),
+    title: input.title,
+    description: `${input.title} evaluation fixture`,
+    minutes: input.minutes,
+    difficulty: input.difficulty,
+    servings: input.servings,
+    why_good: "Evaluation fixture",
+    icon: "chef-hat",
+    image_tint: "oat",
+    image_url: null,
+    ingredients: input.ingredients,
+    equipment: input.equipment,
+    steps: [
+      {
+        index: 1,
+        title: "Cook",
+        instruction: "Cook until ready.",
+        ingredients: input.ingredients,
+      },
+    ],
+    tags: input.tags ?? [],
+    source: "evaluation",
+    source_url: null,
+    user_id: null,
+    parent_recipe_id: null,
+    is_personalized: false,
+    created_at: "2026-01-01T00:00:00.000Z",
+  };
+}
+
+function pantryRows(input: RecommendationCase["input"]): KitchenItemRow[] {
+  return [
+    ...input.pantry.ingredients.map((name, index) => ({
+      id: `ingredient-${index}`,
+      user_id: "eval-user",
+      kind: "ingredient" as const,
+      name,
+      quantity: null,
+      expires_on: null,
+      icon: null,
+      source: "manual" as const,
+      created_at: "2026-01-01T00:00:00.000Z",
+    })),
+    ...input.pantry.equipment.map((name, index) => ({
+      id: `equipment-${index}`,
+      user_id: "eval-user",
+      kind: "equipment" as const,
+      name,
+      quantity: null,
+      expires_on: null,
+      icon: null,
+      source: "manual" as const,
+      created_at: "2026-01-01T00:00:00.000Z",
+    })),
+  ];
+}
+
+function profileRow(input: RecommendationCase["input"]): ProfileRow {
+  return {
+    id: "eval-user",
+    display_name: null,
+    dietary_restrictions: input.profile.dietaryRestrictions ?? [],
+    allergies: input.profile.allergies ?? [],
+    taste_preferences: {},
+    skill_level: input.profile.skillLevel,
+    household_size: input.filters?.servings ?? 1,
+    onboarded_at: "2026-01-01T00:00:00.000Z",
+  };
+}
+
+function sameSet(actual: string[], expected: string[]): boolean {
+  return (
+    actual.length === expected.length &&
+    actual.every((value) => expected.includes(value))
+  );
+}
+
+async function runRecommendations(
+  provider: AiProvider,
+  runsPerCase: number,
+  offline: boolean,
+): Promise<SuiteReport> {
+  const dataset = loadDataset<RecommendationCase>("recommendations");
+  const { generateObject } = await import("ai");
   const modelName = getModelName(provider);
+  const results: EvalResult[] = [];
 
   console.log(
-    `\n--- ${provider} / ${modelName} (${cases.length} case${cases.length === 1 ? "" : "s"}) ---\n`,
+    `\n--- recommendations / ${provider} / ${modelName} (${offline ? "offline safety gates" : `${runsPerCase} run(s) per case`}) ---\n`,
   );
 
-  let passed = 0;
-  let failed = 0;
-  let totalLatency = 0;
-  let totalCost = 0;
-  const caseResults: EvalResult[] = [];
+  for (const testCase of dataset) {
+    const eligible = rankEligibleRecipes(
+      testCase.input.recipes.map(recipeRow),
+      pantryRows(testCase.input),
+      profileRow(testCase.input),
+      [],
+      testCase.input.filters ?? {},
+    );
+    const eligibleIds = eligible.map(({ recipe }) => recipe.id);
 
-  for (const c of cases) {
-    const input = c.input as {
-      ingredients?: string[];
-      equipment?: string[];
-      dietaryRestrictions?: string[];
-      allergies?: string[];
-      tastePreferences?: string[];
-      skillLevel?: string;
-      timeMinutes?: number;
-      servings?: number;
-    };
-
-    const startedAt = performance.now();
-    const { object, usage } = await generateObject({
-      model: getModel(provider),
-      schema: recipeSuggestionsSchema,
-      temperature: provider === "openai" ? undefined : temperature,
-      system: renderPrompt("suggest-recipes", {
-        ingredients: input.ingredients?.join(", ") || "none listed",
-        equipment: input.equipment?.join(", ") || "none listed",
-        dietaryRestrictions: input.dietaryRestrictions?.join(", ") || "none",
-        allergies: input.allergies?.join(", ") || "none",
-        tastePreferences: input.tastePreferences?.join(", ") || "none",
-        skillLevel: input.skillLevel ?? "beginner",
-        timeMinutes: input.timeMinutes?.toString() ?? "no limit",
-        servings: input.servings?.toString() ?? "1",
-      }),
-      prompt: "Suggest meals I can cook tonight.",
-    });
-    const latencyMs = performance.now() - startedAt;
-
-    const problems: string[] = [];
-    for (const s of object.suggestions) {
-      if (
-        c.expect.maxMissingIngredients !== undefined &&
-        s.missingIngredients.length > c.expect.maxMissingIngredients
-      ) {
+    for (let run = 1; run <= (offline ? 1 : runsPerCase); run++) {
+      const problems: string[] = [];
+      if (!sameSet(eligibleIds, testCase.expect.eligibleIds)) {
         problems.push(
-          `"${s.title}" needs ${s.missingIngredients.length} missing ingredients (max ${c.expect.maxMissingIngredients})`,
+          `eligible IDs were [${eligibleIds.join(", ")}], expected [${testCase.expect.eligibleIds.join(", ")}]`,
         );
       }
-      if (
-        c.expect.maxPrepPlusCookMinutes !== undefined &&
-        s.prepMinutes + s.cookMinutes > c.expect.maxPrepPlusCookMinutes
-      ) {
-        problems.push(
-          `"${s.title}" takes ${s.prepMinutes + s.cookMinutes} min (max ${c.expect.maxPrepPlusCookMinutes})`,
-        );
-      }
-      if (
-        c.expect.maxDifficulty &&
-        DIFFICULTY_RANK[s.difficulty] > DIFFICULTY_RANK[c.expect.maxDifficulty]
-      ) {
-        problems.push(
-          `"${s.title}" is ${s.difficulty} (max ${c.expect.maxDifficulty})`,
-        );
-      }
-      const haystack = JSON.stringify(s).toLowerCase();
-      for (const banned of c.expect.mustNotContain ?? []) {
-        if (haystack.includes(banned.toLowerCase())) {
-          problems.push(`"${s.title}" mentions banned item "${banned}"`);
+
+      let latencyMs = 0;
+      let inputTokens = 0;
+      let outputTokens = 0;
+      let rankings: Array<{ id: string; reason: string }> = eligible.map(
+        ({ recipe, pantryMatches }) => ({
+          id: recipe.id,
+          reason: `Deterministic candidate with ${pantryMatches.length} pantry matches`,
+        }),
+      );
+
+      if (!offline && eligible.length > 0) {
+        await paceAiRequests();
+        const startedAt = performance.now();
+        const generated = await generateObject({
+          model: getModel(provider),
+          schema: recommendationRankingSchema,
+          temperature: provider === "openai" ? undefined : 0.4,
+          system: renderPrompt("recommendations", {
+            candidates: JSON.stringify(
+              eligible.map(({ recipe, pantryMatches }) => ({
+                id: recipe.id,
+                title: recipe.title,
+                minutes: recipe.minutes,
+                ingredients: recipe.ingredients,
+                pantryMatches,
+              })),
+            ),
+          }),
+          prompt: "Rank the eligible recipes.",
+        });
+        latencyMs = performance.now() - startedAt;
+        rankings = generated.object.rankings;
+        inputTokens = generated.usage?.inputTokens ?? 0;
+        outputTokens = generated.usage?.outputTokens ?? 0;
+
+        if (rankings.length === 0) problems.push("model returned no rankings");
+        const seen = new Set<string>();
+        for (const ranking of rankings) {
+          if (!eligibleIds.includes(ranking.id)) {
+            problems.push(
+              `model invented or leaked candidate ID ${ranking.id}`,
+            );
+          }
+          if (seen.has(ranking.id)) {
+            problems.push(
+              `model returned duplicate candidate ID ${ranking.id}`,
+            );
+          }
+          seen.add(ranking.id);
+          const required = testCase.expect.reasonMustContainAny?.[ranking.id];
+          if (
+            required?.length &&
+            !required.some((term) =>
+              ranking.reason.toLowerCase().includes(term.toLowerCase()),
+            )
+          ) {
+            problems.push(
+              `reason for ${ranking.id} was not grounded in one of: ${required.join(", ")}`,
+            );
+          }
+        }
+
+        const validated = validateAiRanking(rankings, eligible);
+        const firstId = validated[0]?.recipe.id;
+        if (
+          firstId &&
+          testCase.expect.preferredFirstIds?.length &&
+          !testCase.expect.preferredFirstIds.includes(firstId)
+        ) {
+          problems.push(
+            `first ranked ID ${firstId} was not an expected best match`,
+          );
         }
       }
+
+      const totalTokens = inputTokens + outputTokens;
+      const cost = estimateCost(modelName, inputTokens, outputTokens);
+      const result: EvalResult = {
+        dataset: "recommendations",
+        name: testCase.name,
+        run,
+        passed: problems.length === 0,
+        safetyCritical: testCase.safetyCritical ?? false,
+        problems,
+        latencyMs,
+        inputTokens,
+        outputTokens,
+        totalTokens,
+        costUsd: cost.usd,
+        output: { eligibleIds, rankings },
+      };
+      results.push(result);
+      console.log(
+        `${result.passed ? "PASS" : "FAIL"}  ${testCase.name}${offline ? "" : ` [run ${run}]`}  (${totalTokens} tokens, ${latencyMs.toFixed(0)}ms, $${cost.usd.toFixed(5)})`,
+      );
+      for (const problem of problems) console.log(`      - ${problem}`);
     }
-
-    const isPass = problems.length === 0;
-    if (isPass) passed++;
-    else failed++;
-
-    const inputTokens = usage?.inputTokens ?? 0;
-    const outputTokens = usage?.outputTokens ?? 0;
-    const totalTokens = usage?.totalTokens ?? inputTokens + outputTokens;
-    const cost = estimateCost(modelName, inputTokens, outputTokens);
-    totalLatency += latencyMs;
-    totalCost += cost.usd;
-
-    caseResults.push({
-      name: c.name,
-      passed: isPass,
-      problems,
-      latencyMs,
-      inputTokens,
-      outputTokens,
-      totalTokens,
-      costUsd: cost.usd,
-      costInputUsd: cost.inputUsd,
-      costOutputUsd: cost.outputUsd,
-    });
-
-    const status = isPass ? "PASS" : "FAIL";
-    console.log(
-      `${status}  ${c.name}  (${object.suggestions.length} suggestions, ${totalTokens} tokens, ${latencyMs.toFixed(0)}ms, $${cost.usd.toFixed(5)})`,
-    );
-    for (const p of problems) console.log(`      - ${p}`);
   }
 
-  console.log(
-    `\n${passed}/${cases.length} passed · avg latency ${(totalLatency / cases.length).toFixed(0)}ms · total cost $${totalCost.toFixed(5)}`,
-  );
-
-  return {
+  return createReport(
+    "recommendations",
     provider,
-    model: modelName,
-    passed,
-    failed,
-    total: cases.length,
-    passRate: cases.length ? passed / cases.length : 0,
-    avgLatencyMs: cases.length ? totalLatency / cases.length : 0,
-    totalCostUsd: totalCost,
-    cases: caseResults,
-  };
+    offline ? "offline" : "live",
+    offline ? 1 : runsPerCase,
+    results,
+  );
 }
 
-async function runAssistantDataset(
+async function runAssistant(
   provider: AiProvider,
-  temperature = 0.7,
-): Promise<ProviderReport> {
-  const cases = loadDataset<AssistantEvalCase>("assistant");
+  runsPerCase: number,
+): Promise<SuiteReport> {
+  const dataset = loadDataset<AssistantCase>("assistant");
   const { generateObject } = await import("ai");
-  const { assistantReplySchema } =
-    await import("../src/lib/ai/schemas/assistant");
-  const { renderPrompt } = await import("../src/lib/ai/prompts");
-
   const modelName = getModelName(provider);
+  const results: EvalResult[] = [];
 
   console.log(
-    `\n--- assistant / ${provider} / ${modelName} (${cases.length} case${cases.length === 1 ? "" : "s"}) ---\n`,
+    `\n--- assistant / ${provider} / ${modelName} (${runsPerCase} run(s) per case) ---\n`,
   );
 
-  let passed = 0;
-  let failed = 0;
-  let totalLatency = 0;
-  let totalCost = 0;
-  const caseResults: EvalResult[] = [];
+  for (const testCase of dataset) {
+    for (let run = 1; run <= runsPerCase; run++) {
+      await paceAiRequests();
+      const startedAt = performance.now();
+      const generated = await generateObject({
+        model: getModel(provider),
+        schema: assistantReplySchema,
+        temperature: provider === "openai" ? undefined : 0.7,
+        system: renderPrompt("cooking-assistant", {
+          recipeTitle: testCase.input.recipeTitle,
+          stepTitle: testCase.input.stepTitle,
+          memory:
+            testCase.input.memory?.map((fact) => `- ${fact}`).join("\n") ??
+            "- Nothing recorded yet — this may be their first session.",
+          dietaryRestrictions:
+            testCase.input.dietaryRestrictions?.join(", ") || "none",
+          allergies: testCase.input.allergies?.join(", ") || "none",
+          pantry: testCase.input.pantry?.join(", ") || "none",
+          adjustments: JSON.stringify(testCase.input.adjustments ?? []),
+        }),
+        prompt: testCase.input.question,
+      });
+      const latencyMs = performance.now() - startedAt;
+      const object = generated.object;
+      const answer = object.answer.toLowerCase();
+      const problems: string[] = [];
 
-  for (const c of cases) {
-    const input = c.input as {
-      question: string;
-      recipeTitle: string;
-      stepTitle: string;
-    };
-
-    const startedAt = performance.now();
-    const { object, usage } = await generateObject({
-      model: getModel(provider),
-      schema: assistantReplySchema,
-      temperature: provider === "openai" ? undefined : temperature,
-      system: renderPrompt("cooking-assistant", {
-        recipeTitle: input.recipeTitle,
-        stepTitle: input.stepTitle,
-        stepInstruction: "Follow the current recipe step safely.",
-        recipeIngredients: "Use the recipe ingredients safely.",
-        recipeEquipment: "Use normal kitchen equipment.",
-        pantry: "Not provided for this evaluation.",
-        adjustments: "none",
-        memory: "- Nothing recorded yet.",
-        dietaryRestrictions: "none",
-        allergies: "none",
-      }),
-      prompt: input.question,
-    });
-    const latencyMs = performance.now() - startedAt;
-
-    const problems: string[] = [];
-    const haystack = object.answer.toLowerCase();
-
-    if (c.expect.maxSentences !== undefined) {
-      const sentences = object.answer
-        .split(/[.!?]+/)
-        .filter((s) => s.trim().length > 0);
-      if (sentences.length > c.expect.maxSentences) {
+      if (testCase.expect.maxSentences !== undefined) {
+        const sentences = object.answer
+          .split(/[.!?]+/)
+          .filter((sentence) => sentence.trim().length > 0);
+        if (sentences.length > testCase.expect.maxSentences) {
+          problems.push(
+            `answer had ${sentences.length} sentences (max ${testCase.expect.maxSentences})`,
+          );
+        }
+      }
+      for (const required of testCase.expect.mustContain ?? []) {
+        if (!answer.includes(required.toLowerCase())) {
+          problems.push(`answer did not mention "${required}"`);
+        }
+      }
+      for (const alternatives of testCase.expect.mustContainAny ?? []) {
+        if (
+          !alternatives.some((value) => answer.includes(value.toLowerCase()))
+        ) {
+          problems.push(
+            `answer did not mention any of: ${alternatives.join(", ")}`,
+          );
+        }
+      }
+      for (const forbidden of testCase.expect.mustNotContain ?? []) {
+        if (answer.includes(forbidden.toLowerCase())) {
+          problems.push(`answer mentioned forbidden item "${forbidden}"`);
+        }
+      }
+      if (
+        testCase.expect.actionType !== undefined &&
+        object.action?.type !== testCase.expect.actionType
+      ) {
         problems.push(
-          `answer has ${sentences.length} sentences (max ${c.expect.maxSentences})`,
+          `expected action ${testCase.expect.actionType}, got ${object.action?.type ?? "none"}`,
         );
       }
-    }
-
-    for (const required of c.expect.mustContain ?? []) {
-      if (!haystack.includes(required.toLowerCase())) {
-        problems.push(`answer does not mention "${required}"`);
+      if (
+        testCase.expect.timerSeconds !== undefined &&
+        object.action?.timerSeconds !== testCase.expect.timerSeconds
+      ) {
+        problems.push(
+          `expected ${testCase.expect.timerSeconds}s timer, got ${object.action?.timerSeconds ?? "none"}`,
+        );
       }
-    }
+      if (
+        testCase.expect.stepIndex !== undefined &&
+        object.action?.stepIndex !== testCase.expect.stepIndex
+      ) {
+        problems.push(
+          `expected step ${testCase.expect.stepIndex}, got ${object.action?.stepIndex ?? "none"}`,
+        );
+      }
 
-    if (
-      c.expect.actionType !== undefined &&
-      object.action?.type !== c.expect.actionType
-    ) {
-      problems.push(
-        `expected action "${c.expect.actionType}" but got "${object.action?.type ?? "none"}"`,
+      const inputTokens = generated.usage?.inputTokens ?? 0;
+      const outputTokens = generated.usage?.outputTokens ?? 0;
+      const totalTokens = inputTokens + outputTokens;
+      const cost = estimateCost(modelName, inputTokens, outputTokens);
+      const result: EvalResult = {
+        dataset: "assistant",
+        name: testCase.name,
+        run,
+        passed: problems.length === 0,
+        safetyCritical: testCase.safetyCritical ?? false,
+        problems,
+        latencyMs,
+        inputTokens,
+        outputTokens,
+        totalTokens,
+        costUsd: cost.usd,
+        output: object,
+      };
+      results.push(result);
+      console.log(
+        `${result.passed ? "PASS" : "FAIL"}  ${testCase.name} [run ${run}]  (${totalTokens} tokens, ${latencyMs.toFixed(0)}ms, $${cost.usd.toFixed(5)})`,
       );
+      for (const problem of problems) console.log(`      - ${problem}`);
     }
-
-    const isPass = problems.length === 0;
-    if (isPass) passed++;
-    else failed++;
-
-    const inputTokens = usage?.inputTokens ?? 0;
-    const outputTokens = usage?.outputTokens ?? 0;
-    const totalTokens = usage?.totalTokens ?? inputTokens + outputTokens;
-    const cost = estimateCost(modelName, inputTokens, outputTokens);
-    totalLatency += latencyMs;
-    totalCost += cost.usd;
-
-    caseResults.push({
-      name: c.name,
-      passed: isPass,
-      problems,
-      latencyMs,
-      inputTokens,
-      outputTokens,
-      totalTokens,
-      costUsd: cost.usd,
-      costInputUsd: cost.inputUsd,
-      costOutputUsd: cost.outputUsd,
-    });
-
-    const status = isPass ? "PASS" : "FAIL";
-    console.log(
-      `${status}  ${c.name}  (${totalTokens} tokens, ${latencyMs.toFixed(0)}ms, $${cost.usd.toFixed(5)})`,
-    );
-    for (const p of problems) console.log(`      - ${p}`);
   }
 
+  return createReport("assistant", provider, "live", runsPerCase, results);
+}
+
+function printSummary(report: SuiteReport) {
   console.log(
-    `\n${passed}/${cases.length} passed · avg latency ${(totalLatency / cases.length).toFixed(0)}ms · total cost $${totalCost.toFixed(5)}`,
+    `\n${report.dataset}: ${report.passed}/${report.total} passed (${(report.passRate * 100).toFixed(1)}%) · safety ${(report.safetyPassRate * 100).toFixed(1)}% · avg ${report.avgLatencyMs.toFixed(0)}ms · p95 ${report.p95LatencyMs.toFixed(0)}ms · $${report.totalCostUsd.toFixed(5)}`,
   );
-
-  return {
-    provider,
-    model: modelName,
-    passed,
-    failed,
-    total: cases.length,
-    passRate: cases.length ? passed / cases.length : 0,
-    avgLatencyMs: cases.length ? totalLatency / cases.length : 0,
-    totalCostUsd: totalCost,
-    cases: caseResults,
-  };
+  console.log(`Report written to ${writeReport(report)}`);
 }
 
-async function runSingle(datasetName: string) {
-  const provider = (process.env.AI_PROVIDER as AiProvider) ?? "google";
-  const temperature = Number(process.env.EVAL_TEMPERATURE ?? 0.4);
-
-  const report =
-    datasetName === "assistant"
-      ? await runAssistantDataset(provider, 0.7)
-      : await runDataset(datasetName, provider, temperature);
-
-  process.exit(report.failed ? 1 : 0);
-}
-
-async function runReport() {
-  const datasetName = "suggest-recipes";
-  const temperature = Number(process.env.EVAL_TEMPERATURE ?? 0.4);
-  const resultsDir = path.join(process.cwd(), "evals", "results");
-  mkdirSync(resultsDir, { recursive: true });
-
-  const reports: ProviderReport[] = [];
-  for (const provider of AI_PROVIDERS) {
-    try {
-      reports.push(await runDataset(datasetName, provider, temperature));
-    } catch {
-      const message = "PROVIDER_EVALUATION_FAILED";
-      console.error(`\nProvider ${provider} failed: ${message}`);
-      reports.push({
-        provider,
-        model: getModelName(provider),
-        passed: 0,
-        failed: 0,
-        total: 0,
-        passRate: 0,
-        avgLatencyMs: 0,
-        totalCostUsd: 0,
-        cases: [],
-        error: message,
-      });
-    }
+async function runForProvider(
+  dataset: string,
+  provider: AiProvider,
+  runsPerCase: number,
+  offline: boolean,
+): Promise<SuiteReport[]> {
+  if (offline && dataset !== "recommendations") {
+    throw new Error("--offline is only available for recommendations");
   }
-
-  const output = {
-    dataset: datasetName,
-    temperature,
-    ranAt: new Date().toISOString(),
-    providers: reports,
-  };
-
-  const outFile = path.join(resultsDir, "text-model-comparison.json");
-  writeFileSync(outFile, JSON.stringify(output, null, 2));
-  console.log(`\nComparison report written to ${outFile}`);
+  if (dataset === "recommendations") {
+    return [await runRecommendations(provider, runsPerCase, offline)];
+  }
+  if (dataset === "assistant") {
+    return [await runAssistant(provider, runsPerCase)];
+  }
+  if (dataset === "all") {
+    return [
+      await runRecommendations(provider, runsPerCase, false),
+      await runAssistant(provider, runsPerCase),
+    ];
+  }
+  throw new Error(`Unknown eval dataset "${dataset}"`);
 }
 
 async function main() {
   const args = process.argv.slice(2);
   const reportMode = args.includes("--report");
-  const datasetArg = args.find((a) => !a.startsWith("-"));
+  const offline = args.includes("--offline");
+  const dataset = args.find((arg) => !arg.startsWith("-")) ?? "all";
+  const runsPerCase = Math.max(
+    1,
+    Math.min(10, Number.parseInt(process.env.EVAL_RUNS ?? "1", 10) || 1),
+  );
 
   if (reportMode) {
-    await runReport();
+    const comparison: Array<{
+      provider: AiProvider;
+      suites?: SuiteReport[];
+      error?: string;
+    }> = [];
+    for (const provider of AI_PROVIDERS) {
+      try {
+        comparison.push({
+          provider,
+          suites: await runForProvider("all", provider, runsPerCase, false),
+        });
+      } catch (error) {
+        comparison.push({
+          provider,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    mkdirSync(RESULTS_DIR, { recursive: true });
+    const file = path.join(RESULTS_DIR, "text-model-comparison.json");
+    writeFileSync(
+      file,
+      JSON.stringify(
+        { ranAt: new Date().toISOString(), runsPerCase, providers: comparison },
+        null,
+        2,
+      ),
+    );
+    console.log(`\nComparison report written to ${file}`);
     return;
   }
 
-  await runSingle(datasetArg ?? "suggest-recipes");
+  const provider = (process.env.AI_PROVIDER as AiProvider) ?? "google";
+  const reports = await runForProvider(dataset, provider, runsPerCase, offline);
+  reports.forEach(printSummary);
+  if (reports.some((report) => report.failed > 0)) process.exitCode = 1;
 }
 
-main().catch(() => {
-  console.error("Evaluation failed: provider unavailable or output invalid");
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : error);
+  try {
+    console.error(`Incomplete run recorded in ${writeProviderFailure(error)}`);
+  } catch {
+    console.error("The incomplete run could not be recorded.");
+  }
   process.exit(1);
 });

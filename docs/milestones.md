@@ -26,11 +26,11 @@ retrofitted at submission time. Full writeup goes in
 
 ### Text + vision candidates
 
-| Role          | Provider alias | Env var / default model                   | Why                                                                            |
-| ------------- | -------------- | ----------------------------------------- | ------------------------------------------------------------------------------ |
-| Primary       | Google         | `GOOGLE_MODEL=gemini-5.8-flash`           | Latest Flash tier; handles text and kitchen-scan vision in one call.           |
-| Alternative 1 | OpenAI         | `OPENAI_MODEL=gpt-5.6-luna`               | Strong structured output and ecosystem; benchmark for recipe schema adherence. |
-| Alternative 2 | Google Lite    | `GOOGLE_LITE_MODEL=gemini-3.5-flash-lite` | Google's fastest / cheapest Flash option; good baseline for cost/latency.      |
+| Role          | Provider alias | Env var / default model                   | Why                                                                              |
+| ------------- | -------------- | ----------------------------------------- | -------------------------------------------------------------------------------- |
+| Primary       | Google         | `GOOGLE_MODEL=gemini-3.8-flash`           | Flash tier used in production; handles text and kitchen-scan vision in one call. |
+| Alternative 1 | OpenAI         | `OPENAI_MODEL=gpt-5.6-luna`               | Strong structured output and ecosystem; benchmark for recipe schema adherence.   |
+| Alternative 2 | Google Lite    | `GOOGLE_LITE_MODEL=gemini-3.5-flash-lite` | Google's fastest / cheapest Flash option; good baseline for cost/latency.        |
 
 Run the comparison:
 
