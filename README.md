@@ -101,4 +101,3 @@ docs/                  milestone writeups, rollout plans, credits model, launch 
 - [Supabase SSR guide](https://supabase.com/docs/guides/auth/server-side) —
   auth client patterns
 - CS3216 Assignment 3 spec — milestone requirements
-- _add tutorials, design references, and libraries as you use them_
