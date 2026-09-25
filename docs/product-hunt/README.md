@@ -57,3 +57,5 @@ Upload in this order. Each image is 1270 × 760 pixels. The square thumbnail is 
 ![Review your scan](gallery/02-review-your-scan.png)
 ![Cook with help](gallery/03-cook-with-help.png)
 ![Launch plans](gallery/04-launch-plans.png)
+
+Launch status: These materials were prepared as a simulated Product Hunt submission for this milestone. StarterChef has not been published on Product Hunt.
