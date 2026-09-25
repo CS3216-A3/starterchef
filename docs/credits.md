@@ -146,8 +146,8 @@ owned by backend rather than frontend:
   that is what the settings page reports.
 - Payment integration. There is no Stripe or checkout code in the repo; no tier
   is actually purchasable.
-- Wiring `creditCostFor()` into each `api/ai/*` route alongside a monthly ledger instead of the
-  current route-specific daily quota costs.
+- Wiring `creditCostFor()` into each `api/ai/*` route in place of the current
+  one-request-one-unit daily quota, alongside a monthly ledger.
 - The Free-tier feature ceiling itself: `FEATURE_ROWS` documents which
   features are "Limited" on Free, but the actual per-feature quotas (scans
   per month, imports per month, etc.) aren't decided or enforced anywhere yet.
