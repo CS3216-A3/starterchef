@@ -11,9 +11,9 @@ talk to and show your pan to.
 
 ## Team
 
-| Name  | Matric no. | Contributions |
-| ----- | ---------- | ------------- |
-| Huang Kaijuan Joulene | A0299817E | Created the base app with core features and tech stack. Designed app logo and interactive landing page. |
+| Name                  | Matric no. | Contributions                                                                                           |
+| --------------------- | ---------- | ------------------------------------------------------------------------------------------------------- |
+| Huang Kaijuan Joulene | A0299817E  | Created the base app with core features and tech stack. Designed app logo and interactive landing page. |
 
 ## Tech stack
 
@@ -62,25 +62,33 @@ npm run format        # Prettier
 ## Repo layout
 
 ```
-src/app/(marketing)/   landing page (SEO + OG, interactive demos, pricing)
+src/app/(marketing)/   landing page (SEO + OG image, interactive demos, pricing)
 src/app/(app)/         authed app shell: today, kitchen, recipes, cook/[id], sessions, settings
-src/lib/data.ts        server-side query helpers (profiles, kitchen_items, recipes, sessions)
-src/lib/types.ts       DB row types (hand-maintained)
-src/lib/credits.ts     plan + credit amounts — single source for pricing UI
-supabase/seed/         starter recipe catalogue (TheMealDB demo data)
-src/app/api/ai/        AI endpoints (kitchen-scan, suggestions, trusted assistant, realtime credentials)
-src/hooks/             voice hooks: OpenAI Realtime + Gemini Live
+src/app/login · onboarding · auth/  sign-in, first-run wizard, auth callback
+src/app/robots.ts · sitemap.ts · manifest.ts · icon.svg   SEO + PWA metadata
+src/app/api/ai/        AI endpoints (assistant, import-recipe, kitchen-voice,
+                       realtime-sessions, suggest-recipes)
+src/app/api/           app endpoints (cooking-sessions, recipe-drafts,
+                       kitchen-scans, pantry-items, cron retention)
+src/components/        shared UI — cards, cook assist, ChefBuddy, landing demos
+src/hooks/             voice hooks: OpenAI Realtime + Gemini Live + shared assistant state
 src/lib/ai/            provider abstraction, zod schemas, tools, voice telemetry
+src/lib/supabase/      browser, server + admin clients, generated DB types
+src/lib/data.ts        server-side query helpers (profiles, kitchen_items, recipes, sessions)
+src/lib/credits.ts     plan + credit amounts — single source for pricing UI
 src/lib/posthog/       analytics init + event tracking helper
 src/instrumentation.ts PostHog AI observability via OpenTelemetry
-src/lib/supabase/      browser + server clients
+src/proxy.ts           auth session refresh + route guard (Next.js proxy/middleware)
 workflows/             durable workflows (recipe verification, session recap)
-e2e/                   Playwright end-to-end specs
 prompts/               versioned system prompts (cited in milestones writeup)
 evals/                 eval datasets + runner (LLMOps milestone)
+tests/                 Vitest unit + route-contract tests
+e2e/                   Playwright end-to-end specs
+scripts/               ops scripts (AI key smoke test, retention cron, media migration)
 supabase/migrations/   database schema (RLS on every user table)
+supabase/seed/         starter recipe catalogue (TheMealDB demo data)
+docs/                  milestone writeups, rollout plans, credits model, launch assets
 .devin/skills/         agent skills for project workflows
-docs/specs/            feature specs
 ```
 
 ## Resources used
