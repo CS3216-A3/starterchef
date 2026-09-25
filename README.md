@@ -20,7 +20,7 @@ talk to and show your pan to.
 
 ## Tech stack
 
-- **Next.js 16** (App Router, TypeScript) — responsive web app / PWA
+- **Next.js 16** (App Router, TypeScript) — responsive web app
 - **Tailwind CSS v4** — brand tokens in `src/app/globals.css`
 - **Vercel AI SDK** — provider-agnostic LLM layer (`src/lib/ai/`), swappable
   via `AI_PROVIDER` env var
