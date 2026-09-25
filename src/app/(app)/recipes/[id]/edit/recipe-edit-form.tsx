@@ -100,7 +100,7 @@ export function RecipeEditForm({ recipe }: { recipe: RecipeRow }) {
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       <Link
         href={`/recipes/${recipe.slug}`}
-        className="text-sm font-bold text-flame underline"
+        className="text-sm font-bold text-flame-ink underline"
       >
         Want an AI adaptation? Request a reviewed draft on the recipe page.
       </Link>
@@ -174,7 +174,7 @@ export function RecipeEditForm({ recipe }: { recipe: RecipeRow }) {
         <input
           type="file"
           accept="image/*"
-          className="text-sm font-semibold file:mr-3 file:rounded-full file:bg-flame file:px-4 file:py-2 file:text-white"
+          className="text-sm font-semibold file:mr-3 file:rounded-full file:bg-flame file:px-4 file:py-2 file:text-espresso"
           onChange={async (e) => {
             const file = e.target.files?.[0];
             if (!file) return;
@@ -219,7 +219,7 @@ export function RecipeEditForm({ recipe }: { recipe: RecipeRow }) {
             className="flex flex-col gap-3 rounded-2xl bg-card p-4 ring-1 ring-oat"
           >
             <div className="flex items-center gap-3">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-flame text-sm font-extrabold text-white">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-flame text-sm font-extrabold text-espresso">
                 {step.index}
               </span>
               <TextField

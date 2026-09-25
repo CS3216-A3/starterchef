@@ -22,21 +22,45 @@ export function useRealtimeAssistant({
   const expiry = useRef<number | null>(null);
   const heartbeat = useRef<number | null>(null);
   const active = useRef(false);
+  const attempt = useRef<string | null>(null);
 
-  const stop = useCallback(() => {
-    active.current = false;
-    pending.current?.abort();
-    pending.current = null;
-    if (expiry.current !== null) window.clearTimeout(expiry.current);
-    if (heartbeat.current !== null) window.clearInterval(heartbeat.current);
-    expiry.current = null;
-    heartbeat.current = null;
-    cleanup.current?.();
-    cleanup.current = null;
-    setTranscript(undefined);
-    setState({ status: "idle" });
-    logMetrics(metrics.current);
-  }, []);
+  const stop = useCallback(
+    (reason: "user" | "expired" | "connection_lost" | "failed" = "user") => {
+      const closingAttempt = attempt.current;
+      attempt.current = null;
+      active.current = false;
+      pending.current?.abort();
+      pending.current = null;
+      if (expiry.current !== null) window.clearTimeout(expiry.current);
+      if (heartbeat.current !== null) window.clearInterval(heartbeat.current);
+      expiry.current = null;
+      heartbeat.current = null;
+      cleanup.current?.();
+      cleanup.current = null;
+      setTranscript(undefined);
+      setState(
+        reason === "user"
+          ? { status: "idle" }
+          : {
+              status: "error",
+              message: "Live voice ended. Use the text assistant below.",
+            },
+      );
+      if (closingAttempt)
+        void fetch("/api/ai/realtime-sessions/closed", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId,
+            attemptId: closingAttempt,
+            reason,
+          }),
+          keepalive: true,
+        }).catch(() => undefined);
+      logMetrics(metrics.current);
+    },
+    [sessionId],
+  );
 
   const start = useCallback(async () => {
     if (active.current) return;
@@ -47,6 +71,7 @@ export function useRealtimeAssistant({
     const controller = new AbortController();
     pending.current = controller;
     const attemptId = crypto.randomUUID();
+    attempt.current = attemptId;
     const credential = async (fallbackFrom: "openai" | null) => {
       const response = await fetch("/api/ai/realtime-sessions", {
         method: "POST",
@@ -81,7 +106,7 @@ export function useRealtimeAssistant({
           metrics,
           onAction,
           controller.signal,
-          stop,
+          () => stop("connection_lost"),
           markConnected,
         );
       } else if (config.provider === "openai") {
@@ -93,7 +118,7 @@ export function useRealtimeAssistant({
             metrics,
             onAction,
             controller.signal,
-            stop,
+            () => stop("connection_lost"),
             markConnected,
           );
         } catch {
@@ -109,7 +134,7 @@ export function useRealtimeAssistant({
             metrics,
             onAction,
             controller.signal,
-            stop,
+            () => stop("connection_lost"),
             markConnected,
           );
         }
@@ -122,29 +147,27 @@ export function useRealtimeAssistant({
         return;
       }
       pending.current = null;
-      expiry.current = window.setTimeout(stop, 15 * 60_000);
+      const serverDeadline = Date.parse(String(config.sessionDeadlineAt));
+      const remaining = Number.isFinite(serverDeadline)
+        ? Math.max(0, serverDeadline - Date.now())
+        : 0;
+      expiry.current = window.setTimeout(() => stop("expired"), remaining);
       heartbeat.current = window.setInterval(() => {
         void fetch(`/api/cooking-sessions/${sessionId}`, { cache: "no-store" })
           .then(async (response) => {
             const body = await response.json().catch(() => null);
-            if (!response.ok || body?.status !== "in_progress") stop();
+            if (!response.ok || body?.status !== "in_progress")
+              stop("connection_lost");
           })
           .catch(() => undefined);
       }, 15_000);
     } catch {
       if (controller.signal.aborted) return;
       pending.current = null;
-      cleanup.current?.();
-      cleanup.current = null;
-      active.current = false;
-      setState({
-        status: "error",
-        message: "Live voice is unavailable. Use the text assistant below.",
-      });
-      setTranscript(undefined);
+      stop("failed");
     }
   }, [sessionId, stop, onAction]);
 
-  useEffect(() => stop, [stop]);
-  return { state, transcript, start, stop };
+  useEffect(() => () => stop(), [stop]);
+  return { state, transcript, start, stop: () => stop() };
 }

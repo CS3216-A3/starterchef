@@ -1,33 +1,35 @@
 import type { Metadata, Viewport } from "next";
-import { Nunito } from "next/font/google";
+import localFont from "next/font/local";
 import { PostHogProvider } from "@/components/posthog-provider";
 import "./globals.css";
 
-const nunito = Nunito({
+const nunito = localFont({
+  src: "./fonts/Nunito-Latin-Variable.woff2",
   variable: "--font-nunito",
-  subsets: ["latin"],
+  weight: "200 1000",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
   metadataBase: new URL(
-    process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://starterchef.vercel.app",
   ),
   title: {
-    default: "StarterChef · Your kitchen, your next meal",
+    default: "StarterChef · Your start to great cooking",
     template: "%s · StarterChef",
   },
   description:
     "A personalized cooking assistant for beginners. Scan your kitchen, get recipes that fit your ingredients, equipment, and taste, then cook hands-free with an AI sous-chef.",
   openGraph: {
     siteName: "StarterChef",
-    title: "StarterChef · Your kitchen, your next meal",
+    title: "StarterChef · Your start to great cooking",
     description:
       "Scan your kitchen, get recipes that fit what you have, and cook hands-free with an AI sous-chef.",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "StarterChef — Your kitchen, your next meal",
+    title: "StarterChef — Your start to great cooking",
     description:
       "Scan your kitchen, get recipes that fit what you have, and cook hands-free with an AI sous-chef.",
   },

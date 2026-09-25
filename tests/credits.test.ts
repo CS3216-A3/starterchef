@@ -83,7 +83,7 @@ describe("plan economics", () => {
   });
 });
 
-describe("feature gating", () => {
+describe("launch feature comparison", () => {
   it("lists at least one core feature shared by every plan", () => {
     expect(CORE_FEATURES.length).toBeGreaterThan(0);
   });

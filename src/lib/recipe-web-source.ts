@@ -5,19 +5,25 @@ import { scrapeRecipe } from "recipe-scrapers";
 import { Agent } from "undici";
 
 const MAX_SOURCE_BYTES = 1_000_000;
+const RECIPE_PAGE_UA =
+  "Mozilla/5.0 (compatible; StarterChef/1.0; +https://starterchef.dev)";
+// Refusals, not "page missing": Dotdash Meredith answers 402 to datacenter
+// traffic, Cloudflare-style blocks are 403, rate limits 429, geo/legal 451.
+const BLOCKED_STATUSES = new Set([402, 403, 429, 451]);
+
+/** Marks "the site refused to serve us" so an archived-snapshot fallback can
+ * apply without masking DNS, SSRF-guard, or body-size failures. */
+class RecipeSourceBlockedError extends Error {}
 
 /** Fetch and reduce a public recipe page to the structured data needed by the
  * workflow. Call this only from a durable workflow step, never from a client.
  */
 export async function loadRecipeWebSource(url: string): Promise<string> {
-  let current = await assertPublicRecipeUrl(url);
-  let response: Response | undefined;
-  const signal = AbortSignal.timeout(15_000);
   // Validate at the *actual connection lookup* too. A hostname that changes
   // from public to private between preflight and connect must not be fetched.
   const dispatcher = new Agent({
     connect: {
-      lookup(hostname, _options, callback) {
+      lookup(hostname, options, callback) {
         void lookup(hostname, { all: true, verbatim: true })
           .then((addresses) => {
             if (
@@ -29,6 +35,13 @@ export async function loadRecipeWebSource(url: string): Promise<string> {
                 "",
                 0,
               );
+              return;
+            }
+            // autoSelectFamily (default on Node ≥20) calls lookup with
+            // all: true and expects the full address list back, not a
+            // single address.
+            if (options.all) {
+              callback(null, addresses);
               return;
             }
             const selected = addresses[0];
@@ -44,32 +57,70 @@ export async function loadRecipeWebSource(url: string): Promise<string> {
       },
     },
   });
-  // Do not let fetch follow a redirect without inspecting its destination.
   try {
-    for (let redirects = 0; redirects <= 5; redirects += 1) {
-      response = await fetch(current, {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (compatible; StarterChef/1.0; +https://starterchef.dev)",
-        },
-        redirect: "manual",
-        signal,
-        dispatcher,
-      } as RequestInit & { dispatcher: Agent });
-      if (![301, 302, 303, 307, 308].includes(response.status)) break;
-      const location = response.headers.get("location");
-      await response.body?.cancel();
-      if (!location) throw new Error("Recipe page redirect has no destination");
-      current = await assertPublicRecipeUrl(
-        new URL(location, current).toString(),
-      );
+    let html: string;
+    let sourceUrl: string;
+    try {
+      ({ html, sourceUrl } = await fetchRecipePage(url, dispatcher));
+    } catch (error) {
+      // Publishers that refuse datacenter traffic often still have a Wayback
+      // Machine snapshot of the same page, served by a host that does not
+      // block us.
+      if (!(error instanceof RecipeSourceBlockedError)) throw error;
+      const snapshot = await findArchiveSnapshot(url, dispatcher);
+      if (!snapshot) throw error;
+      ({ html } = await fetchRecipePage(snapshot, dispatcher));
+      // The archived DOM is still the publisher's page: keep the original
+      // URL so the site-specific scraper and the recorded source stay right.
+      sourceUrl = url;
     }
-    if (!response || [301, 302, 303, 307, 308].includes(response.status))
-      throw new Error("Recipe page redirected too many times");
-    if (!response.ok) {
-      await response.body?.cancel();
-      throw new Error(`Could not fetch recipe page (${response.status})`);
-    }
+    const scraped = await scrapeRecipe(html, sourceUrl, { safeParse: true });
+    if (!scraped.success)
+      throw new Error("Could not find a recipe schema on that page");
+    const recipe = scraped.data as unknown as RecipePageData;
+    return buildPromptFromScraped(sourceUrl, recipe);
+  } finally {
+    await dispatcher.close();
+  }
+}
+
+/** Fetch a recipe page with manual, preflight-checked redirects and a bounded
+ * body. Throws RecipeSourceBlockedError for refusal statuses. */
+async function fetchRecipePage(
+  url: string,
+  dispatcher: Agent,
+): Promise<{ html: string; sourceUrl: string }> {
+  let current = await assertPublicRecipeUrl(url);
+  const signal = AbortSignal.timeout(15_000);
+  let response: Response | undefined;
+  // Do not let fetch follow a redirect without inspecting its destination.
+  for (let redirects = 0; redirects <= 5; redirects += 1) {
+    response = await fetch(current, {
+      headers: {
+        "User-Agent": RECIPE_PAGE_UA,
+      },
+      redirect: "manual",
+      signal,
+      dispatcher,
+    } as RequestInit & { dispatcher: Agent });
+    if (![301, 302, 303, 307, 308].includes(response.status)) break;
+    const location = response.headers.get("location");
+    await response.body?.cancel();
+    if (!location) throw new Error("Recipe page redirect has no destination");
+    current = await assertPublicRecipeUrl(
+      new URL(location, current).toString(),
+    );
+  }
+  if (!response || [301, 302, 303, 307, 308].includes(response.status))
+    throw new Error("Recipe page redirected too many times");
+  if (!response.ok) {
+    await response.body?.cancel();
+    const message = `Could not fetch recipe page (${response.status})`;
+    throw BLOCKED_STATUSES.has(response.status)
+      ? new RecipeSourceBlockedError(message)
+      : new Error(message);
+  }
+  {
     const length = Number(response.headers.get("content-length") ?? 0);
     if (length > MAX_SOURCE_BYTES) {
       await response.body?.cancel();
@@ -98,14 +149,41 @@ export async function loadRecipeWebSource(url: string): Promise<string> {
       offset += chunk.byteLength;
     }
     const html = new TextDecoder().decode(bytes);
+    return { html, sourceUrl: current };
+  }
+}
 
-    const scraped = await scrapeRecipe(html, current, { safeParse: true });
-    if (!scraped.success)
-      throw new Error("Could not find a recipe schema on that page");
-    const recipe = scraped.data as unknown as RecipePageData;
-    return buildPromptFromScraped(current, recipe);
-  } finally {
-    await dispatcher.close();
+/** Ask the Wayback Machine for the closest good snapshot of a blocked page.
+ * Returns undefined when nothing usable is archived. */
+async function findArchiveSnapshot(
+  url: string,
+  dispatcher: Agent,
+): Promise<string | undefined> {
+  try {
+    const apiUrl = await assertPublicRecipeUrl(
+      `https://archive.org/wayback/available?url=${encodeURIComponent(url)}`,
+    );
+    const response = await fetch(apiUrl, {
+      headers: { "User-Agent": RECIPE_PAGE_UA },
+      signal: AbortSignal.timeout(10_000),
+      dispatcher,
+    } as RequestInit & { dispatcher: Agent });
+    if (!response.ok) {
+      await response.body?.cancel();
+      return undefined;
+    }
+    const data = (await response.json()) as {
+      archived_snapshots?: {
+        closest?: { available?: boolean; status?: string; url?: string };
+      };
+    };
+    const closest = data.archived_snapshots?.closest;
+    if (!closest?.available || closest.status !== "200" || !closest.url)
+      return undefined;
+    // The API answers with plain-http snapshot URLs; upgrade before fetching.
+    return closest.url.replace(/^http:/, "https:");
+  } catch {
+    return undefined;
   }
 }
 

@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://starterchef.vercel.app";
 
 /**
  * Only public, unauthenticated routes belong here — the app routes under

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { apiError } from "@/lib/api-error";
 import { protectedError, withProtectedRoute } from "@/lib/protected-route";
 import {
   isAllowedRecipeUrl,
@@ -165,20 +166,34 @@ export const POST = withProtectedRoute(
       p_input_id: inputRow?.id ?? null,
       p_idempotency_key: input.idempotencyKey,
     });
+    if (error?.code === "P0001") {
+      // The RPC owns both the quota check and its limit. Keep this response
+      // independent of a second read or a possibly different app-side limit.
+      const required = input.kind === "photo" ? 7 : 6;
+      const today = new Date().toISOString().slice(0, 10);
+      const resetAt = new Date(`${today}T00:00:00.000Z`);
+      resetAt.setUTCDate(resetAt.getUTCDate() + 1);
+      const response = apiError(
+        429,
+        "RATE_LIMITED",
+        `${input.kind === "photo" ? "A photo recipe review" : "A recipe review"} needs ${required} daily AI credits. Your available allowance is too low; it resets at midnight UTC.`,
+        { required, resetAt: resetAt.toISOString() },
+        requestId,
+      );
+      response.headers.set(
+        "Retry-After",
+        String(Math.max(0, Math.ceil((resetAt.getTime() - Date.now()) / 1000))),
+      );
+      return response;
+    }
     if (error)
       return protectedError(
         { requestId },
-        error.code === "P0001" ? 429 : error.code === "23505" ? 409 : 500,
-        error.code === "P0001"
-          ? "RATE_LIMITED"
-          : error.code === "23505"
-            ? "CONFLICT"
-            : "INTERNAL_ERROR",
-        error.code === "P0001"
-          ? "Daily AI credit limit reached"
-          : error.code === "23505"
-            ? "Finish or reject your active recipe draft first"
-            : "Could not create recipe draft",
+        error.code === "23505" ? 409 : 500,
+        error.code === "23505" ? "CONFLICT" : "INTERNAL_ERROR",
+        error.code === "23505"
+          ? "Finish or reject your active recipe draft first"
+          : "Could not create recipe draft",
       );
     const outcome = result as {
       draft?: {

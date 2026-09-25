@@ -149,7 +149,7 @@ export function LoginForm() {
                 setError(undefined);
                 setSuccess(undefined);
               }}
-              className="font-extrabold text-flame hover:text-flame-dark"
+              className="font-extrabold text-flame-ink hover:text-espresso"
             >
               Sign up
             </button>
@@ -164,7 +164,7 @@ export function LoginForm() {
                 setError(undefined);
                 setSuccess(undefined);
               }}
-              className="font-extrabold text-flame hover:text-flame-dark"
+              className="font-extrabold text-flame-ink hover:text-espresso"
             >
               Sign in
             </button>

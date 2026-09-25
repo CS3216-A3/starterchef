@@ -1,9 +1,17 @@
 import { ImageResponse } from "next/og";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 
 export const runtime = "nodejs";
-export const alt = "StarterChef — Good food starts with what you have";
+export const alt = "StarterChef — Your start to great cooking";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
+
+const nunito = await readFile(
+  join(process.cwd(), "src/app/fonts/Nunito-Static-700.ttf"),
+);
+const logo = await readFile(join(process.cwd(), "public/logo.png"));
+const logoSrc = `data:image/png;base64,${logo.toString("base64")}`;
 
 export default function OpengraphImage() {
   return new ImageResponse(
@@ -16,24 +24,12 @@ export default function OpengraphImage() {
         justifyContent: "space-between",
         padding: "72px",
         background: "#FAF7F2",
-        fontFamily: "sans-serif",
+        fontFamily: "Nunito",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        <div
-          style={{
-            width: 60,
-            height: 60,
-            borderRadius: 18,
-            background: "linear-gradient(145deg,#F58220,#C2540A)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 32,
-          }}
-        >
-          🔥
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={logoSrc} alt="" width={60} height={60} />
         <div
           style={{
             display: "flex",
@@ -58,8 +54,8 @@ export default function OpengraphImage() {
             maxWidth: 980,
           }}
         >
-          Good food starts with&nbsp;
-          <span style={{ color: "#C2540A" }}>what you have.</span>
+          Your start to&nbsp;
+          <span style={{ color: "#A34405" }}>great cooking.</span>
         </div>
         <div
           style={{
@@ -76,7 +72,7 @@ export default function OpengraphImage() {
       </div>
 
       <div style={{ display: "flex", gap: 12 }}>
-        {["Scan your kitchen", "Recipes that fit you", "Cook hands-free"].map(
+        {["Scan your kitchen", "Recipes that fit you", "Cook step by step"].map(
           (t) => (
             <div
               key={t}
@@ -96,6 +92,9 @@ export default function OpengraphImage() {
         )}
       </div>
     </div>,
-    { ...size },
+    {
+      ...size,
+      fonts: [{ name: "Nunito", data: nunito, style: "normal", weight: 700 }],
+    },
   );
 }

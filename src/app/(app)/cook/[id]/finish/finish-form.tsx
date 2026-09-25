@@ -92,7 +92,7 @@ export function FinishForm({
           <label htmlFor="rating" className="text-sm font-extrabold">
             Rating
           </label>
-          <span className="text-sm font-extrabold text-flame">
+          <span className="text-sm font-extrabold text-flame-ink">
             {rating}/5 · {RATING_LABELS[rating - 1]}
           </span>
         </div>
@@ -111,7 +111,7 @@ export function FinishForm({
           <label htmlFor="difficulty" className="text-sm font-extrabold">
             How difficult was it?
           </label>
-          <span className="text-sm font-extrabold text-flame">
+          <span className="text-sm font-extrabold text-flame-ink">
             {difficulty}/5
           </span>
         </div>
@@ -160,7 +160,7 @@ export function FinishForm({
       {error && (
         <p
           role="alert"
-          className="rounded-xl bg-oat p-3 text-sm font-bold text-flame"
+          className="rounded-xl bg-oat p-3 text-sm font-bold text-flame-ink"
         >
           {error}
         </p>

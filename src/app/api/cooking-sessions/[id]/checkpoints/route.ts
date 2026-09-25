@@ -180,16 +180,44 @@ export const DELETE = withProtectedRoute(async (context) => {
       "A checkpointId is required",
     );
   const admin = createAdminClient();
-  const { data: checkpoint } = await admin
+  const { data: checkpoint, error: checkpointLookupError } = await admin
     .from("cooking_checkpoints")
     .select("id, object_path")
     .eq("id", checkpointId)
     .eq("session_id", id)
     .eq("user_id", context.user.id)
     .maybeSingle();
+  if (checkpointLookupError)
+    return protectedError(
+      context,
+      500,
+      "INTERNAL_ERROR",
+      "Could not load checkpoint",
+    );
   if (!checkpoint)
     return protectedError(context, 404, "NOT_FOUND", "Checkpoint not found");
-  await admin.from("cooking_checkpoints").delete().eq("id", checkpoint.id);
-  await admin.storage.from("recipe-inputs").remove([checkpoint.object_path]);
+  const removal = await admin.storage
+    .from("recipe-inputs")
+    .remove([checkpoint.object_path]);
+  if (removal.error)
+    return protectedError(
+      context,
+      503,
+      "INTERNAL_ERROR",
+      "Could not remove checkpoint photo; please try again",
+    );
+  const deleted = await admin
+    .from("cooking_checkpoints")
+    .delete()
+    .eq("id", checkpoint.id)
+    .eq("session_id", id)
+    .eq("user_id", context.user.id);
+  if (deleted.error)
+    return protectedError(
+      context,
+      500,
+      "INTERNAL_ERROR",
+      "Could not remove checkpoint record; please try again",
+    );
   return Response.json({ ok: true });
 });

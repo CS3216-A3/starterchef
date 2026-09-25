@@ -41,6 +41,9 @@ kitchen → get recipes that fit → cook step-by-step with a voice assistant.
 
 ## Conventions
 
+- **One task = one worktree + one PR.** Never edit or commit in the user's
+  checkout — their uncommitted work is off-limits. Create a sibling worktree
+  and branch per task, verify and push from there. See `/task-worktree`.
 - **Design tokens only.** Colors come from `@theme` in `src/app/globals.css`
   (`bg-cream`, `bg-oat`, `bg-flame`, `text-espresso`…). Never hardcode hex.
   Run `/design-system` for the full rules.

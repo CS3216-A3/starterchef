@@ -42,8 +42,8 @@ export default async function CookPage({
     const recipe = session.recipe_id
       ? await getRecipeById(session.recipe_id)
       : null;
-    const allIngredients = recipe?.ingredients ?? [];
-    const allEquipment = recipe?.equipment ?? [];
+    const allIngredients = session.recipe.ingredients ?? [];
+    const allEquipment = session.recipe.equipment ?? [];
     return (
       <div className="mx-auto flex max-w-lg flex-col gap-6">
         <BackButton />
@@ -53,14 +53,16 @@ export default async function CookPage({
           </p>
           <h1 className="text-2xl font-extrabold">Get everything ready</h1>
           <p className="text-sm font-semibold text-espresso-light">
-            {recipe
-              ? `${recipe.minutes} min · ${recipe.difficulty} · serves ${recipe.servings} · `
+            {session.recipe.minutes ? `${session.recipe.minutes} min · ` : ""}
+            {session.recipe.difficulty ? `${session.recipe.difficulty} · ` : ""}
+            {session.recipe.servings
+              ? `serves ${session.recipe.servings} · `
               : ""}
             {steps.length} steps
           </p>
-          {recipe?.description ? (
+          {session.recipe.description ? (
             <p className="text-sm font-semibold text-espresso-light">
-              {recipe.description}
+              {session.recipe.description}
             </p>
           ) : null}
         </header>
@@ -108,7 +110,7 @@ export default async function CookPage({
           <ol className="flex flex-col gap-1.5">
             {steps.map((s) => (
               <li key={s.index} className="flex gap-2.5 text-sm font-semibold">
-                <span className="w-5 shrink-0 text-right font-extrabold text-flame">
+                <span className="w-5 shrink-0 text-right font-extrabold text-flame-ink">
                   {s.index}
                 </span>
                 <span className="text-espresso-light">{s.title}</span>
@@ -168,7 +170,9 @@ export default async function CookPage({
           <h1 className="text-xl font-extrabold">
             Step {session.current_step} of {steps.length}
           </h1>
-          <span className="text-sm font-extrabold text-flame">{progress}%</span>
+          <span className="text-sm font-extrabold text-flame-ink">
+            {progress}%
+          </span>
         </div>
         <div
           className="h-2 overflow-hidden rounded-full bg-oat"

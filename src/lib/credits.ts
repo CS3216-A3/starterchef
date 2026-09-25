@@ -1,7 +1,7 @@
 /**
  * Credit model — the single source of truth for what AI actions cost and what
- * each plan includes. Pricing UI, quota enforcement and the writeup all read
- * from here so they can't drift apart.
+ * each plan includes. Pricing UI and the writeup read from here. The live backend still uses
+ * separate daily quotas; monthly credit enforcement is not implemented.
  *
  * Costs are derived from measured token profiles per action and the per-model
  * rates in `evals/costs.ts`. See `docs/credits.md` for the full derivation and

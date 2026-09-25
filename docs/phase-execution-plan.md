@@ -372,6 +372,11 @@ keys.
 
 ## Phase 5 — telemetry, public-media remediation, evidence, and rollout
 
+The current migration order and release commands are in
+[`phase-5-release.md`](phase-5-release.md). This section records planning
+history; migration names and command examples below are superseded by the
+runbook's `0033`/`0034`/planned `0035` sequence.
+
 ### Migration `0023_ai_telemetry_and_capability_routing.sql`
 
 - Extend `ai_calls` with route, stage, prompt version, user/job/session links,
@@ -415,10 +420,10 @@ On Windows, the final pipeline is:
 npm.cmd run lint
 npm.cmd run typecheck
 npm.cmd test
-npm.cmd run test:integration:security
-npm.cmd run test:e2e:spike
+npm.cmd run test:security:integration
+npm.cmd run test:security:e2e
 npm.cmd run build
-npm.cmd run eval -- --report
+npm.cmd run eval -- suggest-recipes
 ```
 
 Provider smoke tests and real evaluations are explicit opt-in jobs. Ordinary

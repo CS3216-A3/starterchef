@@ -82,11 +82,11 @@ acquisition cost, not evaluated on its own margin.
 
 ## Two gates, not one
 
-Launch pricing gates access two ways, and the credit budget is the smaller of
-the two constraints:
+The intended launch model has two access constraints:
 
-1. **A monthly credit budget** — 100 (Free) vs. 1,500 (Plus), enforced by
-   `creditCostFor()` per action.
+1. **A monthly credit budget** — 100 (Free) vs. 1,500 (Plus).
+   `creditCostFor()` calculates intended costs; monthly enforcement is not
+   implemented yet.
 2. **A feature ceiling on Free** — kitchen scanning, recipe imports, AI
    recommendations and cooking assistance are all explicitly "Limited" on
    Free regardless of credit balance, and voice, photo checkpoints,
@@ -94,8 +94,7 @@ the two constraints:
    unavailable on Free entirely (`FEATURE_ROWS` in `src/lib/credits.ts`).
 
 This matters for the credit numbers below: Free's 100 credits aren't meant to
-cover a full trial of everything, because most of "everything" is already
-feature-gated. They only need to cover a few core-loop actions (a scan, a
+cover a full trial of everything, because the proposed feature ceiling excludes several AI features. They only need to cover a few core-loop actions (a scan, a
 couple of suggestions) before a user hits the feature wall, not the credit
 wall. **Not yet decided:** the actual per-feature caps behind "Limited" (e.g.
 scans/month, imports/month) — `src/lib/credits.ts` only encodes the credit
@@ -107,9 +106,12 @@ can be enforced in code.
 A representative cook — one suggestion run, four assistant questions, one camera
 checkpoint, one recap — is **29 credits** (`CREDITS_PER_TYPICAL_COOK`).
 
-- 100 free credits ≈ 3 cooks/month — enough to taste the core loop before
-  hitting the feature wall above, not a full trial on its own.
-- 1,500 Plus credits ≈ 51 cooks/month — comfortably more than daily use.
+- 100 credits cover three of these action bundles mathematically, but this is
+  **not a Free-plan entitlement**: the bundle includes Plus-only photo
+  checkpoints and recaps. The landing page therefore shows credits without
+  promising a number of cooks.
+- 1,500 Plus credits cover about 51 of these illustrative bundles. This
+  excludes live voice and imports; it is not a guaranteed monthly meal count.
 
 ## Open questions for the team
 
@@ -117,11 +119,12 @@ Two things this model surfaces that are product calls, not frontend ones:
 
 1. **Live voice is the tightest constraint on Plus, and it conflicts with the
    pitch.** At 120 credits/minute, a Plus user who spent every monthly credit
-   on live voice alone would get **12.5 minutes** — well under one cooking
+   on live voice alone has **12.5 raw credit-equivalent minutes** (at most
+   12 whole billed minutes, because usage rounds up) — well under one cooking
    session — while "cook hands-free" is a headline feature. The fix already
    exists in the codebase: the `web-speech` voice provider does browser STT →
    `/api/ai/assistant` → browser TTS, so it only costs the 3-credit assistant
-   call (500 minutes-equivalent for the same budget). **Recommendation:** make
+   call (500 assistant calls for the same budget, not a measured voice duration). **Recommendation:** make
    `web-speech` the default voice path, and treat native live audio (Gemini
    Live / OpenAI Realtime) as a distinct, separately-communicated premium
    mode rather than folding it into "Voice cooking assistance ✓" on the
@@ -139,12 +142,14 @@ This module is the pricing model, not the enforcement. Still outstanding, and
 owned by backend rather than frontend:
 
 - A credit ledger (balance per user, debits per action, grants on renewal).
-  Today `src/lib/rate-limit.ts` still enforces a flat daily request cap, and
+  Today `src/lib/rate-limit.ts` still enforces a daily weighted usage cap, and
   that is what the settings page reports.
 - Payment integration. There is no Stripe or checkout code in the repo; no tier
   is actually purchasable.
 - Wiring `creditCostFor()` into each `api/ai/*` route in place of the current
   one-request-one-unit increment.
+- Wiring `creditCostFor()` into each `api/ai/*` route alongside a monthly ledger instead of the
+  current route-specific daily quota costs.
 - The Free-tier feature ceiling itself: `FEATURE_ROWS` documents which
   features are "Limited" on Free, but the actual per-feature quotas (scans
   per month, imports per month, etc.) aren't decided or enforced anywhere yet.

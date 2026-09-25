@@ -129,7 +129,7 @@ async function runDataset(
     const { object, usage } = await generateObject({
       model: getModel(provider),
       schema: recipeSuggestionsSchema,
-      temperature,
+      temperature: provider === "openai" ? undefined : temperature,
       system: renderPrompt("suggest-recipes", {
         ingredients: input.ingredients?.join(", ") || "none listed",
         equipment: input.equipment?.join(", ") || "none listed",
@@ -259,10 +259,18 @@ async function runAssistantDataset(
     const { object, usage } = await generateObject({
       model: getModel(provider),
       schema: assistantReplySchema,
-      temperature,
+      temperature: provider === "openai" ? undefined : temperature,
       system: renderPrompt("cooking-assistant", {
         recipeTitle: input.recipeTitle,
         stepTitle: input.stepTitle,
+        stepInstruction: "Follow the current recipe step safely.",
+        recipeIngredients: "Use the recipe ingredients safely.",
+        recipeEquipment: "Use normal kitchen equipment.",
+        pantry: "Not provided for this evaluation.",
+        adjustments: "none",
+        memory: "- Nothing recorded yet.",
+        dietaryRestrictions: "none",
+        allergies: "none",
       }),
       prompt: input.question,
     });
@@ -367,8 +375,8 @@ async function runReport() {
   for (const provider of AI_PROVIDERS) {
     try {
       reports.push(await runDataset(datasetName, provider, temperature));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+    } catch {
+      const message = "PROVIDER_EVALUATION_FAILED";
       console.error(`\nProvider ${provider} failed: ${message}`);
       reports.push({
         provider,
@@ -410,7 +418,7 @@ async function main() {
   await runSingle(datasetArg ?? "suggest-recipes");
 }
 
-main().catch((err) => {
-  console.error(err);
+main().catch(() => {
+  console.error("Evaluation failed: provider unavailable or output invalid");
   process.exit(1);
 });

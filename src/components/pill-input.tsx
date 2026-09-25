@@ -40,7 +40,7 @@ export function PillInput({
                 type="button"
                 onClick={() => onChange(values.filter((v) => v !== value))}
                 aria-label={`Remove ${value}`}
-                className="text-espresso-light hover:text-flame"
+                className="text-espresso-light hover:text-flame-ink"
               >
                 ×
               </button>

@@ -1,0 +1,22 @@
+{
+  "checks": [
+    "High and medium confidence preselected; low confidence unchecked",
+    "No automatic save",
+    "Save payload excludes unconfirmed items",
+    "Edited uncertain item included only after explicit selection",
+    "Failed save retains edits and selection",
+    "All-low and empty results disable save",
+    "Discard returns to scan",
+    "320px and 390px layouts have no horizontal overflow",
+    "Approved pricing and accessible comparison table rendered",
+    "No nested button links",
+    "No browser runtime errors",
+    "Copy length and gallery file sizes pass"
+  ],
+  "screenshots": 6,
+  "galleryImages": 4,
+  "thumbnail": "240x240",
+  "gallerySize": "1270x760",
+  "taglineCharacters": 47,
+  "descriptionCharacters": 212
+}

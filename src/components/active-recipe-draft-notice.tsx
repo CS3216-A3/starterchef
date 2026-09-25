@@ -40,7 +40,7 @@ export function ActiveRecipeDraftNotice() {
       </div>
       <Link
         href={`/recipes/import?draft=${draft.draftId}`}
-        className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-flame px-6 font-bold text-white hover:bg-flame-dark"
+        className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-flame px-6 font-bold text-espresso hover:bg-flame-ink hover:text-white"
       >
         Open review
       </Link>

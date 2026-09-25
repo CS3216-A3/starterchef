@@ -182,6 +182,11 @@ export default function ImportRecipePage() {
           Paste text, a link, a photo of a recipe card or finished dish, or a
           YouTube cooking video.
         </p>
+        <p className="mt-2 text-sm font-semibold text-espresso-light">
+          Text, link, and YouTube reviews use six daily AI credits; photo
+          reviews use seven. Uploading a photo only stores it privately; the
+          review starts when you tap Build recipe.
+        </p>
       </div>
 
       <div className="grid grid-cols-4 gap-2">
@@ -294,7 +299,7 @@ export default function ImportRecipePage() {
                 accept="image/*"
                 onChange={handlePhotoFile}
                 disabled={uploadProgress !== null}
-                className="rounded-2xl border-2 border-dashed border-espresso/20 bg-card p-4 text-sm font-semibold file:mr-4 file:rounded-full file:bg-flame file:px-4 file:py-2 file:text-white"
+                className="rounded-2xl border-2 border-dashed border-espresso/20 bg-card p-4 text-sm font-semibold file:mr-4 file:rounded-full file:bg-flame file:px-4 file:py-2 file:text-espresso"
                 required
               />
               {uploadProgress !== null && (
@@ -374,7 +379,7 @@ export default function ImportRecipePage() {
           {error && (
             <p
               role="alert"
-              className="rounded-2xl bg-oat p-3 text-sm font-bold text-flame"
+              className="rounded-2xl bg-oat p-3 text-sm font-bold text-flame-ink"
             >
               {error}
             </p>
@@ -435,7 +440,7 @@ function SourceButton({
       disabled={disabled}
       className={`flex flex-col items-center gap-2 rounded-2xl p-3 text-xs font-extrabold transition-colors ${
         active && !disabled
-          ? "bg-flame text-white"
+          ? "bg-flame text-espresso"
           : "bg-card text-espresso-light ring-1 ring-oat hover:bg-oat disabled:cursor-not-allowed disabled:opacity-50"
       }`}
     >

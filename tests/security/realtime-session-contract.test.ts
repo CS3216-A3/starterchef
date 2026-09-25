@@ -10,11 +10,15 @@ vi.mock("@/lib/protected-route", () => ({
     message: string,
   ) => Response.json({ error: { code, message } }, { status }),
 }));
+vi.mock("@/lib/session-events", () => ({
+  getCookingMemory: async () => ["Uses a small saucepan"],
+}));
 
 import { POST } from "@/app/api/ai/realtime-sessions/route";
 
 const attemptId = "75dcc627-6124-4505-a4bf-3ab35cff841f";
 const sessionId = "631d4b15-4723-4c60-833d-bdf7ee817847";
+const deadline = new Date(Date.now() + 15 * 60_000).toISOString();
 const route = POST as unknown as (context: unknown) => Promise<Response>;
 
 function context(
@@ -26,26 +30,40 @@ function context(
     error: null,
   }));
   const supabase = {
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          eq: () => ({
-            maybeSingle: async () => ({
-              data: {
-                status: "in_progress",
-                current_step: 1,
-                recipe: {
-                  title: "Trusted soup",
-                  steps: [
-                    { index: 1, title: "Simmer", instruction: "Cook gently" },
-                  ],
-                },
-              },
-            }),
-          }),
+    from: (table: string) => {
+      const query = {
+        select: () => query,
+        eq: () => query,
+        maybeSingle: async () => ({
+          data:
+            table === "profiles"
+              ? { dietary_restrictions: ["vegetarian"], allergies: ["peanut"] }
+              : table === "realtime_attempts"
+                ? { expires_at: deadline }
+                : {
+                    status: "in_progress",
+                    current_step: 1,
+                    recipe: {
+                      title: "Trusted soup",
+                      ingredients: ["tomato"],
+                      steps: [
+                        {
+                          index: 1,
+                          title: "Simmer",
+                          instruction: "Cook gently",
+                        },
+                      ],
+                    },
+                  },
+          error: null,
         }),
-      }),
-    }),
+        limit: async () => ({
+          data: [{ kind: "ingredient", name: "tomato", quantity: "2" }],
+          error: null,
+        }),
+      };
+      return query;
+    },
     rpc,
   };
   return {
@@ -84,6 +102,7 @@ describe("realtime credential contract", () => {
     expect(await response.json()).toMatchObject({
       provider: "openai",
       credential: "ephemeral-openai",
+      sessionDeadlineAt: deadline,
     });
     const [url, request] = fetcher.mock.calls[0] as unknown as [
       string,
@@ -92,6 +111,8 @@ describe("realtime credential contract", () => {
     expect(url).toBe("https://api.openai.com/v1/realtime/client_secrets");
     const configuration = JSON.parse(String(request.body));
     expect(configuration.session.instructions).toContain("Trusted soup");
+    expect(configuration.session.instructions).toContain("vegetarian");
+    expect(configuration.session.instructions).toContain("tomato");
     expect(configuration.session.tools[0].name).toBe("propose_cooking_action");
     expect(request.headers).toMatchObject({
       "OpenAI-Safety-Identifier": expect.any(String),
@@ -121,6 +142,23 @@ describe("realtime credential contract", () => {
       p_fallback_from: "openai",
     });
     expect(fetcher).toHaveBeenCalledTimes(2);
+    const [tokenUrl, tokenRequest] = fetcher.mock.calls[1] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(tokenUrl).toBe(
+      "https://generativelanguage.googleapis.com/v1alpha/auth_tokens",
+    );
+    const token = JSON.parse(String(tokenRequest.body));
+    expect(token.uses).toBe(1);
+    expect(token.fieldMask).toContain("system_instruction");
+    expect(token.fieldMask).not.toContain("session_resumption");
+    expect(
+      token.bidiGenerateContentSetup.systemInstruction.parts[0].text,
+    ).toContain("Trusted soup");
+    expect(
+      token.bidiGenerateContentSetup.generationConfig.responseModalities,
+    ).toEqual(["AUDIO"]);
   });
 
   it("rejects browser-authored recipe and system context", async () => {
