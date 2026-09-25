@@ -11,9 +11,12 @@ talk to and show your pan to.
 
 ## Team
 
-| Name                  | Matric no. | Contributions                                                                                           |
-| --------------------- | ---------- | ------------------------------------------------------------------------------------------------------- |
-| Huang Kaijuan Joulene | A0299817E  | Created the base app with core features and tech stack. Designed app logo and interactive landing page. |
+| Name                  | Matric no. | Contributions                                                                                                                                                                                                                                          |
+| --------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Huang Kaijuan Joulene | A0299817E  | Created the base app with core features and tech stack with supabase auth and posthog set up. Designed app logo and interactive feature introduction on the landing page and onboarding and profile page. Chose the AI models to use, wiring them in with Vercel AI SDK and writing initial prompts. Added per user AI rate limiting. Seeded base 6 recipes with TheMealDB. Added recipe import and core step by step cooking UX including the show camera and animated mascot. Added session memory to cooking sessions. Deployed the app to Vercel. |
+| Cedric Tay | A0307676U  | Implemented AI-specific scan review UX and human-in-the-loop controls. Developed the usage-based credit and pricing model, enhanced landing-page pricing, SEO and accessibility, fixed analytics tracking, and prepared Product Hunt launch materials. |
+| Hoang Trung Hai | A0325468W | Worked on backend architecture, security, and AI infrastructure, including authentication and authorization, database RLS policies, private media storage, API validation, quota handling, and cross-user security. Additional work covered secure kitchen scanning, recipe recommendations, imports, AI-assisted recipe workflows, persistent cooking sessions, live voice and assistant integrations, telemetry, cleanup, testing, and production-readiness safeguards. Development followed phased vertical slices with explicit security, reliability, and testing gates throughout. |
+| Angel | A0276261A |  |
 
 ## Tech stack
 

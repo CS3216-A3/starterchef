@@ -26,7 +26,7 @@ const model =
     ? (process.env.OPENAI_MODEL ?? "gpt-5.6-luna")
     : provider === "google-lite"
       ? (process.env.GOOGLE_LITE_MODEL ?? "gemini-3.5-flash-lite")
-      : (process.env.GOOGLE_MODEL ?? "gemini-5.8-flash");
+      : (process.env.GOOGLE_MODEL ?? "gemini-3.8-flash");
 
 function statusCode(status: number) {
   if (status === 401 || status === 403) return "AUTH_OR_PERMISSION_FAILED";

@@ -70,6 +70,19 @@ const tokens = [...sourceCss.matchAll(/(--color-[\w-]+):\s*(#[a-f\d]+);/gi)]
   .join(";");
 const html =
   '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/preview.css"><body><div id="root"></div><script src="/preview.js"></script></body></html>';
+
+async function revealFullPage(page) {
+  const height = await page.evaluate(
+    () => document.documentElement.scrollHeight,
+  );
+  for (let y = 0; y < height; y += 600) {
+    await page.evaluate((top) => window.scrollTo(0, top), y);
+    await page.waitForTimeout(80);
+  }
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(200);
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
   const files = {
@@ -269,18 +282,15 @@ try {
 
   await page.setViewportSize({ width: 1040, height: 1200 });
   await page.goto(`${base}/?view=landing`);
-  await expect(
-    page.getByText("100 AI credits / month", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("1,500 AI credits / month", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText("100 / month", { exact: true })).toBeVisible();
+  await expect(page.getByText("1,500 / month", { exact: true })).toBeVisible();
   await expect(page.getByRole("table")).toBeVisible();
   assert.equal(
     await page.locator("a button").count(),
     0,
     "Links cannot contain buttons",
   );
+  await revealFullPage(page);
   await page.screenshot({
     path: path.join(output, "screenshots/landing-desktop.png"),
     fullPage: true,
@@ -290,11 +300,22 @@ try {
     .screenshot({ path: path.join(output, "screenshots/pricing.png") });
   for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 844 });
+    const overflow = await page.evaluate(() =>
+      [...document.querySelectorAll("*")]
+        .filter((element) => element.getBoundingClientRect().right > innerWidth)
+        .slice(0, 10)
+        .map((element) => ({
+          tag: element.tagName,
+          className: element.className,
+          right: element.getBoundingClientRect().right,
+          text: element.textContent?.trim().slice(0, 80),
+        })),
+    );
     assert(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
-      `Landing page overflows at ${width}px`,
+      `Landing page overflows at ${width}px: ${JSON.stringify(overflow)}`,
     );
   }
   await page.screenshot({

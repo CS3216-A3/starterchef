@@ -25,7 +25,6 @@ import {
   FEATURE_ROWS,
   PLANS,
   TOP_UPS,
-  approxCooks,
   type TopUp,
 } from "@/lib/credits";
 
@@ -143,7 +142,7 @@ export default function LandingPage() {
         {howItWorks.map(({ icon: Icon, title, body, Demo }, index) => (
           <Reveal key={title}>
             <div className="grid items-center gap-6 sm:grid-cols-2 sm:gap-10">
-              <div className={index % 2 === 1 ? "sm:order-2" : ""}>
+              <div className={`min-w-0 ${index % 2 === 1 ? "sm:order-2" : ""}`}>
                 <span className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-flame-soft">
                   <Icon className="h-5 w-5 text-flame" />
                 </span>
@@ -152,7 +151,7 @@ export default function LandingPage() {
                   {body}
                 </p>
               </div>
-              <div className={index % 2 === 1 ? "sm:order-1" : ""}>
+              <div className={`min-w-0 ${index % 2 === 1 ? "sm:order-1" : ""}`}>
                 <Demo />
               </div>
             </div>
@@ -175,6 +174,9 @@ export default function LandingPage() {
         <Reveal>
           <div className="overflow-hidden rounded-3xl bg-card shadow-sm ring-1 ring-oat">
             <table className="w-full table-fixed">
+              <caption className="sr-only">
+                Compare Free Starter and StarterChef Plus features
+              </caption>
               <thead>
                 <tr className="border-b border-oat">
                   <th className="w-1/2 p-4 text-left align-bottom sm:p-5">
@@ -202,18 +204,18 @@ export default function LandingPage() {
                           or {sgd(plan.annualPriceSgd)}/year
                         </span>
                       )}
-                      <span className="mt-1 block text-xs font-semibold text-espresso-light">
-                        ≈ {approxCooks(plan.credits)} AI-assisted cooks / month
-                      </span>
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 <tr className="border-b border-oat">
-                  <td className="p-4 text-xs font-bold sm:p-5 sm:text-sm">
+                  <th
+                    scope="row"
+                    className="p-4 text-left text-xs font-bold sm:p-5 sm:text-sm"
+                  >
                     AI credits
-                  </td>
+                  </th>
                   <td className="p-4 text-center sm:p-5">
                     <PlanCell
                       value={`${freePlan.credits.toLocaleString()} / month`}
@@ -226,9 +228,12 @@ export default function LandingPage() {
                   </td>
                 </tr>
                 <tr className="border-b border-oat">
-                  <td className="p-4 text-xs font-bold sm:p-5 sm:text-sm">
+                  <th
+                    scope="row"
+                    className="p-4 text-left text-xs font-bold sm:p-5 sm:text-sm"
+                  >
                     Core features
-                  </td>
+                  </th>
                   <td
                     colSpan={2}
                     className="p-4 text-center text-xs font-semibold text-espresso-light sm:p-5"
@@ -241,9 +246,12 @@ export default function LandingPage() {
                     key={row.label}
                     className="border-b border-oat last:border-0"
                   >
-                    <td className="p-4 text-xs font-bold sm:p-5 sm:text-sm">
+                    <th
+                      scope="row"
+                      className="p-4 text-left text-xs font-bold sm:p-5 sm:text-sm"
+                    >
                       {row.label}
-                    </td>
+                    </th>
                     <td className="p-4 text-center sm:p-5">
                       <PlanCell value={row.free} />
                     </td>
@@ -253,7 +261,9 @@ export default function LandingPage() {
                   </tr>
                 ))}
                 <tr>
-                  <td className="p-4 sm:p-5" />
+                  <th scope="row" className="p-4 sm:p-5">
+                    <span className="sr-only">Choose a plan</span>
+                  </th>
                   <td className="p-4 text-center sm:p-5">
                     <Link
                       href="/today"

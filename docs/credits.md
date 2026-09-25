@@ -22,7 +22,7 @@ loss lands exactly where usage is most enthusiastic.
 ## Deriving the costs
 
 **Model rates** come from `evals/costs.ts`. The default text/vision model,
-`gemini-5.8-flash`, is $0.15 per 1M input tokens and $0.60 per 1M output.
+`gemini-3.8-flash`, is $0.15 per 1M input tokens and $0.60 per 1M output.
 
 **Token profiles** are estimated per action from the prompt sizes in
 `prompts/*.md`, the output schemas in `src/lib/ai/schemas/`, and the input each
@@ -146,8 +146,8 @@ owned by backend rather than frontend:
   that is what the settings page reports.
 - Payment integration. There is no Stripe or checkout code in the repo; no tier
   is actually purchasable.
-- Wiring `creditCostFor()` into each `api/ai/*` route alongside a monthly ledger instead of the
-  current route-specific daily quota costs.
+- Wiring `creditCostFor()` into each `api/ai/*` route in place of the current
+  one-request-one-unit daily quota, alongside a monthly ledger.
 - The Free-tier feature ceiling itself: `FEATURE_ROWS` documents which
   features are "Limited" on Free, but the actual per-feature quotas (scans
   per month, imports per month, etc.) aren't decided or enforced anywhere yet.
