@@ -13,9 +13,12 @@ talk to and show your pan to.
 
 | Name                  | Matric no. | Contributions                                                                                                                                                                                                                                          |
 | --------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Huang Kaijuan Joulene | A0299817E  | Created the base app with core features and tech stack. Designed app logo and interactive landing page.                                                                                                                                                |
-| Cedric Tay            | A0307676U  | Implemented AI-specific scan review UX and human-in-the-loop controls. Developed the usage-based credit and pricing model, enhanced landing-page pricing, SEO and accessibility, fixed analytics tracking, and prepared Product Hunt launch materials. |
+| Huang Kaijuan Joulene | A0299817E  | Created the base app with core features and tech stack with supabase auth and posthog set up. Designed app logo and interactive feature introduction on the landing page and onboarding and profile page. Chose the AI models to use, wiring them in with Vercel AI SDK and writing initial prompts. Added per user AI rate limiting. Seeded base 6 recipes with TheMealDB. Added recipe import and core step by step cooking UX including the show camera and animated mascot. Added session memory to cooking sessions. |
+| Cedric Tay | A0307676U  | Implemented AI-specific scan review UX and human-in-the-loop controls. Developed the usage-based credit and pricing model, enhanced landing-page pricing, SEO and accessibility, fixed analytics tracking, and prepared Product Hunt launch materials. |
 
+| Angel | A |  |
+
+| Hai Hoang | A  | |
 
 ## Tech stack
 
