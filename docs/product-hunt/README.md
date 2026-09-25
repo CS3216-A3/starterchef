@@ -61,26 +61,3 @@ Upload in this order. Each image is 1270 × 760 pixels. The square thumbnail is 
 ![Review your scan](gallery/02-review-your-scan.png)
 ![Cook with help](gallery/03-cook-with-help.png)
 ![Launch plans](gallery/04-launch-plans.png)
-
-## Capture provenance and regeneration
-
-These images use the actual `RecipeCard`, `ScanKitchenButton`, `CookAssist`, and `CookStepNavigation` components. Sample props and mocked responses replace database and AI calls. The surrounding recipe/scan headings are a capture composition, not a screenshot of a signed-in production session. Every demo panel is labelled. The recipe's illustration is the app's existing fallback, not a food photograph. No real user data, API keys, or private kitchen photos are included.
-
-The `landing-desktop.png` and `landing-mobile.png` captures render the actual marketing page/layout in the same harness. The separate `landing-production-desktop.png`, `landing-production-mobile.png`, and `opengraph.png` are captured from the built Next.js server. Gallery pricing comes directly from `PLANS` and `TOP_UPS`. The harness adapts Next navigation and image handling and disables analytics; it does not test auth, backend persistence, or model accuracy. It is under `scripts/`, with no public app route or authentication bypass.
-
-After `npm ci` and installing Chromium with `npx playwright install chromium`, run:
-
-```bash
-node scripts/product-hunt/capture.mjs
-```
-
-The command generates the gallery, six raw [screenshots](screenshots/), and [verification.json](verification.json). It also checks scan selection/save behaviour, empty and uncertain scans, failed-save recovery, mobile overflow, pricing text, and browser errors. Build prerequisites are the repo's locked esbuild, PostCSS/Tailwind and Playwright dependencies. It needs a local HTTP listener and permission to launch Chromium, but no Supabase or AI credentials.
-
-To verify the production page and refresh its separate captures, run `npm run build`, then `npm run start -- --hostname 127.0.0.1 --port 3100` in one terminal and `node scripts/product-hunt/verify-site.mjs` in another. The [built-site report](site-verification.json) records metadata, social image, sitemap/robots, mobile layout, and runtime checks.
-
-## Submission notes
-
-- The materials satisfy the simulated launch brief. A real launch still needs the maker accounts and launch date selected by the team, plus a production smoke test with a test account.
-- The pricing table describes approved launch intent. Payment integration, a monthly credit ledger, Free-tier caps, and priority-processing enforcement are not completed by this frontend task. The launch copy explicitly says so.
-- No user-count claims, testimonials, safety guarantees, or claims of unlimited voice usage are included. The optional GIF/video has not been produced; the static gallery is complete.
-- Product Hunt's [launch guide](https://www.producthunt.com/launch/preparing-for-launch) recommends a 60-character tagline, a square 240 × 240 thumbnail and 1270 × 760 gallery images. It currently lists a 500-character description, while the [posting help page](https://help.producthunt.com/en/articles/479557-how-to-post-a-product) lists 260. This description fits both. Specifications checked on 24 September 2026.
