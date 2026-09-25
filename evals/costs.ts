@@ -12,7 +12,7 @@ interface ModelRate {
 
 const RATES: Record<string, ModelRate> = {
   // Google Gemini text/vision models
-  "gemini-5.8-flash": { inputPerM: 0.15, outputPerM: 0.6 },
+  "gemini-3.8-flash": { inputPerM: 0.15, outputPerM: 0.6 },
   "gemini-3.5-flash-lite": { inputPerM: 0.3, outputPerM: 2.5 },
   "gemini-3.6-flash": { inputPerM: 0.15, outputPerM: 0.6 },
 

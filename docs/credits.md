@@ -22,7 +22,7 @@ loss lands exactly where usage is most enthusiastic.
 ## Deriving the costs
 
 **Model rates** come from `evals/costs.ts`. The default text/vision model,
-`gemini-5.8-flash`, is $0.15 per 1M input tokens and $0.60 per 1M output.
+`gemini-3.8-flash`, is $0.15 per 1M input tokens and $0.60 per 1M output.
 
 **Token profiles** are estimated per action from the prompt sizes in
 `prompts/*.md`, the output schemas in `src/lib/ai/schemas/`, and the input each

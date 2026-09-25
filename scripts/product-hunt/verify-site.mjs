@@ -8,6 +8,19 @@ const base = process.env.LAUNCH_PREVIEW_URL ?? "http://127.0.0.1:3100";
 const output = fileURLToPath(
   new URL("../../docs/product-hunt/", import.meta.url),
 );
+
+async function revealFullPage(page) {
+  const height = await page.evaluate(
+    () => document.documentElement.scrollHeight,
+  );
+  for (let y = 0; y < height; y += 600) {
+    await page.evaluate((top) => window.scrollTo(0, top), y);
+    await page.waitForTimeout(80);
+  }
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(200);
+}
+
 const browser = await chromium.launch();
 try {
   const page = await browser.newPage({
@@ -17,7 +30,7 @@ try {
   page.on("pageerror", (error) => errors.push(error.message));
   const response = await page.goto(base);
   assert.equal(response.status(), 200);
-  await expect(page).toHaveTitle("StarterChef · Cook with what you have");
+  await expect(page).toHaveTitle("StarterChef · Your start to great cooking");
   await expect(page.locator("h1")).toHaveCount(1);
   const canonical = await page
     .locator('link[rel="canonical"]')
@@ -45,6 +58,7 @@ try {
   assert.equal(png.readUInt32BE(20), 630);
   await writeFile(`${output}screenshots/opengraph.png`, png);
   await page.evaluate(() => document.fonts.ready);
+  await revealFullPage(page);
   await page.screenshot({
     path: `${output}screenshots/landing-production-desktop.png`,
     fullPage: true,
@@ -68,12 +82,8 @@ try {
     fullPage: true,
   });
   assert.equal(await page.locator("a button").count(), 0);
-  await expect(
-    page.getByText("100 AI credits / month", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("1,500 AI credits / month", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText("100 / month", { exact: true })).toBeVisible();
+  await expect(page.getByText("1,500 / month", { exact: true })).toBeVisible();
   const robots = await page.request.get(`${base}/robots.txt`);
   assert.equal(robots.status(), 200);
   assert.match(
