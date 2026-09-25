@@ -1,9 +1,5 @@
 # StarterChef — Product Hunt launch kit
 
-Draft submission materials for M20. No Product Hunt post has been created.
-
-## Submission fields
-
 **Name:** StarterChef
 
 **Website:** https://starterchef.vercel.app/
