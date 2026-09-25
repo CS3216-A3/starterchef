@@ -4,7 +4,7 @@
 
 **Website:** https://starterchef.vercel.app/
 
-**Tagline:** Your AI cooking companion, from pantry to plate
+**Tagline:** Your start to great cooking
 
 ## Short description
 
