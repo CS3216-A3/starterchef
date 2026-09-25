@@ -4,9 +4,9 @@
 
 **Website:** https://starterchef.vercel.app/
 
-**Tagline (47 characters):** Your AI cooking companion, from pantry to plate
+**Tagline:** Your AI cooking companion, from pantry to plate
 
-**Short description (212 characters):**
+**Short description:**
 
 New to cooking? Scan your ingredients, find recipes that fit your kitchen, and follow one step at a time with AI help. Import recipes you love, ask questions as you cook, and save the changes that worked for you.
 
